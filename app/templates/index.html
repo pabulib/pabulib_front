@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PB Library</title>
+    <link rel="stylesheet" href="{{ url_for('main.static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <div class="container">
+      <form id="downloadForm" method="post" action="{{ url_for('main.download_selected') }}">
+        <header class="toolbar">
+          <input id="search" class="search" placeholder="Search..." />
+          <label class="select-all"><input id="selectAll" type="checkbox" /> Select all</label>
+          <div class="spacer"></div>
+          <div class="count"><span id="count">{{ count }}</span> PBs found</div>
+          <button id="downloadBtn" class="primary" type="submit" disabled>Download selected</button>
+        </header>
+
+      {% for t in tiles %}
+      <section class="tile" data-title="{{ t.title|e }}" data-webpage="{{ t.webpage_name|e }}" data-desc="{{ t.description|e }}" data-file="{{ t.file_name|e }}">
+        <div class="tile-header">
+          <input class="row-check" type="checkbox" data-file="{{ t.file_name|e }}" />
+          <h2>{{ t.title }}</h2>
+          <span class="doc" title="File"></span>
+          <a class="download" href="{{ url_for('main.download', filename=t.file_name) }}" title="Download"></a>
+        </div>
+        <div class="grid head">
+          <div>Description</div>
+          <div># votes</div>
+          <div># projects</div>
+          <div>Budget</div>
+          <div>Vote type</div>
+          <div>Vote length</div>
+        </div>
+        <div class="grid">
+          <div class="muted">{{ t.description }}</div>
+          <div>{{ t.num_votes }}</div>
+          <div>{{ t.num_projects }}</div>
+          <div>{{ t.budget }}</div>
+          <div>{{ t.vote_type }}</div>
+          <div>{{ t.vote_length }}</div>
+        </div>
+      </section>
+      {% endfor %}
+      </form>
+
+      <script>
+        (function(){
+          const input = document.getElementById('search');
+          const tiles = Array.from(document.querySelectorAll('.tile'));
+          const countEl = document.getElementById('count');
+          const selectAll = document.getElementById('selectAll');
+          const downloadBtn = document.getElementById('downloadBtn');
+          const form = document.getElementById('downloadForm');
+          function normalize(s){
+            return (s||'').toString().toLowerCase();
+          }
+          function filter(){
+            const q = normalize(input.value);
+            let visible = 0;
+            tiles.forEach(t=>{
+              const hay = [t.dataset.title, t.dataset.webpage, t.dataset.desc, t.dataset.file]
+                .map(normalize)
+                .join(' ');
+              const match = hay.includes(q);
+              t.style.display = match ? '' : 'none';
+              if(match) visible++;
+            });
+            countEl.textContent = visible.toString();
+            // when filtering, uncheck select-all (to avoid confusion)
+            selectAll.checked = false;
+            updateChecks();
+          }
+          input.addEventListener('input', filter);
+
+          function visibleRowChecks(){
+            return Array.from(document.querySelectorAll('.tile'))
+              .filter(t => t.style.display !== 'none')
+              .map(t => t.querySelector('.row-check'));
+          }
+
+          function updateChecks(){
+            const checks = visibleRowChecks();
+            const anyChecked = checks.some(ch => ch.checked);
+            const allChecked = checks.length > 0 && checks.every(ch => ch.checked);
+            downloadBtn.disabled = !anyChecked;
+            selectAll.indeterminate = anyChecked && !allChecked;
+            if(checks.length){ selectAll.disabled = false; } else { selectAll.disabled = true; selectAll.checked = false; selectAll.indeterminate = false; }
+          }
+
+          selectAll.addEventListener('change', () => {
+            const checks = visibleRowChecks();
+            checks.forEach(ch => ch.checked = selectAll.checked);
+            updateChecks();
+          });
+
+          document.addEventListener('change', (e) => {
+            if(e.target && e.target.classList.contains('row-check')){
+              updateChecks();
+            }
+          });
+
+          form.addEventListener('submit', (e) => {
+            // add hidden inputs for selected files
+            const prev = form.querySelectorAll('input[name="files"]');
+            prev.forEach(p => p.remove());
+            const selected = Array.from(document.querySelectorAll('.row-check:checked'));
+            if(!selected.length){ e.preventDefault(); return; }
+            selected.forEach(ch => {
+              const inp = document.createElement('input');
+              inp.type = 'hidden';
+              inp.name = 'files';
+              inp.value = ch.dataset.file;
+              form.appendChild(inp);
+            });
+          });
+
+          // initial state
+          updateChecks();
+        })();
+      </script>
+    </div>
+  </body>
+  </html>
