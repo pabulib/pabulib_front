@@ -1,11 +1,10 @@
-# PB UI (Flask)
+## Pabulib frontend
 
-Minimal Flask app that lists `.pb` files from `pb_files/` and renders tiles similar to the provided screenshot.
+[soon] https://pabulib.org/
 
 ## Quick start (macOS, zsh)
 
 ```bash
-python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python run.py
