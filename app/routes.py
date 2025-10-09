@@ -226,6 +226,15 @@ def contact_page():
     return render_template("contact.html")
 
 
+# @bp.route("/upload")
+# def upload_page():
+#     return "To be implemented"
+# Placeholder page for now; can be implemented later
+# return render_template(
+#     "index.html", tiles=_get_tiles_cached(), count=len(_get_tiles_cached())
+# )
+
+
 @bp.route("/download/<path:filename>")
 def download(filename: str):
     path = _pb_folder() / filename
