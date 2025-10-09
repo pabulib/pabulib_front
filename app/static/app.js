@@ -153,10 +153,15 @@
   [input, filterCountry, filterCity, filterYear, votesMin, votesMax, projectsMin, projectsMax, lenMin, lenMax, filterType, excludeFully, excludeExperimental]
     .forEach(el => el.addEventListener('input', debounced));
   orderBy.addEventListener('change', sortTiles);
-  orderDir.addEventListener('click', ()=>{ orderDir.dataset.dir = (orderDir.dataset.dir === 'desc') ? 'asc' : 'desc'; sortTiles(); });
+  orderDir.addEventListener('click', ()=>{
+    orderDir.dataset.dir = (orderDir.dataset.dir === 'desc') ? 'asc' : 'desc';
+    orderDir.textContent = (orderDir.dataset.dir === 'desc') ? '↓' : '↑';
+    sortTiles();
+  });
 
   // initial
   orderDir.dataset.dir = 'asc';
+  orderDir.textContent = '↑';
   initOptions();
   updateChecks();
   sortTiles();
