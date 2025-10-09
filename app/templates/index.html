@@ -7,7 +7,64 @@
     <link rel="stylesheet" href="{{ url_for('main.static', filename='styles.css') }}" />
   </head>
   <body>
-    <div class="container">
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="field">
+          <label>Order by</label>
+          <div class="row">
+            <select id="orderBy">
+              <option value="quality">Quality</option>
+              <option value="votes"># votes</option>
+              <option value="projects"># projects</option>
+              <option value="budget">Budget</option>
+              <option value="year">Year</option>
+            </select>
+            <button type="button" id="orderDir" title="Toggle sort direction">⇅</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Country</label>
+          <select id="filterCountry"><option value="">All countries</option></select>
+        </div>
+        <div class="field">
+          <label>City</label>
+          <select id="filterCity"><option value="">All cities</option></select>
+        </div>
+        <div class="field">
+          <label>Year of election</label>
+          <select id="filterYear"><option value="">All years</option></select>
+        </div>
+        <div class="field two">
+          <label>Number of votes</label>
+          <div class="range"><input id="votesMin" placeholder="-" inputmode="numeric"><span>-</span><input id="votesMax" placeholder="-" inputmode="numeric"></div>
+        </div>
+        <div class="field two">
+          <label>Number of projects</label>
+          <div class="range"><input id="projectsMin" placeholder="-" inputmode="numeric"><span>-</span><input id="projectsMax" placeholder="-" inputmode="numeric"></div>
+        </div>
+        <div class="field two">
+          <label>Average vote length</label>
+          <div class="range"><input id="lenMin" placeholder="-" inputmode="decimal"><span>-</span><input id="lenMax" placeholder="-" inputmode="decimal"></div>
+        </div>
+        <div class="field">
+          <label>Vote type</label>
+          <select id="filterType">
+            <option value="">Any</option>
+            <option value="approval">approval</option>
+            <option value="cumulative">cumulative</option>
+            <option value="ranked">ranked</option>
+            <option value="k-approval">k-approval</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Exclude</label>
+          <label class="checkbox"><input id="excludeFully" type="checkbox"> fully funded</label>
+          <label class="checkbox"><input id="excludeExperimental" type="checkbox"> experimental</label>
+        </div>
+      </aside>
+
+      <div class="container">
       <form id="downloadForm" method="post" action="{{ url_for('main.download_selected') }}">
         <header class="toolbar">
           <input id="search" class="search" placeholder="Search..." />
@@ -18,7 +75,23 @@
         </header>
 
       {% for t in tiles %}
-      <section class="tile" data-title="{{ t.title|e }}" data-webpage="{{ t.webpage_name|e }}" data-desc="{{ t.description|e }}" data-file="{{ t.file_name|e }}">
+      <section class="tile"
+        data-title="{{ t.title|e }}"
+        data-webpage="{{ t.webpage_name|e }}"
+        data-desc="{{ t.description|e }}"
+        data-file="{{ t.file_name|e }}"
+        data-country="{{ t.country|e }}"
+        data-city="{{ t.city|e }}"
+        data-year="{{ t.year|e }}"
+        data-votes="{{ t.num_votes_raw if t.num_votes_raw is not none else '' }}"
+        data-projects="{{ t.num_projects_raw if t.num_projects_raw is not none else '' }}"
+        data-budget="{{ t.budget_raw if t.budget_raw is not none else '' }}"
+        data-type="{{ t.vote_type|e }}"
+        data-vlen="{{ '%.3f' % t.vote_length_raw if t.vote_length_raw is not none else '' }}"
+        data-fully="{{ '1' if t.fully_funded else '0' }}"
+        data-experimental="{{ '1' if t.experimental else '0' }}"
+        data-quality="{{ '%.6f' % t.quality }}"
+      >
         <div class="tile-header">
           <input class="row-check" type="checkbox" data-file="{{ t.file_name|e }}" />
           <h2>{{ t.title }}</h2>
@@ -43,83 +116,10 @@
         </div>
       </section>
       {% endfor %}
-      </form>
-
-      <script>
-        (function(){
-          const input = document.getElementById('search');
-          const tiles = Array.from(document.querySelectorAll('.tile'));
-          const countEl = document.getElementById('count');
-          const selectAll = document.getElementById('selectAll');
-          const downloadBtn = document.getElementById('downloadBtn');
-          const form = document.getElementById('downloadForm');
-          function normalize(s){
-            return (s||'').toString().toLowerCase();
-          }
-          function filter(){
-            const q = normalize(input.value);
-            let visible = 0;
-            tiles.forEach(t=>{
-              const hay = [t.dataset.title, t.dataset.webpage, t.dataset.desc, t.dataset.file]
-                .map(normalize)
-                .join(' ');
-              const match = hay.includes(q);
-              t.style.display = match ? '' : 'none';
-              if(match) visible++;
-            });
-            countEl.textContent = visible.toString();
-            // when filtering, uncheck select-all (to avoid confusion)
-            selectAll.checked = false;
-            updateChecks();
-          }
-          input.addEventListener('input', filter);
-
-          function visibleRowChecks(){
-            return Array.from(document.querySelectorAll('.tile'))
-              .filter(t => t.style.display !== 'none')
-              .map(t => t.querySelector('.row-check'));
-          }
-
-          function updateChecks(){
-            const checks = visibleRowChecks();
-            const anyChecked = checks.some(ch => ch.checked);
-            const allChecked = checks.length > 0 && checks.every(ch => ch.checked);
-            downloadBtn.disabled = !anyChecked;
-            selectAll.indeterminate = anyChecked && !allChecked;
-            if(checks.length){ selectAll.disabled = false; } else { selectAll.disabled = true; selectAll.checked = false; selectAll.indeterminate = false; }
-          }
-
-          selectAll.addEventListener('change', () => {
-            const checks = visibleRowChecks();
-            checks.forEach(ch => ch.checked = selectAll.checked);
-            updateChecks();
-          });
-
-          document.addEventListener('change', (e) => {
-            if(e.target && e.target.classList.contains('row-check')){
-              updateChecks();
-            }
-          });
-
-          form.addEventListener('submit', (e) => {
-            // add hidden inputs for selected files
-            const prev = form.querySelectorAll('input[name="files"]');
-            prev.forEach(p => p.remove());
-            const selected = Array.from(document.querySelectorAll('.row-check:checked'));
-            if(!selected.length){ e.preventDefault(); return; }
-            selected.forEach(ch => {
-              const inp = document.createElement('input');
-              inp.type = 'hidden';
-              inp.name = 'files';
-              inp.value = ch.dataset.file;
-              form.appendChild(inp);
-            });
-          });
-
-          // initial state
-          updateChecks();
-        })();
-      </script>
+      <div id="sentinel" class="sentinel" aria-hidden="true"></div>
+    </form>
+    <script src="{{ url_for('main.static', filename='app.js') }}"></script>
+  </div>
     </div>
   </body>
   </html>

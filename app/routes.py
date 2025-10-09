@@ -3,7 +3,7 @@ import os
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from flask import Blueprint, abort, current_app, render_template, request, send_file
 
@@ -16,6 +16,11 @@ bp = Blueprint(
     static_folder="static",
     static_url_path="/static",
 )
+
+
+# Simple in-process cache so we don't parse 1000+ files every request
+_TILES_CACHE: Optional[List[Dict[str, Any]]] = None
+_CACHE_SIGNATURE: Optional[str] = None
 
 
 def _workspace_root() -> Path:
@@ -77,9 +82,10 @@ def build_tile_data(pb_path: Path) -> Dict[str, Any]:
         budget = None
     budget_str = _format_budget(currency, budget) if budget is not None else "—"
 
-    vote_type = meta.get("vote_type", meta.get("rule", "")).lower()
+    vote_type = str(meta.get("vote_type", meta.get("rule", ""))).lower()
 
     # vote length: average number of items chosen per voter from VOTES section
+    vote_length_float = None
     try:
         lengths = []
         for v in votes.values():
@@ -87,9 +93,56 @@ def build_tile_data(pb_path: Path) -> Dict[str, Any]:
             if not sel:
                 continue
             lengths.append(len([s for s in sel.split(",") if s]))
-        vote_length = f"{(sum(lengths)/len(lengths)):.3f}" if lengths else "—"
+        if lengths:
+            vote_length_float = sum(lengths) / len(lengths)
+        vote_length = (
+            f"{vote_length_float:.3f}" if vote_length_float is not None else "—"
+        )
     except Exception:
         vote_length = "—"
+        vote_length_float = None
+
+    # fully funded heuristic: if all projects are selected OR sum(selected costs) >= budget
+    fully_funded = False
+    try:
+        selected_flags = [
+            str(p.get("selected", "0")).strip() for p in projects.values()
+        ]
+        all_selected = len(selected_flags) > 0 and all(v == "1" for v in selected_flags)
+        sum_selected_cost = 0
+        for p in projects.values():
+            if str(p.get("selected", "0")).strip() == "1":
+                c = p.get("cost")
+                if isinstance(c, str) and c.isdigit():
+                    sum_selected_cost += int(c)
+                elif isinstance(c, int):
+                    sum_selected_cost += c
+        fully_funded = all_selected or (
+            budget is not None and sum_selected_cost >= budget
+        )
+    except Exception:
+        fully_funded = False
+
+    # experimental flag from META, if present
+    experimental = str(meta.get("experimental", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+    }
+
+    # normalize city label (use unit/city/district unified as "city" for filters)
+    city_label = unit
+
+    # parse instance to int if possible (for year filtering)
+    try:
+        year_int = int(instance)
+    except Exception:
+        year_int = None
+
+    # quality metric: (avg vote length)^3 * (num_projects)^2 * (num_votes)
+    vlen = vote_length_float or 0.0
+    quality = (vlen**3) * (float(num_projects) ** 2) * float(num_votes)
 
     return {
         "file_name": pb_path.name,
@@ -97,11 +150,45 @@ def build_tile_data(pb_path: Path) -> Dict[str, Any]:
         "webpage_name": webpage_name,
         "description": description,
         "num_votes": _format_int(num_votes),
+        "num_votes_raw": num_votes,
         "num_projects": _format_int(num_projects),
+        "num_projects_raw": num_projects,
         "budget": budget_str,
+        "budget_raw": budget,
         "vote_type": vote_type,
         "vote_length": vote_length,
+        "vote_length_raw": vote_length_float,
+        "country": country,
+        "city": city_label,
+        "year": instance,
+        "year_raw": year_int,
+        "fully_funded": fully_funded,
+        "experimental": experimental,
+        "quality": quality,
     }
+
+
+def _compute_signature(paths: List[Path]) -> str:
+    # A simple signature based on names + mtimes + sizes
+    parts = []
+    for p in paths:
+        try:
+            st = p.stat()
+            parts.append(f"{p.name}:{int(st.st_mtime)}:{st.st_size}")
+        except FileNotFoundError:
+            continue
+    return "|".join(sorted(parts))
+
+
+def _get_tiles_cached() -> List[Dict[str, Any]]:
+    global _TILES_CACHE, _CACHE_SIGNATURE
+    folder = _pb_folder()
+    files = sorted(folder.glob("*.pb"))
+    signature = _compute_signature(files)
+    if _TILES_CACHE is None or signature != _CACHE_SIGNATURE:
+        _TILES_CACHE = [build_tile_data(p) for p in files]
+        _CACHE_SIGNATURE = signature
+    return _TILES_CACHE
 
 
 @bp.route("/")
@@ -110,8 +197,7 @@ def home():
     if not folder.exists():
         abort(404, description="PB files folder not found")
 
-    files = sorted(folder.glob("*.pb"))
-    tiles = [build_tile_data(p) for p in files]
+    tiles = _get_tiles_cached()
     return render_template("index.html", tiles=tiles, count=len(tiles))
 
 
