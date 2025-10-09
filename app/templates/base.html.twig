@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Pabulib{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('main.static', filename='styles.css') }}" />
+  </head>
+  <body class="{% block bodyClass %}{% endblock %}">
+    <header class="topbar">
+      <nav class="nav">
+        <a class="brand" href="{{ url_for('main.home') }}">Pabulib</a>
+        <a class="item {{ 'active' if request.path == url_for('main.home') else '' }}" href="{{ url_for('main.home') }}">Search</a>
+        <a class="item {{ 'active' if request.path == url_for('main.format_page') else '' }}" href="{{ url_for('main.format_page') }}">Data format</a>
+        <a class="item {{ 'active' if request.path == url_for('main.code_page') else '' }}" href="{{ url_for('main.code_page') }}">Code</a>
+        <a class="item {{ 'active' if request.path == url_for('main.publications_page') else '' }}" href="{{ url_for('main.publications_page') }}">Publications</a>
+        <a class="item {{ 'active' if request.path == url_for('main.about_page') else '' }}" href="{{ url_for('main.about_page') }}">About</a>
+        <a class="item {{ 'active' if request.path == url_for('main.contact_page') else '' }}" href="{{ url_for('main.contact_page') }}">Contact</a>
+      </nav>
+    </header>
+
+    {% block body %}{% endblock %}
+  </body>
+  </html>

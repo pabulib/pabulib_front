@@ -1,0 +1,727 @@
+{% extends 'base.html.twig' %}
+
+{% block bodyClass %}format{% endblock %}
+{% block title %}Data format{% endblock %}
+
+{% block body %}
+    <style>
+        /* CSS Styles */
+        body.format .container {
+            font-family: Arial, sans-serif;
+        }
+
+        body.format .container h1, body.format .container h2, body.format .container h3 {
+            color: navy;
+        }
+
+        body.format .container pre {
+            background-color: #f4f4f4;
+            padding: 10px;
+        }
+
+        body.format .container ul, body.format .container ol {
+            padding-left: 20px;
+        }
+
+        body.format .container li {
+            margin-bottom: 10px;
+        }
+
+        body.format .container table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        body.format .container th, body.format .container td {
+            border: 1px solid black;
+            padding: 8px;
+        }
+    </style>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-12 col-lg-8 mt-5">
+                <h1>The <kbd>.pb</kbd> File Format</h1>
+                <p>The data concerning one instance of participatory budgeting is to be stored in a single UTF-8 text
+                    file with the extension&nbsp;<kbd>.pb</kbd>. The content of the file is to be divided into three
+                    sections:</p>
+                <ul>
+                    <li><strong>META</strong> section with general metadata like the country, budget, number of votes.
+                    </li>
+                    <li><strong>PROJECTS</strong> section with projects costs and possibly some other metadata regarding
+                        projects like category, target etc.
+                    </li>
+                    <li><strong>VOTES</strong> section with votes, that can be in one of the four types: approval,
+                        ordinal,
+                        cumulative, scoring; and optionally with metadata regarding voters like age, sex etc.
+                    </li>
+                </ul>
+
+                <p align="justify">
+                Each section starts with a title line (one of <kbd>META</kbd>, <kbd>PROJECTS</kbd>, <kbd>VOTES</kbd>), 
+                followed by a column header line which is a semicolon-separated list of the names of the columns used 
+                in the section (for the META section this must be <kbd>key;value</kbd>, for the other sections it 
+                depends on which information is available), followed by several lines encoding the data.
+                </p>
+
+
+
+                <div class="accordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#code" aria-expanded="false"
+                                    aria-controls="code">A Simple Example
+                            </button>
+                        </h2>
+                        <div id="code" class="accordion-collapse collapse">
+                            <div class="accordion-body">
+                <pre>
+META
+key; value
+description; Municipal PB in Wieliczka
+country; Poland
+unit; Wieliczka
+instance; 2020
+num_projects; 5
+num_votes; 10
+budget; 2500
+rule; greedy
+vote_type; approval
+min_length; 1
+max_length; 3
+date_begin; 16.09.2023
+date_end; 04.10.2023
+PROJECTS
+project_id; cost; category
+1; 600; culture, education
+2; 800; sport
+4; 1400; culture
+5; 1000; health, sport
+7; 1200; education
+VOTES
+voter_id; age; sex; vote
+1; 34; f; 1,2,4
+2; 51; m; 1,2
+3; 23; m; 2,4,5
+4; 19; f; 5,7
+5; 62; f; 1,4,7
+6; 54; m; 1,7
+7; 49; m; 5
+8; 27; f; 4
+9; 39; f; 2,4,5
+10; 44; m; 4,5</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+<br>
+                <p align="justify">
+                    Although this is not a single standard CSV file, the format behaves similarly. Each <kbd>.pb</kbd> 
+                    file consists of three sections (meta, projects, and votes), each structured like a separate CSV 
+                    table — with different numbers of columns per section. Because of this structure, the format follows 
+                    standard CSV conventions, meaning that special characters are properly escaped using double quotes.
+                    <br><br>
+                    Values are separated by a semicolon (<kbd>;</kbd>). If a field contains a semicolon, it is enclosed 
+                    in double quotes (<kbd>"</kbd>). Double quotes inside a field are escaped by doubling them (<kbd>""</kbd>). 
+                    Fields that do not contain special characters (like <kbd>;</kbd> or <kbd>"</kbd>) are left unquoted.
+
+                    <br><br>For example, in the <kbd>poland_wroclaw_2017_.pb</kbd> file:
+                    <br>
+
+                    <code>
+                        <br>18;1000000;8640;<strong>Rowerowy Wrocław 2017</strong>;category
+                        <br>50;1000000;10796;<strong>"Zielona rowerowo-piesza obwodnica Wrocławia; ETAP II"</strong>;category
+                        <br>499;1000000;3949;<strong>"""Konikowo"" - Budowa autorskiego placu zabaw"</strong>;category
+                    </code>
+
+                </p>
+
+                <h2 class="mb-3 mt-5">Detailed Description</h2>
+
+
+
+
+<section>
+    <p class="my-3">The <code class="required header">red</code> part is obligatory.</p>
+
+    <div class="accordion">
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#section-one" aria-expanded="false" aria-controls="section-one">
+                    Section 1: META
+                </button>
+            </h2>
+            <div id="section-one" class="accordion-collapse collapse show">
+                <div class="accordion-body">
+                    <p><i>All fields are provided as <b>key:value</b> pairs.</i></p>
+                    <ul id="fields-container"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+<section class="mt-3">
+    <div class="accordion">
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#section-two" aria-expanded="false" aria-controls="section-two">
+                    Section 2: PROJECTS
+                </button>
+            </h2>
+            <div id="section-two" class="accordion-collapse collapse">
+                <div class="accordion-body">
+                    <ul id="projects-container"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+<section class="mt-3 mb-5">
+    <div class="accordion">
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#section-three" aria-expanded="false" aria-controls="section-three">
+                    Section 3: VOTES
+                </button>
+            </h2>
+            <div id="section-three" class="accordion-collapse collapse">
+                <div class="accordion-body">
+                    <ul id="votes-container"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+    const metaFields = [
+        {
+            "field_name": "description",
+            "datatype": "str",
+            "description": "a brief summary of the process.",
+            "example": "Municipal PB in Wieliczka",
+            "if_obligatory": true
+        },
+        {
+            "field_name": "country",
+            "datatype": "str",
+            "description": "name of the country. If the election was held across multiple countries we use <kbd>Worldwide</kbd> term.",
+            "example": ["Poland"],
+            "if_obligatory": true
+        },
+        {
+            "field_name": "unit",
+            "datatype": "str",
+            "description": "name of the municipality, region, organization, etc., holding the PB process.",
+            "example": "Wieliczka",
+            "if_obligatory": true
+        },
+        {
+            "field_name": "subunit",
+            "datatype": "str",
+            "description": "name of the sub-jurisdiction or category within which the preferences are aggregated and funds are allocated. Additionaly, subunit (if exists) is added to the file name on the website: '<em>country_unit_instance_subunit</em>', so it's more 'official'.",
+            "if_obligatory": false,
+            "additional_info": [
+                "<em>scenario 1</em>: in Paris, there are 21 PBs – a city-wide budget and 20 district-wide budgets. For the city-wide budget, <code class='required'>unit</code> is Paris, and <code class='optional'>subunit</code> is undefined, while for the district-wide budgets, <code class='required'>unit</code> is also Paris, and <code class='optional'>subunit</code> is the name of the district (e.g., <kbd>IIIe arrondissement</kbd>).",
+                "<em>scenario 2</em>: before 2019, in Warsaw there have been district-wide and neighborhood-wide PBs. For all of them, <code class='required'>unit</code> is Warsaw, while <code class='optional'>subunit</code> is the name of the district for district-wide budgets, and the name of the neighborhood for neighborhood-wide budgets. To associate neighborhoods with districts (if desired), an additional property <code class='optional'>district</code> can be used.",
+                "<em>scenario 3</em>: assume that in a given city, there are distinct PBs for each of n > 1 categories (environmental projects, transportation projects, etc.). For all of them, <code class='required'>unit</code> is the city name, while <code class='optional'>subunit</code> is the name of the category."
+            ],
+            "example": "Sunnydale Village"
+        },
+        {
+            "field_name": "district",
+            "datatype": "str",
+            "if_obligatory": false,
+            "description": "see descriptions of <code class=\"optional\">subunit</code> above.",
+            "example": "Brooklyn"
+        },
+        {
+            "field_name": "instance",
+            "datatype": "str",
+            "description": "a unique identifier of the specific edition of the PB process (year, edition number, etc.) used by the organizers to identify that edition; note that <code class=\"required\">instance</code> will not necessarily correspond to the year in which the vote is actually held, as some organizers identify the edition by the fiscal year in which the PB projects are to be carried out.",
+            "example": "2023",
+            "if_obligatory": true
+        },
+        {
+            "field_name": "num_projects",
+            "datatype": "int",
+            "description": "the total number of projects involved, which must match the count from the PROJECTS section.",
+            "example": "42",
+            "if_obligatory": true
+        },
+        {
+            "field_name": "num_votes",
+            "datatype": "int",
+            "description": "the total number of votes, which must match the count from the VOTES section.",
+            "example": "1000",
+            "if_obligatory": true
+        },
+        {
+            "field_name": "budget",
+            "datatype": "float or int",
+            "description": "the total amount of funds to be allocated.",
+            "example": ["500000.00", "20000"],
+            "if_obligatory": true
+        },
+        {
+            "field_name": "vote_type",
+            "datatype": "str",
+            "description": "the voting mechanism employed. Options:",
+            "options": [
+                {"value": "approval", "description": "each vote is a subset of projects,"},
+                {"value": "ordinal", "description": "each vote is a permutation of a subset of project such that its size is in $[$<code>min_length</code>$,$ <code>max_length</code>$]$, corresponding to a strict preference ordering,"},
+                {"value": "cumulative", "description": "each vote is a vector $\\mathbf{v} \\in \\mathbb{R}_{+}^{|P|}$ such that ${\\lVert\\mathbf{v}\\rVert}_{1} \\le $<code>max_sum_points</code> $ \\in \\mathbb{R}_{+}$, we usually omit the projects that have zero support,"},
+                {"value": "scoring", "description": "each vote is a vector $\\mathbf{v} \\in I^{|P|}$, where $I \\subseteq \\mathbb{R}$,"},
+                {"value": "choose-1", "description": "participants are allowed to cast a single vote for one project."}
+            ],
+            "if_obligatory": true
+        },
+        {
+            "field_name": "rule",
+            "datatype": "str",
+            "description": "the rule applied to the voting results. Options:",
+            "options": [
+                {"value": "greedy", "description": ""},
+                {"value": "equalshares", "description": ""},
+                {"value": "equalshares/add1", "description": ""},
+                {"value": "unknown", "description": "either the information is not available, or there were multiple possibilities, and it is unclear which one applies."},
+            ],
+            "if_obligatory": true
+        },
+        {
+            "field_name": "date_begin",
+            "datatype": "str",
+            "description": "the starting date of voting, <kbd>dd.mm.yyyy</kbd>. If the exact date is unavailable, providing just the year is sufficient.",
+            "example": ["16.09.2023", "2023"],
+            "if_obligatory": true
+        },
+        {
+            "field_name": "date_end",
+            "datatype": "str",
+            "description": "the ending date of voting, <kbd>dd.mm.yyyy</kbd>. If the exact date is unavailable, providing just the year is sufficient.",
+            "example": ["04.10.2023", "2023"],
+            "if_obligatory": true
+        },
+        {
+            "field_name": "if <code class=\"required\">vote_type</code>  == approval:",
+            "datatype": null,
+            "description": "",
+            "options": [
+                {"value": "min_length", "description": "[default: 1]"},
+                {"value": "max_length", "description": "[default: num_projects]"},
+                {"value": "min_sum_cost", "description": "[default: 0]"},
+                {"value": "max_sum_cost", "description": "[default: $\\infty$]"},
+            ],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "if <code class=\"required\">vote_type</code>  == ordinal:",
+            "datatype": null,
+            "description": "",
+            "options": [
+                {"value": "min_length", "description": "[default: 1]"},
+                {"value": "max_length", "description": "[default: num_projects]"},
+                {"value": "scoring_fn", "description": "[default: Borda]"},
+            ],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "if <code class=\"required\">vote_type</code>  == cumulative:",
+            "datatype": null,
+            "description": "",
+            "options": [
+                {"value": "min_length", "description": "[default: 1]"},
+                {"value": "max_length", "description": "[default: num_projects]"},
+                {"value": "min_points", "description": "[default: 0]"},
+                {"value": "max_points", "description": "[default: max_sum_points]"},
+                {"value": "min_sum_points", "description": "[default: 0]"},
+                {"value": "<code class=\"required\">max_sum_points</code>", "description": ""},
+            ],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "if <code class=\"required\">vote_type</code>  == scoring:",
+            "datatype": null,
+            "description": "",
+            "options": [
+                {"value": "min_length", "description": "[default: 1]"},
+                {"value": "max_length", "description": "[default: num_projects]"},
+                {"value": "min_points", "description": "[default: $-\\infty$]"},
+                {"value": "max_points", "description": "[default: $\\infty$]"},
+                {"value": "default_score", "description": "[default: 0]"},
+            ],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "edition",
+            "datatype": "str",
+            "description": "typically a sequential number indicating event in the series.",
+            "example": ["6"],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "language",
+            "datatype": "str",
+            "description": "language of the description texts (i.e., full project names), in <a href=\"https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes\" target=\"_blank\">ISO 639 format</a> (assigned as two-letter code).",
+            "example": ["en"],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "currency",
+            "datatype": "str",
+            "description": "budget's currency, in <a href=\"https://en.wikipedia.org/wiki/ISO_4217\" target=\"_blank\">ISO 4217 format</a> (assigned as three-letter code).",
+            "example": ["EUR", "PLN"],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "fully_funded",
+            "datatype": "int*",
+            "description": "a flag indicating whether the budget was greater than the total cost of all projects, which already meant funding all the projects before the voting. Added only to files where such a situation occurred; we do not add <em>fully_funded;0</em>. There is an excluder for such instances on the website, as we understand that such files might not be very engaging. :)",
+            "example": ["1"],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "experimental",
+            "datatype": "int*",
+            "description": "a flag indicating whether the data is artificial. Excluder on the website.",
+            "example": ["1"],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "comment",
+            "datatype": "str",
+            "description": "a comment (or comments) for the file. It can address various issues such as data inconsistencies, errors in voting, or mistakes in vote counting. Sometimes there is more than one comment, and they may repeat. For this reason, each comment gets a sequential number (#1:, #2:, #3:, etc.). These numbers allow for easy identification and referencing of specific comments.",
+            "example": ["#1: Project 586 was free (cost 0). To keep data consistent and not to have 0-cost projects (may cause problems when processing data) we set its cost to an artificial value of 1. #2: If a given project has multiple coordinates, then the average over these coordinates is taken."],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "acknowledgments",
+            "datatype": "str",
+            "description": "used to cite the sources of data, methodologies, or tools referenced or utilized in the file.",
+            "example": ["Data from Yang et al. (2024), https://arxiv.org/abs/2310.03501."],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "min_project_score_threshold",
+            "datatype": "int",
+            "description": "a minimum score a project must receive to be eligible for implementation. Even if a project fits within the available budget, it will not be selected unless it meets this threshold. In the case of approval ballots, the score is simply the number of votes received.",
+            "example": ["300"],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "other, non-standard fields:",
+            "options": [
+                {"value": "min_project_cost"},
+                {"value": "max_project_cost"},
+                {"value": "neighborhoods"},
+                {"value": "subdistricts"},
+                {"value": "categories"},
+                {"value": "leftover_budget"},
+                {"value": "budget_per_category"},
+                {"value": "budget_per_neighborhood"},
+                {"value": "min_length_per_category"},
+                {"value": "max_length_per_category"},
+                {"value": "min_sum_cost_per_category"},
+                {"value": "max_sum_cost_per_category"},
+            ],
+            "if_obligatory": false
+        }
+    ];
+
+    const projectFields = [
+        {
+            "field_name": "project_id",
+            "datatype": "str",
+            "description": "unique identifier for the project.",
+            "example": "124-A",
+            "if_obligatory": true
+        },
+        {
+            "field_name": "cost",
+            "datatype": "int or float",
+            "description": "the cost of the project.",
+            "options": null,
+            "example": "50000",
+            "if_obligatory": true
+        },
+        {
+            "field_name": "votes",
+            "datatype": "int",
+            "description": "represents the total number of unique voting actions for a project, incrementing by one for each voter regardless of the points given. For example, if a voter gives 5 points to a project, it adds 1 to the votes and 5 to the score.",
+            "options": null,
+            "example": "560",
+            "if_obligatory": false
+        },
+        {
+            "field_name": "score",
+            "datatype": "int",
+            "description": "reflects the cumulative sum of points awarded to the project, increasing by the exact number of points assigned by voters. For example, if a voter gives 5 points to a project, it adds 1 to the votes and 5 to the score.",
+            "options": null,
+            "example": "1430",
+            "if_obligatory": false
+        },
+        {
+            "field_name": "name",
+            "datatype": "str",
+            "description": "full project name.",
+            "options": null,
+            "example": "Community Park Renovation",
+            "if_obligatory": false
+        },
+        {
+            "field_name": "category",
+            "datatype": "list",
+            "description": "categories assigned to the project, separated by commas",
+            "options": null,
+            "example": "urban greenery,public space,environmental protection",
+            "additional_info": [
+                "<em>scenario 1</em>: a project might be classified under 'environmental protection' if it aims to improve recycling facilities in a community.",
+                "<em>scenario 2</em>: a 'public space' project could involve renovating a local park to include more seating areas and playground equipment.",
+            ],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "target",
+            "datatype": "list",
+            "description": "target group, beneficiaries for whom the project is intended. Separated by commas.",
+            "options": null,
+            "example": "people with disabilities,seniors",
+            "additional_info": [
+                "<em>scenario 1</em>: a project targeted at 'youth' might include building a new skateboard park.",
+                "<em>scenario 2</em>: 'Seniors' might be the target for a project that introduces fitness programs tailored to older adults in community centers.",
+            ],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "selected",
+            "datatype": "int*",
+            "description": "if project was selected by orignial rule. Typically selected (1) or not (0), but there are ambiguous cases where 2 is used. Then, explained in the comment.",
+            "options": null,
+            "example": ["0", "1", "2"],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "district",
+            "datatype": "str",
+            "description": "identifies the district within a city where the project is located or applicable. This field is particularly useful in city-wide instances.",
+            "options": null,
+            "example": "Manhattan",
+            "if_obligatory": false
+        },
+        {
+            "field_name": "neighborhood",
+            "datatype": "str",
+            "description": "similar to <em>district</em> but different granularity.",
+            "options": null,
+            "example": "Upper West Side",
+            "if_obligatory": false
+        },
+        
+        {
+            "field_name": "description",
+            "datatype": "str",
+            "description": "more details about a project.",
+            "options": null,
+            "example": "The Community Green Space Enhancement Project aims to transform underutilized urban spaces into vibrant, eco-friendly areas for public use.",
+            "if_obligatory": false
+        },
+        {
+            "field_name": "proposer",
+            "datatype": "str",
+            "description": "a full name of the individual or group proposing a project.",
+            "options": null,
+            "example": "Jane Doe",
+            "if_obligatory": false
+        },
+        {
+            "field_name": "latitude",
+            "datatype": "float",
+            "description": "coordinates. If a given project has multiple coordinates, then the average over these coordinates is taken.",
+            "options": null,
+            "example": "52.1314771874616",
+            "if_obligatory": false
+        },
+        {
+            "field_name": "longitude",
+            "datatype": "float",
+            "description": "coordinates. If a given project has multiple coordinates, then the average over these coordinates is taken.",
+            "options": null,
+            "example": "21.0567927351804",
+            "if_obligatory": false
+        },
+        {
+            "field_name": "other, non-standard fields:",
+            "options": [
+                {"value": "sustainability", "description": "indicating whether a project adheres to environmental sustainability principles."},
+                {"value": "community_involvement", "description": "detailing the extent of local community participation in the project's planning and execution."},
+                {"value": "public_id"},
+            ],
+            "if_obligatory": false
+        }
+    ];
+
+    const voteFields = [
+        {
+            "field_name": "voter_id",
+            "datatype": "str",
+            "description": "unique identifier for the voter.",
+            "options": null,
+            "example": "P5424",
+            "if_obligatory": true
+        },
+        {
+            "field_name": "if <code class=\"required\">vote_type</code>  == approval:",
+            "datatype": null,
+            "description": "",
+            "options": [
+                {"value": "<code class=\"required\">vote</code>", "description": "<em>(list)</em> ids of the approved projects, separated by commas"},
+            ],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "if <code class=\"required\">vote_type</code>  == ordinal:",
+            "datatype": null,
+            "description": "",
+            "options": [
+                {"value": "<code class=\"required\">vote</code>", "description": "<em>(list)</em> ids of the selected projects, from the most preferred one to the least preferred one, separated by commas."},
+            ],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "if <code class=\"required\">vote_type</code>  == cumulative:",
+            "datatype": null,
+            "description": "",
+            "options": [
+                {"value": "<code class=\"required\">vote</code>", "description": "<em>(list)</em> project ids, in the decreasing order induced by points, separated by commas; projects not listed are assumed to be awarded $0$ points."},
+                {"value": "<code class=\"required\">points</code>", "description": "<em>(list)</em> points assigned to the selected projects, listed in the same order as project ids in <code class=\"required\">vote</code>."}
+            ],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "if <code class=\"required\">vote_type</code>  == scoring:",
+            "datatype": null,
+            "description": "",
+            "options": [
+                {"value": "<code class=\"required\">vote</code>", "description": "<em>(list)</em> project ids, in the decreasing order induced by <code class=\"optional\">points</code>, separated by commas; projects not listed are assumed to be awarded <code class=\"optional\">default_score</code> points."},
+                {"value": "<code class=\"required\">points</code>", "description": "<em>(list)</em> points assigned to the selected projects, listed in the same order as project ids in <code class=\"required\">vote</code>."}
+            ],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "age",
+            "datatype": "int",
+            "description": "age of the voter. Sometimes it shows very low values (starting from zero), indicating that one doesn't need to be an adult to vote: If a voter is under 13, they can vote with the consent of a parent or guardian. Hence, for example, age 0 likely corresponds to cases where parents/guardians are voting on behalf of their children.",
+            "options": null,
+            "example": "27",
+            "if_obligatory": false
+        },
+        {
+            "field_name": "sex",
+            "datatype": "str",
+            "description": "currently, only two values are present.",
+            "options": null,
+            "example": ["M", "F"],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "voting_method",
+            "datatype": "str",
+            "description": "online or offline?",
+            "options": null,
+            "example": ["internet", "paper"],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "district",
+            "datatype": "str",
+            "description": "voter's district: is particularly useful in city-wide instances.",
+            "options": null,
+            "example": ["Krowodrza"],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "neighborhood",
+            "datatype": "str",
+            "description": "similar to <code class=\"optional\">district</code> but different granularity.",
+            "options": null,
+            "example": ["Krowodrza Górka"],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "education",
+            "datatype": "str",
+            "description": "voter's education level.",
+            "options": null,
+            "example": ["Master's degree"],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "other, non-standard fields:",
+            "options": [
+                {"value": "topic_preference_transport"},
+                {"value": "topic_preference_culture"},
+                {"value": "topic_preference_nature"},
+                {"value": "district_preference"},
+                {"value": "time_taken_seconds"},
+                {"value": "format_easiness"},
+                {"value": "format_expressiveness"},
+                {"value": "format_rank"},
+            ],
+            "if_obligatory": false
+        }
+    ];
+
+   const renderFields = (fields, containerId) => {
+        const container = document.getElementById(containerId);
+        fields.forEach(field => {
+            const fieldItem = document.createElement('li');
+            fieldItem.innerHTML = `
+                <code class="${field.if_obligatory ? 'required header' : 'optional header'}">${field.field_name}</code>
+                
+                ${field.datatype ? `<em>(${field.datatype})</em>` : ''}${field.description ? ` &ndash; ${field.description}` : ''}
+
+                <ul>
+
+                    ${field.options ? `<ul>${field.options.map(option => 
+                        `<li><code class='optional header'>${option.value}</code>${option.description ? ` &ndash; ${option.description}` : ''}</li>`
+                    ).join('')}</ul>` : ''}
+
+                    ${field.additional_info ? `<div style="margin-left: 1em;"><ul>${field.additional_info.map(info => `<li>${info}</li>`).join('')}</ul></div>` : ''}
+                    
+                    ${Array.isArray(field.example) 
+                    ? `<div style="margin-left: 1em;"><em>e.g.:</em> ${field.example.map((example, index) => 
+                        `<kbd>${example}</kbd>${index < field.example.length - 1 ? ' or ' : ''}`
+                        ).join('')}</div>` 
+                    : field.example 
+                        ? `<div style="margin-left: 1em;"><em>e.g.:</em> <kbd>${field.example}</kbd></div>` 
+                        : ''}
+                </ul>
+            `;
+            container.appendChild(fieldItem);
+        });
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        renderFields(metaFields, 'fields-container');
+        renderFields(projectFields, 'projects-container');
+        renderFields(voteFields, 'votes-container');
+    });
+</script>
+
+
+    <p class="my-3" align="justify"><i>* we use integers instead of booleans for flag values (such as 1 and 0)
+     as this approach provides more flexibility. For example, a project can be either selected (1)
+    or not (0). But there are cases where a project is selected for another reason, such as 
+    an error made by the company conducting the voting process. 
+    In such cases, we can assign a special value, like 2, and explain it in a comment.</i></p>
+
+
+
+
+            </div>
+        </div>
+    </div>
+{% endblock %}

@@ -201,6 +201,31 @@ def home():
     return render_template("index.html", tiles=tiles, count=len(tiles))
 
 
+@bp.route("/format")
+def format_page():
+    return render_template("format.html")
+
+
+@bp.route("/code")
+def code_page():
+    return render_template("code.html")
+
+
+@bp.route("/publications")
+def publications_page():
+    return render_template("publications.html")
+
+
+@bp.route("/about")
+def about_page():
+    return render_template("about.html")
+
+
+@bp.route("/contact")
+def contact_page():
+    return render_template("contact.html")
+
+
 @bp.route("/download/<path:filename>")
 def download(filename: str):
     path = _pb_folder() / filename
