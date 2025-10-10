@@ -3,7 +3,7 @@ import os
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from flask import Blueprint, abort, current_app, render_template, request, send_file
 
@@ -21,6 +21,12 @@ bp = Blueprint(
 # Simple in-process cache so we don't parse 1000+ files every request
 _TILES_CACHE: Optional[List[Dict[str, Any]]] = None
 _CACHE_SIGNATURE: Optional[str] = None
+
+# Cache for comments aggregation
+_COMMENTS_CACHE: Optional[
+    Tuple[Dict[str, List[str]], List[Tuple[str, int, List[str]]]]
+] = None
+_COMMENTS_SIGNATURE: Optional[str] = None
 
 
 def _workspace_root() -> Path:
@@ -191,6 +197,88 @@ def _get_tiles_cached() -> List[Dict[str, Any]]:
     return _TILES_CACHE
 
 
+def _extract_comments_from_meta(meta: Dict[str, Any]) -> List[str]:
+    """
+    Parse comments from META string values following the pattern:
+    comment;#1: text. #2: text. ...
+    Returns a list of comment strings in index order. If no comments, returns [].
+    """
+    raw = str(meta.get("comment", "")).strip()
+    if not raw:
+        return []
+    # Normalize separators and ensure consistent spaces
+    s = raw.replace("\n", " ")
+    parts: List[str] = []
+    current = []
+    expecting = 1
+    i = 0
+    # Simple state machine: find occurrences of #n: and capture until next #n+1:
+    while True:
+        marker = f"#{expecting}:"
+        next_marker = f"#{expecting + 1}:"
+        start = s.find(marker)
+        if start == -1:
+            # If no #1: but the whole string exists, take as single comment
+            if expecting == 1 and s:
+                text = s
+                text = text.strip().strip(";.")
+                if text:
+                    parts.append(text)
+            break
+        start_text = start + len(marker)
+        end = s.find(next_marker, start_text)
+        if end == -1:
+            chunk = s[start_text:]
+        else:
+            chunk = s[start_text:end]
+        text = chunk.strip().strip(";.")
+        if text:
+            parts.append(text)
+        expecting += 1
+        if end == -1:
+            break
+    return parts
+
+
+def _aggregate_comments_cached() -> (
+    Tuple[Dict[str, List[str]], List[Tuple[str, int, List[str]]]]
+):
+    """
+    Returns a tuple:
+    - mapping from comment text -> list of filenames using it
+    - list of tuples (comment, count, files) sorted by count desc then comment asc
+    Uses a cache based on files signature.
+    """
+    global _COMMENTS_CACHE, _COMMENTS_SIGNATURE
+    folder = _pb_folder()
+    files = sorted(folder.glob("*.pb"))
+    signature = _compute_signature(files)
+    if _COMMENTS_CACHE is not None and signature == _COMMENTS_SIGNATURE:
+        return _COMMENTS_CACHE
+
+    mapping: Dict[str, List[str]] = {}
+    for p in files:
+        try:
+            lines = _read_file_lines(p)
+            meta, _, _, _, _ = parse_pb_lines(lines)
+            comments = _extract_comments_from_meta(meta)
+            for c in comments:
+                mapping.setdefault(c, []).append(p.name)
+        except Exception:
+            # Ignore broken files for comments aggregation
+            continue
+
+    # Create sorted list
+    rows: List[Tuple[str, int, List[str]]] = []
+    for c, flist in mapping.items():
+        rows.append((c, len(flist), sorted(flist)))
+    rows.sort(key=lambda t: (-t[1], t[0].lower()))
+
+    _COMMENTS_CACHE = (mapping, rows)
+    _COMMENTS_SIGNATURE = signature
+    return _COMMENTS_CACHE
+
+
 @bp.route("/")
 def home():
     folder = _pb_folder()
@@ -224,6 +312,12 @@ def about_page():
 @bp.route("/contact")
 def contact_page():
     return render_template("contact.html")
+
+
+@bp.route("/comments")
+def comments_page():
+    _map, rows = _aggregate_comments_cached()
+    return render_template("comments.html", rows=rows, total=len(rows))
 
 
 # @bp.route("/upload")

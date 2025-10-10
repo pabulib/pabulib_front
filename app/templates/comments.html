@@ -1,0 +1,106 @@
+{% extends 'base.html.twig' %}
+
+{% block bodyClass %}comments{% endblock %}
+{% block title %}Pabulib – Comments{% endblock %}
+
+{% block body %}
+<div class="container py-3">
+  <h1 class="mb-3">Comments</h1>
+  <p class="text-muted">Parsed from META key <code>comment</code> using pattern <code>#n:</code> segments. Showing how many PB files share each comment.</p>
+
+  <div class="table-responsive">
+    <table class="table table-striped align-middle comments-table">
+      <colgroup>
+        <col style="width:75%">
+        <col style="width:5%">
+        <col style="width:20%">
+      </colgroup>
+      <thead class="table-light">
+        <tr>
+          <th>Comment</th>
+          <th># files</th>
+          <th>Files</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for comment, count, files in rows %}
+        <tr>
+          <td class="comment-cell">{{ comment }}</td>
+          <td><span class="badge text-bg-secondary">{{ count }}</span></td>
+          <td>
+            {% set preview = files[:5] %}
+            <div class="files-cell">
+              <div class="file-list" data-files='{{ files|tojson|e }}' data-expanded="0">
+                {% for f in preview %}
+                  <span class="file-item">{{ f }}</span>
+                {% endfor %}
+                {% if files|length > preview|length %}
+                  <span class="more-count text-muted">+ {{ files|length - preview|length }} more</span>
+                {% endif %}
+              </div>
+              {% if files|length > preview|length %}
+                <button type="button" class="btn btn-sm btn-outline-primary mt-1 btn-expand" aria-label="Show all files" aria-expanded="false">+</button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// Expand/collapse behavior for files list (+ to expand, − to collapse)
+(function(){
+  const PREVIEW_COUNT = 5;
+  function renderPreview(container, files){
+    const rest = Math.max(files.length - PREVIEW_COUNT, 0);
+    const preview = files.slice(0, PREVIEW_COUNT)
+      .map(f => `<span class=\"file-item\">${f}</span>`) 
+      .join('');
+    const more = rest > 0 ? `<span class=\"more-count text-muted\">+ ${rest} more</span>` : '';
+    container.innerHTML = preview + more;
+    container.dataset.expanded = '0';
+  }
+  function renderFull(container, files){
+    container.innerHTML = files.map(f => `<span class=\"file-item\">${f}</span>`).join('');
+    container.dataset.expanded = '1';
+  }
+  addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-expand');
+    if (!btn) return;
+    const wrap = btn.closest('.files-cell'); // robust parent lookup
+    const container = wrap && wrap.querySelector('.file-list');
+    if (!container) return;
+  const data = container.getAttribute('data-files');
+  if (!data) return;
+  let files;
+  try { files = JSON.parse(data) || []; } catch (e) { files = []; }
+  const expanded = container.dataset.expanded === '1';
+    if (expanded){
+      renderPreview(container, files);
+      btn.textContent = '+';
+      btn.setAttribute('aria-label', 'Show all files');
+      btn.setAttribute('aria-expanded', 'false');
+    } else {
+      renderFull(container, files);
+      btn.textContent = '-';
+      btn.setAttribute('aria-label', 'Show fewer files');
+      btn.setAttribute('aria-expanded', 'true');
+    }
+  });
+})();
+</script>
+
+<style>
+/* Make the comment column the longest and allow wrapping */
+.comments-table .comment-cell { word-break: break-word; }
+.comments-table .files-cell { display: flex; flex-direction: column; align-items: flex-start; max-width: 100%; overflow-x: auto; }
+.comments-table .file-list { display: block; max-width: 100%; }
+.comments-table .file-item { display: block; line-height: 1.25; margin-bottom: 2px; white-space: nowrap; }
+.comments-table .more-count { display: block; margin-top: 2px; }
+.comments-table td:nth-child(2) { white-space: nowrap; }
+.comments-table td:nth-child(3) { white-space: nowrap; }
+</style>
+{% endblock %}
