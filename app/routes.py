@@ -28,6 +28,10 @@ _COMMENTS_CACHE: Optional[
 ] = None
 _COMMENTS_SIGNATURE: Optional[str] = None
 
+# Cache for statistics aggregation
+_STATS_CACHE: Optional[Tuple[Dict[str, Any], Dict[str, Any]]] = None
+_STATS_SIGNATURE: Optional[str] = None
+
 
 def _workspace_root() -> Path:
     # assume this repo layout
@@ -110,6 +114,7 @@ def build_tile_data(pb_path: Path) -> Dict[str, Any]:
 
     # fully funded heuristic: if all projects are selected OR sum(selected costs) >= budget
     fully_funded = False
+    selected_count = 0
     try:
         selected_flags = [
             str(p.get("selected", "0")).strip() for p in projects.values()
@@ -118,6 +123,7 @@ def build_tile_data(pb_path: Path) -> Dict[str, Any]:
         sum_selected_cost = 0
         for p in projects.values():
             if str(p.get("selected", "0")).strip() == "1":
+                selected_count += 1
                 c = p.get("cost")
                 if isinstance(c, str) and c.isdigit():
                     sum_selected_cost += int(c)
@@ -128,6 +134,7 @@ def build_tile_data(pb_path: Path) -> Dict[str, Any]:
         )
     except Exception:
         fully_funded = False
+        selected_count = 0
 
     # experimental flag from META, if present
     experimental = str(meta.get("experimental", "")).strip().lower() in {
@@ -140,11 +147,36 @@ def build_tile_data(pb_path: Path) -> Dict[str, Any]:
     # normalize city label (use unit/city/district unified as "city" for filters)
     city_label = unit
 
-    # parse instance to int if possible (for year filtering)
+    # Determine election year from date_begin (dd.mm.yyyy or yyyy), fallback to instance/year
+    year_str = ""
+    year_int: Optional[int] = None
     try:
-        year_int = int(instance)
+        date_begin = str(meta.get("date_begin", "")).strip()
+        if date_begin:
+            # look for a 4-digit year anywhere in the string
+            import re
+
+            m = re.search(r"(\d{4})", date_begin)
+            if m:
+                y = int(m.group(1))
+                if 1900 <= y <= 2100:
+                    year_int = y
+                    year_str = str(y)
+        if year_int is None:
+            # fallback: try instance or meta year directly
+            for cand in [meta.get("year"), instance]:
+                if cand is None:
+                    continue
+                s = str(cand).strip()
+                if s.isdigit():
+                    y = int(s)
+                    if 1900 <= y <= 2100:
+                        year_int = y
+                        year_str = str(y)
+                        break
     except Exception:
         year_int = None
+        year_str = ""
 
     # quality metric: (avg vote length)^3 * (num_projects)^2 * (num_votes)
     vlen = vote_length_float or 0.0
@@ -155,10 +187,13 @@ def build_tile_data(pb_path: Path) -> Dict[str, Any]:
         "title": title,
         "webpage_name": webpage_name,
         "description": description,
+        "currency": currency,
         "num_votes": _format_int(num_votes),
         "num_votes_raw": num_votes,
         "num_projects": _format_int(num_projects),
         "num_projects_raw": num_projects,
+        "num_selected_projects": _format_int(selected_count),
+        "num_selected_projects_raw": selected_count,
         "budget": budget_str,
         "budget_raw": budget,
         "vote_type": vote_type,
@@ -166,7 +201,7 @@ def build_tile_data(pb_path: Path) -> Dict[str, Any]:
         "vote_length_raw": vote_length_float,
         "country": country,
         "city": city_label,
-        "year": instance,
+        "year": year_str,
         "year_raw": year_int,
         "fully_funded": fully_funded,
         "experimental": experimental,
@@ -279,6 +314,132 @@ def _aggregate_comments_cached() -> (
     return _COMMENTS_CACHE
 
 
+def _aggregate_statistics_cached() -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    Compute and cache aggregate statistics across all PB files based on tile data.
+    Returns (totals, series) where totals is a dict of overall counters and series
+    contains grouped data for charts.
+    """
+    global _STATS_CACHE, _STATS_SIGNATURE
+    folder = _pb_folder()
+    files = sorted(folder.glob("*.pb"))
+    signature = _compute_signature(files)
+    if _STATS_CACHE is not None and signature == _STATS_SIGNATURE:
+        return _STATS_CACHE
+
+    tiles = _get_tiles_cached()
+    total_files = len(tiles)
+    countries = set()
+    cities = set()  # (country, city)
+    sum_projects = 0
+    sum_votes = 0
+    sum_selected = 0
+    sum_budget = 0
+    budget_by_currency_total: Dict[str, int] = {}
+
+    by_year: Dict[str, int] = {}
+    votes_by_country: Dict[str, int] = {}
+    budget_by_country: Dict[str, int] = {}
+    budget_by_country_by_currency: Dict[str, Dict[str, int]] = {}
+    vote_types: Dict[str, int] = {}
+    votes_by_city: Dict[str, int] = {}
+
+    for t in tiles:
+        country = t.get("country") or ""
+        city = t.get("city") or ""
+        year = t.get("year_raw")
+        num_projects = int(t.get("num_projects_raw") or 0)
+        num_votes = int(t.get("num_votes_raw") or 0)
+        num_selected = int(t.get("num_selected_projects_raw") or 0)
+        budget = t.get("budget_raw")
+        currency = (t.get("currency") or "").strip() or "—"
+        vtype = (t.get("vote_type") or "").strip().lower() or "unknown"
+
+        if country:
+            countries.add(country)
+        if country or city:
+            cities.add((country, city))
+
+        sum_projects += num_projects
+        sum_votes += num_votes
+        sum_selected += num_selected
+        if isinstance(budget, int):
+            sum_budget += budget
+            budget_by_currency_total[currency] = (
+                budget_by_currency_total.get(currency, 0) + budget
+            )
+
+        if year is not None:
+            by_year[str(year)] = by_year.get(str(year), 0) + 1
+        if country:
+            votes_by_country[country] = votes_by_country.get(country, 0) + num_votes
+            if isinstance(budget, int):
+                budget_by_country[country] = budget_by_country.get(country, 0) + budget
+                by_cur = budget_by_country_by_currency.setdefault(currency, {})
+                by_cur[country] = by_cur.get(country, 0) + budget
+        vote_types[vtype] = vote_types.get(vtype, 0) + 1
+
+        label = f"{country} – {city}".strip(" –")
+        votes_by_city[label] = votes_by_city.get(label, 0) + num_votes
+
+    totals: Dict[str, Any] = {
+        "total_files": total_files,
+        "total_countries": len(countries),
+        "total_cities": len(cities),
+        "total_projects": sum_projects,
+        "total_votes": sum_votes,
+        "total_funded_projects": sum_selected,
+        "total_budget": sum_budget,
+        "budget_by_currency": budget_by_currency_total,
+    }
+
+    # Prepare series as sorted arrays for charts
+    series_files_per_year = [{"label": y, "value": c} for y, c in by_year.items()]
+    try:
+        series_files_per_year.sort(key=lambda d: int(d["label"]))
+    except Exception:
+        series_files_per_year.sort(key=lambda d: str(d["label"]))
+
+    series: Dict[str, Any] = {
+        "files_per_year": series_files_per_year,
+        "votes_per_country": sorted(
+            [{"label": k, "value": v} for k, v in votes_by_country.items()],
+            key=lambda d: d["value"],
+            reverse=True,
+        ),
+        "budget_per_country": sorted(
+            [{"label": k, "value": v} for k, v in budget_by_country.items()],
+            key=lambda d: d["value"],
+            reverse=True,
+        ),
+        "budget_per_country_by_currency": {
+            cur: sorted(
+                [{"label": k, "value": v} for k, v in by_cur.items()],
+                key=lambda d: d["value"],
+                reverse=True,
+            )
+            for cur, by_cur in budget_by_country_by_currency.items()
+        },
+        "available_currencies": sorted(
+            list(budget_by_currency_total.keys()), key=lambda s: (s == "—", s)
+        ),
+        "vote_types": sorted(
+            [{"label": k, "value": v} for k, v in vote_types.items()],
+            key=lambda d: d["value"],
+            reverse=True,
+        ),
+        "top_cities_by_votes": sorted(
+            [{"label": k, "value": v} for k, v in votes_by_city.items()],
+            key=lambda d: d["value"],
+            reverse=True,
+        )[:15],
+    }
+
+    _STATS_CACHE = (totals, series)
+    _STATS_SIGNATURE = signature
+    return _STATS_CACHE
+
+
 @bp.route("/")
 def home():
     folder = _pb_folder()
@@ -318,6 +479,35 @@ def contact_page():
 def comments_page():
     _map, rows = _aggregate_comments_cached()
     return render_template("comments.html", rows=rows, total=len(rows))
+
+
+@bp.route("/statistics")
+def statistics_page():
+    totals, series = _aggregate_statistics_cached()
+    # Provide some pre-formatted numbers for display
+    formatted = {
+        "files": _format_int(totals.get("total_files", 0)),
+        "countries": _format_int(totals.get("total_countries", 0)),
+        "cities": _format_int(totals.get("total_cities", 0)),
+        "projects": _format_int(totals.get("total_projects", 0)),
+        "votes": _format_int(totals.get("total_votes", 0)),
+        "funded": _format_int(totals.get("total_funded_projects", 0)),
+    }
+    # Build per-currency budget list for display
+    budgets_map: Dict[str, int] = totals.get("budget_by_currency", {}) or {}
+    budgets_list = [
+        {"currency": cur, "amount": _format_int(val)}
+        for cur, val in sorted(
+            budgets_map.items(), key=lambda kv: (kv[0] == "—", kv[0])
+        )
+    ]
+    return render_template(
+        "statistics.html",
+        totals=totals,
+        formatted=formatted,
+        series=series,
+        budgets_list=budgets_list,
+    )
 
 
 # @bp.route("/upload")
