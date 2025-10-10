@@ -32,9 +32,21 @@ _TILES_CACHE: Optional[List[Dict[str, Any]]] = None
 _CACHE_SIGNATURE: Optional[str] = None
 
 # Cache for comments aggregation
+# Structure: (
+#   mapping: Dict[comment_text, List[filename]],
+#   rows: List[Tuple[comment_text, count, List[filename]]],
+#   groups_by_comment_country: Dict[comment_text, List[{label, count, files}]],
+#   groups_by_comment_country_unit: Dict[comment_text, List[{label, count, files}]]
+# )
 _COMMENTS_CACHE: Optional[
-    Tuple[Dict[str, List[str]], List[Tuple[str, int, List[str]]]]
-] = None
+    Tuple[
+        Dict[str, List[str]],
+        List[Tuple[str, int, List[str]]],
+        Dict[str, List[Dict[str, Any]]],
+        Dict[str, List[Dict[str, Any]]],
+    ]
+]
+_COMMENTS_CACHE = None
 _COMMENTS_SIGNATURE: Optional[str] = None
 
 # Cache for statistics aggregation
@@ -321,9 +333,12 @@ def _extract_comments_from_meta(meta: Dict[str, Any]) -> List[str]:
     return parts
 
 
-def _aggregate_comments_cached() -> (
-    Tuple[Dict[str, List[str]], List[Tuple[str, int, List[str]]]]
-):
+def _aggregate_comments_cached() -> Tuple[
+    Dict[str, List[str]],
+    List[Tuple[str, int, List[str]]],
+    Dict[str, List[Dict[str, Any]]],
+    Dict[str, List[Dict[str, Any]]],
+]:
     """
     Returns a tuple:
     - mapping from comment text -> list of filenames using it
@@ -335,16 +350,47 @@ def _aggregate_comments_cached() -> (
     files = sorted(folder.glob("*.pb"))
     signature = _compute_signature(files)
     if _COMMENTS_CACHE is not None and signature == _COMMENTS_SIGNATURE:
-        return _COMMENTS_CACHE
+        try:
+            # If cache matches new 4-item shape, reuse; otherwise rebuild
+            if isinstance(_COMMENTS_CACHE, tuple) and len(_COMMENTS_CACHE) == 4:
+                return _COMMENTS_CACHE
+        except Exception:
+            pass
 
     mapping: Dict[str, List[str]] = {}
+    # For grouping files: country and country + unit
+    groups_temp_country: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    groups_temp_country_unit: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    # groups_temp_*[comment][group_key] -> {"label": display_label, "files": [filenames...]}
     for p in files:
         try:
             lines = _read_file_lines(p)
             meta, _, _, _, _ = parse_pb_lines(lines)
             comments = _extract_comments_from_meta(meta)
+            country = str(meta.get("country", "")).strip()
+            unit = str(
+                meta.get("unit", meta.get("city", meta.get("district", "")))
+            ).strip()
             for c in comments:
                 mapping.setdefault(c, []).append(p.name)
+                # Group by country
+                if country:
+                    cm_c = groups_temp_country.setdefault(c, {})
+                    key_c = country.lower()
+                    label_c = country
+                    bucket_c = cm_c.setdefault(key_c, {"label": label_c, "files": []})
+                    bucket_c["files"].append(p.name)
+                # Group by country + unit
+                if country or unit:
+                    cm_cu = groups_temp_country_unit.setdefault(c, {})
+                    key_cu = f"{country.lower()}::{unit.lower()}"
+                    label_cu = (
+                        f"{country} – {unit}".strip(" –") if (country or unit) else "—"
+                    )
+                    bucket_cu = cm_cu.setdefault(
+                        key_cu, {"label": label_cu, "files": []}
+                    )
+                    bucket_cu["files"].append(p.name)
         except Exception:
             # Ignore broken files for comments aggregation
             continue
@@ -355,7 +401,38 @@ def _aggregate_comments_cached() -> (
         rows.append((c, len(flist), sorted(flist)))
     rows.sort(key=lambda t: (-t[1], t[0].lower()))
 
-    _COMMENTS_CACHE = (mapping, rows)
+    # Build grouped lists with counts
+    def finalize_groups(
+        src: Dict[str, Dict[str, Dict[str, Any]]],
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        out: Dict[str, List[Dict[str, Any]]] = {}
+        for c, by_key in src.items():
+            items: List[Dict[str, Any]] = []
+            for _k, v in by_key.items():
+                files_list = sorted(v.get("files", []))
+                items.append(
+                    {
+                        "label": v.get("label", "—"),
+                        "count": len(files_list),
+                        "files": files_list,
+                    }
+                )
+            # Sort by count desc then label asc
+            items.sort(
+                key=lambda d: (-int(d.get("count", 0)), str(d.get("label", "")).lower())
+            )
+            out[c] = items
+        return out
+
+    groups_by_comment_country = finalize_groups(groups_temp_country)
+    groups_by_comment_country_unit = finalize_groups(groups_temp_country_unit)
+
+    _COMMENTS_CACHE = (
+        mapping,
+        rows,
+        groups_by_comment_country,
+        groups_by_comment_country_unit,
+    )
     _COMMENTS_SIGNATURE = signature
     return _COMMENTS_CACHE
 
@@ -529,8 +606,16 @@ def contact_page():
 
 @bp.route("/comments")
 def comments_page():
-    _map, rows = _aggregate_comments_cached()
-    return render_template("comments.html", rows=rows, total=len(rows))
+    _map, rows, groups_by_comment_country, groups_by_comment_country_unit = (
+        _aggregate_comments_cached()
+    )
+    return render_template(
+        "comments.html",
+        rows=rows,
+        groups_by_comment_country=groups_by_comment_country,
+        groups_by_comment_country_unit=groups_by_comment_country_unit,
+        total=len(rows),
+    )
 
 
 @bp.route("/statistics")
