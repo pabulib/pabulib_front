@@ -1,0 +1,698 @@
+{% extends 'base.html' %}
+
+{% block title %}Visualization – {{ filename }}{% endblock %}
+{% block bodyClass %}visualization{% endblock %}
+
+{% block head %}
+<!-- Chart.js for plotting -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+{% endblock %}
+
+{% block body %}
+<section class="max-w-6xl mx-auto px-4">
+  <div class="mt-4 mb-6">
+    <a class="text-blue-800 hover:text-blue-900 underline" href="{{ url_for('main.home') }}">← Back to search</a>
+  </div>
+
+  <!-- File header with name, stats, and actions -->
+  <div class="bg-white rounded-lg shadow-lg mb-6 p-6">
+    <div class="flex justify-between items-start">
+      <div>
+        <h2 class="text-2xl font-bold text-slate-800 mb-2">Visualization: {{ filename }}</h2>
+        <div class="flex gap-2">
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800">Projects: {{ counts.projects }}</span>
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800">Votes: {{ counts.votes }}</span>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <a class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" href="{{ url_for('main.preview_file', filename=filename) }}">Preview Data</a>
+        <a class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" href="{{ url_for('main.download', filename=filename) }}">Download</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Visualization Charts -->
+  <div class="space-y-6">
+    
+    <!-- Project Cost Distribution -->
+    <div class="bg-white rounded-lg shadow-lg p-6">
+      <h3 class="text-xl font-bold text-slate-800 mb-4">Project Cost Distribution</h3>
+      <div class="h-96">
+        <canvas id="costChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Vote Distribution -->
+    <div class="bg-white rounded-lg shadow-lg p-6">
+      <h3 class="text-xl font-bold text-slate-800 mb-4">Vote Distribution by Project</h3>
+      <div class="h-96">
+        <canvas id="voteChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Project Categories (if available) -->
+    {% if project_categories %}
+    <div class="bg-white rounded-lg shadow-lg p-6">
+      <h3 class="text-xl font-bold text-slate-800 mb-4">Projects by Category</h3>
+      <div class="h-96">
+        <canvas id="categoryChart"></canvas>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Voter Demographics (if available) -->
+    {% if voter_demographics %}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {% if voter_demographics.age %}
+      <div class="bg-white rounded-lg shadow-lg p-6">
+        <h3 class="text-xl font-bold text-slate-800 mb-4">Voter Age Distribution</h3>
+        <div class="h-64">
+          <canvas id="ageChart"></canvas>
+        </div>
+      </div>
+      {% endif %}
+      
+      {% if voter_demographics.sex %}
+      <div class="bg-white rounded-lg shadow-lg p-6">
+        <h3 class="text-xl font-bold text-slate-800 mb-4">Voter Gender Distribution</h3>
+        <div class="h-64">
+          <canvas id="genderChart"></canvas>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Budget vs Votes Scatter Plot -->
+    <div class="bg-white rounded-lg shadow-lg p-6">
+      <h3 class="text-xl font-bold text-slate-800 mb-4">Project Cost vs Votes Received</h3>
+      <div class="h-96">
+        <canvas id="scatterChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Vote Length Distribution -->
+    <div class="bg-white rounded-lg shadow-lg p-6">
+      <h3 class="text-xl font-bold text-slate-800 mb-4">Vote Length Distribution</h3>
+      <p class="text-sm text-gray-600 mb-4">Distribution of how many projects each voter selected</p>
+      <div class="h-96">
+        <canvas id="voteLengthChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Top Projects by Votes -->
+    <div class="bg-white rounded-lg shadow-lg p-6">
+      <h3 class="text-xl font-bold text-slate-800 mb-4">Top 15 Most Popular Projects</h3>
+      <div class="h-96">
+        <canvas id="topProjectsChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Project Selection Rate -->
+    {% if project_selection_data %}
+    <div class="bg-white rounded-lg shadow-lg p-6">
+      <h3 class="text-xl font-bold text-slate-800 mb-4">Project Selection vs Cost Efficiency</h3>
+      <p class="text-sm text-gray-600 mb-4">Selected projects (green) vs not selected (red) by cost and votes</p>
+      <div class="h-96">
+        <canvas id="selectionChart"></canvas>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Cost Distribution by Category -->
+    {% if category_cost_data %}
+    <div class="bg-white rounded-lg shadow-lg p-6">
+      <h3 class="text-xl font-bold text-slate-800 mb-4">Average Project Cost by Category</h3>
+      <div class="h-96">
+        <canvas id="categoryCostChart"></canvas>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Voting Timeline (if date information available) -->
+    {% if voting_timeline %}
+    <div class="bg-white rounded-lg shadow-lg p-6">
+      <h3 class="text-xl font-bold text-slate-800 mb-4">Voting Activity Over Time</h3>
+      <div class="h-96">
+        <canvas id="timelineChart"></canvas>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Summary Statistics -->
+    <div class="bg-white rounded-lg shadow-lg p-6">
+      <h3 class="text-xl font-bold text-slate-800 mb-4">Summary Statistics</h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="text-center">
+          <div class="text-3xl font-bold text-blue-600">{{ summary_stats.avg_cost|round(2) if summary_stats.avg_cost }}</div>
+          <div class="text-sm text-gray-600">Average Project Cost</div>
+        </div>
+        <div class="text-center">
+          <div class="text-3xl font-bold text-green-600">{{ summary_stats.avg_votes_per_project|round(1) if summary_stats.avg_votes_per_project }}</div>
+          <div class="text-sm text-gray-600">Average Votes per Project</div>
+        </div>
+        <div class="text-center">
+          <div class="text-3xl font-bold text-purple-600">{{ summary_stats.avg_vote_length|round(1) if summary_stats.avg_vote_length }}</div>
+          <div class="text-sm text-gray-600">Average Vote Length</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Correlation Heatmap -->
+    {% if correlation_data %}
+    <div class="bg-white rounded-lg shadow-lg p-6">
+      <h3 class="text-xl font-bold text-slate-800 mb-4">Project Metrics Correlation</h3>
+      <p class="text-sm text-gray-600 mb-4">Correlation between cost, votes, and selection status</p>
+      <div class="h-64">
+        <canvas id="correlationChart"></canvas>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</section>
+
+<script>
+// Data from backend
+const projectData = {{ project_data|tojson }};
+const voteData = {{ vote_data|tojson }};
+const categoryData = {{ category_data|tojson if category_data else 'null' }};
+const demographicData = {{ demographic_data|tojson if demographic_data else 'null' }};
+const voteLengthData = {{ vote_length_data|tojson if vote_length_data else 'null' }};
+const topProjectsData = {{ top_projects_data|tojson if top_projects_data else 'null' }};
+const selectionData = {{ project_selection_data|tojson if project_selection_data else 'null' }};
+const categoryCostData = {{ category_cost_data|tojson if category_cost_data else 'null' }};
+const timelineData = {{ voting_timeline|tojson if voting_timeline else 'null' }};
+const correlationData = {{ correlation_data|tojson if correlation_data else 'null' }};
+
+// Chart configurations
+Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+Chart.defaults.color = '#64748b';
+
+// Project Cost Distribution
+if (projectData && projectData.costs && projectData.costs.length > 0) {
+  const ctx1 = document.getElementById('costChart').getContext('2d');
+  
+  // Create histogram bins
+  const costs = projectData.costs.sort((a, b) => a - b);
+  const min = Math.min(...costs);
+  const max = Math.max(...costs);
+  const binCount = Math.min(20, Math.ceil(Math.sqrt(costs.length)));
+  const binWidth = (max - min) / binCount;
+  
+  const bins = [];
+  const binLabels = [];
+  for (let i = 0; i < binCount; i++) {
+    const binStart = min + i * binWidth;
+    const binEnd = binStart + binWidth;
+    bins.push(0);
+    binLabels.push(`${binStart.toFixed(0)}-${binEnd.toFixed(0)}`);
+  }
+  
+  // Count items in each bin
+  costs.forEach(cost => {
+    const binIndex = Math.min(Math.floor((cost - min) / binWidth), binCount - 1);
+    bins[binIndex]++;
+  });
+  
+  new Chart(ctx1, {
+    type: 'bar',
+    data: {
+      labels: binLabels,
+      datasets: [{
+        label: 'Number of Projects',
+        data: bins,
+        backgroundColor: 'rgba(59, 130, 246, 0.6)',
+        borderColor: 'rgba(59, 130, 246, 1)',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: 'Distribution of Project Costs'
+        }
+      },
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: 'Cost'
+          }
+        },
+        y: {
+          title: {
+            display: true,
+            text: 'Number of Projects'
+          }
+        }
+      }
+    }
+  });
+}
+
+// Vote Distribution
+if (voteData && voteData.votes_per_project) {
+  const ctx2 = document.getElementById('voteChart').getContext('2d');
+  new Chart(ctx2, {
+    type: 'bar',
+    data: {
+      labels: voteData.project_labels,
+      datasets: [{
+        label: 'Votes',
+        data: voteData.votes_per_project,
+        backgroundColor: 'rgba(16, 185, 129, 0.6)',
+        borderColor: 'rgba(16, 185, 129, 1)',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: 'Votes Received by Each Project'
+        }
+      },
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: 'Projects'
+          }
+        },
+        y: {
+          title: {
+            display: true,
+            text: 'Number of Votes'
+          }
+        }
+      }
+    }
+  });
+}
+
+// Category Distribution
+if (categoryData) {
+  const ctx3 = document.getElementById('categoryChart').getContext('2d');
+  new Chart(ctx3, {
+    type: 'pie',
+    data: {
+      labels: categoryData.labels,
+      datasets: [{
+        data: categoryData.counts,
+        backgroundColor: [
+          'rgba(59, 130, 246, 0.8)',
+          'rgba(16, 185, 129, 0.8)',
+          'rgba(245, 101, 101, 0.8)',
+          'rgba(251, 191, 36, 0.8)',
+          'rgba(139, 92, 246, 0.8)',
+          'rgba(236, 72, 153, 0.8)',
+          'rgba(20, 184, 166, 0.8)',
+          'rgba(251, 146, 60, 0.8)'
+        ]
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: 'Project Distribution by Category'
+        }
+      }
+    }
+  });
+}
+
+// Age Distribution
+if (demographicData && demographicData.age) {
+  const ctx4 = document.getElementById('ageChart').getContext('2d');
+  new Chart(ctx4, {
+    type: 'bar',
+    data: {
+      labels: demographicData.age.labels,
+      datasets: [{
+        label: 'Number of Voters',
+        data: demographicData.age.counts,
+        backgroundColor: 'rgba(168, 85, 247, 0.6)',
+        borderColor: 'rgba(168, 85, 247, 1)',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: 'Age Distribution of Voters'
+        }
+      },
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: 'Age Range'
+          }
+        },
+        y: {
+          title: {
+            display: true,
+            text: 'Number of Voters'
+          }
+        }
+      }
+    }
+  });
+}
+
+// Gender Distribution
+if (demographicData && demographicData.sex) {
+  const ctx5 = document.getElementById('genderChart').getContext('2d');
+  new Chart(ctx5, {
+    type: 'doughnut',
+    data: {
+      labels: demographicData.sex.labels,
+      datasets: [{
+        data: demographicData.sex.counts,
+        backgroundColor: [
+          'rgba(236, 72, 153, 0.8)',
+          'rgba(59, 130, 246, 0.8)'
+        ]
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: 'Gender Distribution of Voters'
+        }
+      }
+    }
+  });
+}
+
+// Scatter Plot: Cost vs Votes
+if (projectData && projectData.scatter_data) {
+  const ctx6 = document.getElementById('scatterChart').getContext('2d');
+  new Chart(ctx6, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'Projects',
+        data: projectData.scatter_data,
+        backgroundColor: 'rgba(245, 101, 101, 0.6)',
+        borderColor: 'rgba(245, 101, 101, 1)',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: 'Project Cost vs Votes Received'
+        }
+      },
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: 'Project Cost'
+          }
+        },
+        y: {
+          title: {
+            display: true,
+            text: 'Votes Received'
+          }
+        }
+      }
+    }
+  });
+}
+
+// Vote Length Distribution
+if (voteLengthData) {
+  const ctx7 = document.getElementById('voteLengthChart').getContext('2d');
+  new Chart(ctx7, {
+    type: 'bar',
+    data: {
+      labels: voteLengthData.labels,
+      datasets: [{
+        label: 'Number of Voters',
+        data: voteLengthData.counts,
+        backgroundColor: 'rgba(99, 102, 241, 0.6)',
+        borderColor: 'rgba(99, 102, 241, 1)',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: 'Distribution of Vote Lengths'
+        }
+      },
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: 'Number of Projects Selected'
+          }
+        },
+        y: {
+          title: {
+            display: true,
+            text: 'Number of Voters'
+          }
+        }
+      }
+    }
+  });
+}
+
+// Top Projects Chart
+if (topProjectsData) {
+  const ctx8 = document.getElementById('topProjectsChart').getContext('2d');
+  new Chart(ctx8, {
+    type: 'horizontalBar',
+    data: {
+      labels: topProjectsData.labels,
+      datasets: [{
+        label: 'Votes Received',
+        data: topProjectsData.votes,
+        backgroundColor: 'rgba(34, 197, 94, 0.6)',
+        borderColor: 'rgba(34, 197, 94, 1)',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: 'Most Popular Projects by Votes'
+        }
+      },
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: 'Number of Votes'
+          }
+        }
+      }
+    }
+  });
+}
+
+// Project Selection Scatter Plot
+if (selectionData) {
+  const ctx9 = document.getElementById('selectionChart').getContext('2d');
+  new Chart(ctx9, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'Selected Projects',
+        data: selectionData.selected,
+        backgroundColor: 'rgba(34, 197, 94, 0.7)',
+        borderColor: 'rgba(34, 197, 94, 1)',
+        borderWidth: 1
+      }, {
+        label: 'Not Selected',
+        data: selectionData.not_selected,
+        backgroundColor: 'rgba(239, 68, 68, 0.7)',
+        borderColor: 'rgba(239, 68, 68, 1)',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: 'Project Selection by Cost and Popularity'
+        }
+      },
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: 'Project Cost'
+          }
+        },
+        y: {
+          title: {
+            display: true,
+            text: 'Votes Received'
+          }
+        }
+      }
+    }
+  });
+}
+
+// Category Cost Chart
+if (categoryCostData) {
+  const ctx10 = document.getElementById('categoryCostChart').getContext('2d');
+  new Chart(ctx10, {
+    type: 'bar',
+    data: {
+      labels: categoryCostData.labels,
+      datasets: [{
+        label: 'Average Cost',
+        data: categoryCostData.avg_costs,
+        backgroundColor: 'rgba(147, 51, 234, 0.6)',
+        borderColor: 'rgba(147, 51, 234, 1)',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: 'Average Project Cost by Category'
+        }
+      },
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: 'Category'
+          }
+        },
+        y: {
+          title: {
+            display: true,
+            text: 'Average Cost'
+          }
+        }
+      }
+    }
+  });
+}
+
+// Voting Timeline
+if (timelineData) {
+  const ctx11 = document.getElementById('timelineChart').getContext('2d');
+  new Chart(ctx11, {
+    type: 'line',
+    data: {
+      labels: timelineData.dates,
+      datasets: [{
+        label: 'Votes per Day',
+        data: timelineData.votes_per_day,
+        backgroundColor: 'rgba(6, 182, 212, 0.2)',
+        borderColor: 'rgba(6, 182, 212, 1)',
+        borderWidth: 2,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: 'Voting Activity Timeline'
+        }
+      },
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: 'Date'
+          }
+        },
+        y: {
+          title: {
+            display: true,
+            text: 'Number of Votes'
+          }
+        }
+      }
+    }
+  });
+}
+
+// Correlation Heatmap (simplified as bar chart)
+if (correlationData) {
+  const ctx12 = document.getElementById('correlationChart').getContext('2d');
+  new Chart(ctx12, {
+    type: 'bar',
+    data: {
+      labels: correlationData.labels,
+      datasets: [{
+        label: 'Correlation Coefficient',
+        data: correlationData.values,
+        backgroundColor: correlationData.values.map(val => 
+          val > 0.3 ? 'rgba(34, 197, 94, 0.8)' :
+          val < -0.3 ? 'rgba(239, 68, 68, 0.8)' :
+          'rgba(156, 163, 175, 0.8)'
+        ),
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: 'Correlation Between Project Metrics'
+        }
+      },
+      scales: {
+        y: {
+          min: -1,
+          max: 1,
+          title: {
+            display: true,
+            text: 'Correlation Coefficient'
+          }
+        }
+      }
+    }
+  });
+}
+</script>
+
+{% endblock %}

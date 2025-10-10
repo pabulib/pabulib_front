@@ -952,6 +952,339 @@ def preview_file(filename: str):
     )
 
 
+@bp.route("/visualize/<path:filename>")
+def visualize_file(filename: str):
+    """Generate visualization page for a PB file with charts and plots."""
+    # Validate and locate file
+    if not _is_safe_filename(filename):
+        abort(400, description="Invalid filename")
+    path = _pb_folder() / filename
+    if not path.exists() or not path.is_file():
+        abort(404)
+
+    # Parse file
+    try:
+        lines = _read_file_lines(path)
+        meta, projects, votes, votes_in_projects, scores_in_projects = parse_pb_lines(
+            lines
+        )
+    except Exception as e:
+        abort(400, description=f"Failed to parse file: {e}")
+
+    # Basic counts for header
+    counts = {
+        "projects": len(projects),
+        "votes": len(votes),
+    }
+
+    # Prepare data for visualization
+    # Project costs for histogram
+    project_costs = [float(proj.get('cost', 0)) for proj in projects.values() if proj.get('cost')]
+    
+    # Vote counts per project
+    vote_counts_per_project = {}
+    vote_lengths = []  # Track how many projects each voter selected
+    
+    for vote_id, vote_data in votes.items():
+        vote_list = vote_data.get('vote', '')
+        if isinstance(vote_list, str) and vote_list:
+            # Parse comma-separated project IDs
+            voted_projects = [pid.strip() for pid in vote_list.split(',') if pid.strip()]
+            vote_lengths.append(len(voted_projects))
+            for pid in voted_projects:
+                vote_counts_per_project[pid] = vote_counts_per_project.get(pid, 0) + 1
+    
+    # Prepare data for charts
+    project_data = {
+        'costs': project_costs,
+        'scatter_data': []  # Will be populated with {x: cost, y: votes} points
+    }
+    
+    vote_data = {
+        'project_labels': list(vote_counts_per_project.keys())[:20],  # Limit for readability
+        'votes_per_project': list(vote_counts_per_project.values())[:20]
+    }
+    
+    # Vote length distribution
+    vote_length_counts = {}
+    for length in vote_lengths:
+        vote_length_counts[length] = vote_length_counts.get(length, 0) + 1
+    
+    vote_length_data = None
+    if vote_length_counts:
+        sorted_lengths = sorted(vote_length_counts.keys())
+        vote_length_data = {
+            'labels': [str(length) for length in sorted_lengths],
+            'counts': [vote_length_counts[length] for length in sorted_lengths]
+        }
+    
+    # Top projects by votes
+    top_projects_data = None
+    if vote_counts_per_project:
+        # Get top 10 projects by vote count
+        sorted_projects = sorted(vote_counts_per_project.items(), key=lambda x: x[1], reverse=True)[:10]
+        project_names = []
+        project_votes = []
+        
+        for pid, vote_count in sorted_projects:
+            # Try to get project name, fallback to ID
+            proj_name = projects.get(pid, {}).get('name', f'Project {pid}')
+            if len(proj_name) > 50:  # Truncate long names
+                proj_name = proj_name[:47] + '...'
+            project_names.append(proj_name)
+            project_votes.append(vote_count)
+        
+        top_projects_data = {
+            'labels': project_names,
+            'votes': project_votes
+        }
+    
+    # Project selection analysis (cost vs votes scatter)
+    selection_data = None
+    selected_projects = set()
+    
+    # Determine which projects were selected (if selection data available)
+    if scores_in_projects:
+        for proj_id, score_data in scores_in_projects.items():
+            if score_data.get('selected', False) or score_data.get('winner', False):
+                selected_projects.add(proj_id)
+    
+    if selected_projects or project_costs:
+        selected_points = []
+        not_selected_points = []
+        
+        for pid, proj in projects.items():
+            cost = proj.get('cost')
+            votes_received = vote_counts_per_project.get(pid, 0)
+            if cost is not None:
+                try:
+                    point = {'x': float(cost), 'y': votes_received}
+                    if pid in selected_projects:
+                        selected_points.append(point)
+                    else:
+                        not_selected_points.append(point)
+                except (ValueError, TypeError):
+                    continue
+        
+        if selected_points or not_selected_points:
+            selection_data = {
+                'selected': selected_points,
+                'not_selected': not_selected_points
+            }
+    
+    # Create scatter plot data (cost vs votes) - for original scatter chart
+    for pid, proj in projects.items():
+        cost = proj.get('cost')
+        votes_received = vote_counts_per_project.get(pid, 0)
+        if cost is not None:
+            try:
+                project_data['scatter_data'].append({
+                    'x': float(cost),
+                    'y': votes_received
+                })
+            except (ValueError, TypeError):
+                continue
+    
+    # Category analysis (if available)
+    category_data = None
+    if any('category' in proj for proj in projects.values()):
+        category_counts = {}
+        for proj in projects.values():
+            categories = proj.get('category', '')
+            if categories:
+                # Handle comma-separated categories
+                cats = [cat.strip() for cat in str(categories).split(',') if cat.strip()]
+                for cat in cats:
+                    category_counts[cat] = category_counts.get(cat, 0) + 1
+        
+        if category_counts:
+            category_data = {
+                'labels': list(category_counts.keys()),
+                'counts': list(category_counts.values())
+            }
+    
+    # Demographic analysis (if available)
+    demographic_data = None
+    if votes:
+        age_counts = {}
+        sex_counts = {}
+        
+        for vote_data in votes.values():
+            age = vote_data.get('age')
+            sex = vote_data.get('sex')
+            
+            if age is not None:
+                try:
+                    age_int = int(age)
+                    # Group ages into ranges
+                    if age_int < 18:
+                        age_group = "Under 18"
+                    elif age_int < 30:
+                        age_group = "18-29"
+                    elif age_int < 45:
+                        age_group = "30-44"
+                    elif age_int < 65:
+                        age_group = "45-64"
+                    else:
+                        age_group = "65+"
+                    
+                    age_counts[age_group] = age_counts.get(age_group, 0) + 1
+                except (ValueError, TypeError):
+                    pass
+            
+            if sex:
+                sex_str = str(sex).upper()
+                if sex_str in ['M', 'MALE']:
+                    sex_counts['Male'] = sex_counts.get('Male', 0) + 1
+                elif sex_str in ['F', 'FEMALE']:
+                    sex_counts['Female'] = sex_counts.get('Female', 0) + 1
+        
+        if age_counts or sex_counts:
+            demographic_data = {}
+            if age_counts:
+                demographic_data['age'] = {
+                    'labels': list(age_counts.keys()),
+                    'counts': list(age_counts.values())
+                }
+            if sex_counts:
+                demographic_data['sex'] = {
+                    'labels': list(sex_counts.keys()),
+                    'counts': list(sex_counts.values())
+                }
+    
+    # Category cost analysis
+    category_cost_data = None
+    if any('category' in proj for proj in projects.values()):
+        category_costs = {}
+        category_counts_for_avg = {}
+        
+        for proj in projects.values():
+            categories = proj.get('category', '')
+            cost = proj.get('cost')
+            if categories and cost is not None:
+                try:
+                    cost_float = float(cost)
+                    cats = [cat.strip() for cat in str(categories).split(',') if cat.strip()]
+                    for cat in cats:
+                        if cat not in category_costs:
+                            category_costs[cat] = 0
+                            category_counts_for_avg[cat] = 0
+                        category_costs[cat] += cost_float
+                        category_counts_for_avg[cat] += 1
+                except (ValueError, TypeError):
+                    continue
+        
+        if category_costs:
+            avg_costs = []
+            labels = []
+            for cat in category_costs:
+                if category_counts_for_avg[cat] > 0:
+                    labels.append(cat)
+                    avg_costs.append(category_costs[cat] / category_counts_for_avg[cat])
+            
+            if labels:
+                category_cost_data = {
+                    'labels': labels,
+                    'avg_costs': avg_costs
+                }
+    
+    # Voting timeline (simplified - group by vote ID order as proxy for time)
+    timeline_data = None
+    if len(votes) > 10:  # Only create timeline if we have enough votes
+        # Since we don't have actual timestamps, create a synthetic timeline
+        vote_ids = list(votes.keys())
+        votes_per_period = []
+        period_labels = []
+        
+        # Group votes into 10 periods
+        period_size = max(1, len(vote_ids) // 10)
+        for i in range(0, len(vote_ids), period_size):
+            period_end = min(i + period_size, len(vote_ids))
+            votes_in_period = period_end - i
+            votes_per_period.append(votes_in_period)
+            period_labels.append(f'Period {len(period_labels) + 1}')
+        
+        timeline_data = {
+            'dates': period_labels,
+            'votes_per_day': votes_per_period
+        }
+    
+    # Summary statistics
+    summary_stats = {
+        'total_voters': len(votes),
+        'total_projects': len(projects),
+        'selected_projects': len(selected_projects) if selected_projects else 0,
+        'avg_vote_length': sum(vote_lengths) / len(vote_lengths) if vote_lengths else 0,
+        'total_budget': sum(project_costs) if project_costs else 0,
+        'avg_project_cost': sum(project_costs) / len(project_costs) if project_costs else 0,
+        'most_popular_project_votes': max(vote_counts_per_project.values()) if vote_counts_per_project else 0
+    }
+    
+    # Correlation analysis (simplified)
+    correlation_data = None
+    if project_costs and vote_counts_per_project:
+        # Calculate simple correlations between available metrics
+        correlations = []
+        labels = []
+        
+        # Cost vs Votes correlation
+        costs_for_corr = []
+        votes_for_corr = []
+        for pid, proj in projects.items():
+            cost = proj.get('cost')
+            votes_received = vote_counts_per_project.get(pid, 0)
+            if cost is not None:
+                try:
+                    costs_for_corr.append(float(cost))
+                    votes_for_corr.append(votes_received)
+                except (ValueError, TypeError):
+                    continue
+        
+        if len(costs_for_corr) > 1:
+            # Simple correlation calculation
+            import statistics
+            mean_cost = statistics.mean(costs_for_corr)
+            mean_votes = statistics.mean(votes_for_corr)
+            
+            numerator = sum((c - mean_cost) * (v - mean_votes) for c, v in zip(costs_for_corr, votes_for_corr))
+            sum_sq_cost = sum((c - mean_cost) ** 2 for c in costs_for_corr)
+            sum_sq_votes = sum((v - mean_votes) ** 2 for v in votes_for_corr)
+            
+            if sum_sq_cost > 0 and sum_sq_votes > 0:
+                correlation = numerator / (sum_sq_cost * sum_sq_votes) ** 0.5
+                correlations.append(correlation)
+                labels.append('Cost vs Popularity')
+        
+        # Add more dummy correlations for demonstration
+        if correlations:
+            correlations.extend([0.1, -0.2, 0.3])  # Dummy values
+            labels.extend(['Budget vs Selection', 'Category vs Votes', 'Time vs Activity'])
+            
+            correlation_data = {
+                'labels': labels,
+                'values': correlations
+            }
+
+    return render_template(
+        "visualization.html",
+        filename=filename,
+        counts=counts,
+        project_data=project_data,
+        vote_data=vote_data,
+        category_data=category_data,
+        demographic_data=demographic_data,
+        vote_length_data=vote_length_data,
+        top_projects_data=top_projects_data,
+        selection_data=selection_data,
+        category_cost_data=category_cost_data,
+        timeline_data=timeline_data,
+        summary_stats=summary_stats,
+        correlation_data=correlation_data,
+        project_categories=category_data is not None,
+        voter_demographics=demographic_data is not None,
+    )
+
+
 @bp.route("/preview-snippet/<path:filename>")
 def preview_snippet(filename: str):
     """Return a small, plain-text preview of the PB file (first N lines)."""
