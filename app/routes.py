@@ -230,9 +230,9 @@ def build_tile_data(pb_path: Path) -> Dict[str, Any]:
         year_int = None
         year_str = ""
 
-    # quality metric: (avg vote length)^3 * (num_projects)^2 * (num_votes)
+    # quality metric:
     vlen = vote_length_float or 0.0
-    quality = (vlen**3) * (float(num_projects) ** 2) * float(num_votes)
+    quality = (vlen**2) * (float(num_projects) ** 1) * (float(num_votes)**(0.5))
     quality_short = _format_short_number(quality)
 
     # extra meta fields potentially useful in UI
