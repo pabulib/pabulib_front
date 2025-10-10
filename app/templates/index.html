@@ -109,7 +109,7 @@
             <span class="tag funded" title="All selected projects are funded">Fully funded</span>
             {% endif %}
           </div>
-          <span class="doc" title="File"></span>
+          <a class="doc" href="{{ url_for('main.preview_file', filename=t.file_name) }}" title="Preview"></a>
           <a class="download" href="{{ url_for('main.download', filename=t.file_name) }}" title="Download"></a>
         </div>
         <div class="grid head">
