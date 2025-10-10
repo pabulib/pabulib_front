@@ -665,9 +665,9 @@ def format_page():
     return render_template("format.html")
 
 
-@bp.route("/code")
-def code_page():
-    return render_template("code.html")
+@bp.route("/tools")
+def tools_page():
+    return render_template("tools.html")
 
 
 @bp.route("/publications")
