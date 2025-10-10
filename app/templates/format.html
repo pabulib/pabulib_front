@@ -5,6 +5,11 @@
 
 {% block body %}
 
+    <!-- KaTeX for math rendering (scoped to this page) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+
     <style>
         /* CSS Styles */
         /* Page-scoped variables */
@@ -747,6 +752,26 @@ voter_id; age; sex; vote
         renderFields(metaFields, 'fields-container');
         renderFields(projectFields, 'projects-container');
         renderFields(voteFields, 'votes-container');
+
+        // Render LaTeX math via KaTeX auto-render after dynamic content is injected
+        const tryRenderMath = () => {
+            if (window.renderMathInElement) {
+                const options = {
+                    delimiters: [
+                        { left: '$$', right: '$$', display: true },
+                        { left: '$', right: '$', display: false }
+                    ],
+                    throwOnError: false,
+                    // Avoid rendering inside code/pre blocks
+                    ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+                };
+                window.renderMathInElement(document.querySelector('.format-content'), options);
+            }
+        };
+
+        // Attempt now and also after full load (in case CDN scripts load later)
+        tryRenderMath();
+        window.addEventListener('load', tryRenderMath);
     });
 </script>
 
