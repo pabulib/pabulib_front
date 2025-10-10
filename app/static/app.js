@@ -84,8 +84,9 @@
   function sortTiles(){
     const dir = orderDir.dataset.dir === 'desc' ? -1 : 1;
     const key = orderBy.value;
-    const container = document.querySelector('.container');
-    const items = $$('.tile');
+    // Sort within the tiles' actual parent (the form), not the outer container
+    const container = document.querySelector('#downloadForm') || document.querySelector('.container');
+    const items = Array.from(container.querySelectorAll('.tile'));
     items.sort((a,b)=>{
       const av = (key==='quality')?Number(a.dataset.quality||0):
                  (key==='votes')?Number(a.dataset.votes||0):
@@ -158,11 +159,13 @@
 
   [input, filterCountry, filterCity, filterYear, votesMin, votesMax, projectsMin, projectsMax, lenMin, lenMax, filterType, excludeFully, excludeExperimental]
     .forEach(el => el.addEventListener('input', debounced));
-  orderBy.addEventListener('change', sortTiles);
+  orderBy.addEventListener('change', ()=>{ sortTiles(); visibleCount = 0; revealNext(); });
   orderDir.addEventListener('click', ()=>{
     orderDir.dataset.dir = (orderDir.dataset.dir === 'desc') ? 'asc' : 'desc';
     orderDir.textContent = (orderDir.dataset.dir === 'desc') ? '↓' : '↑';
     sortTiles();
+    visibleCount = 0;
+    revealNext();
   });
 
   // initial: default to Quality, descending (bigger score first)
@@ -174,7 +177,9 @@
   sortTiles();
   // pagination
   function revealNext(){
-    const eligible = tiles.filter(t => !t.hidden);
+    // Use current DOM order so pagination respects the latest sort order
+    const parent = document.querySelector('#downloadForm') || document;
+    const eligible = Array.from(parent.querySelectorAll('.tile')).filter(t => !t.hidden);
     const end = Math.min(eligible.length, visibleCount + PAGE);
     eligible.forEach((t, idx) => {
       t.style.display = (idx < end) ? '' : 'none';
