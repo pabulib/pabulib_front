@@ -29,43 +29,45 @@
         </div>
 
         <div class="field">
-          <label>Country</label>
+          <label>🏳️ Country</label>
           <select id="filterCountry"><option value="">All countries</option></select>
         </div>
         <div class="field">
-          <label>City</label>
+          <label>🏙️ City</label>
           <select id="filterCity"><option value="">All cities</option></select>
         </div>
         <div class="field">
-          <label>Year of election</label>
+          <label>📅 Year of election</label>
           <select id="filterYear"><option value="">All years</option></select>
         </div>
+
         <div class="field two">
-          <label>Number of votes</label>
-          <div class="range"><input id="votesMin" placeholder="" inputmode="numeric"><span>-</span><input id="votesMax" placeholder="" inputmode="numeric"></div>
+          <label>🗳️ Number of votes</label>
+          <div class="range"><input id="votesMin" placeholder="Min" inputmode="numeric"><span>–</span><input id="votesMax" placeholder="Max" inputmode="numeric"></div>
         </div>
         <div class="field two">
-          <label>Number of projects</label>
-          <div class="range"><input id="projectsMin" placeholder="" inputmode="numeric"><span>-</span><input id="projectsMax" placeholder="" inputmode="numeric"></div>
+          <label>📋 Number of projects</label>
+          <div class="range"><input id="projectsMin" placeholder="Min" inputmode="numeric"><span>–</span><input id="projectsMax" placeholder="Max" inputmode="numeric"></div>
         </div>
         <div class="field two">
-          <label>Average vote length</label>
-          <div class="range"><input id="lenMin" placeholder="" inputmode="decimal"><span>-</span><input id="lenMax" placeholder="" inputmode="decimal"></div>
+          <label>📏 Average vote length</label>
+          <div class="range"><input id="lenMin" placeholder="Min" inputmode="decimal"><span>–</span><input id="lenMax" placeholder="Max" inputmode="decimal"></div>
         </div>
+
         <div class="field">
-          <label>Vote type</label>
+          <label>🗳️ Vote type</label>
           <select id="filterType">
-            <option value="">Any</option>
-            <option value="approval">approval</option>
-            <option value="cumulative">cumulative</option>
-            <option value="ranked">ranked</option>
-            <option value="k-approval">k-approval</option>
+            <option value="">Any type</option>
+            <option value="approval">Approval voting</option>
+            <option value="cumulative">Cumulative voting</option>
+            <option value="ranked">Ranked voting</option>
+            <option value="k-approval">K-approval voting</option>
           </select>
         </div>
         <div class="field">
-          <label>Exclude</label>
-          <label class="checkbox"><input id="excludeFully" type="checkbox"> fully funded</label>
-          <label class="checkbox"><input id="excludeExperimental" type="checkbox"> experimental</label>
+          <label>🚫 Exclude from results</label>
+          <label class="checkbox"><input id="excludeFully" type="checkbox"> Fully funded projects</label>
+          <label class="checkbox"><input id="excludeExperimental" type="checkbox"> Experimental datasets</label>
         </div>
       </aside>
 
