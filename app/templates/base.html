@@ -32,31 +32,33 @@
   <body class="{% block bodyClass %} bg-slate-50{% endblock %}">
     <nav class="bg-slate-900 text-white fixed top-0 w-full z-50 shadow-xl">
       <div class="max-w-7xl mx-auto px-4">
-        <div class="flex justify-between items-center h-16">
+        <div class="flex justify-center items-center h-16 relative">
           <!-- Mobile menu button -->
-          <button id="mobile-menu-button" class="lg:hidden flex items-center px-3 py-2 border rounded text-white border-slate-600 hover:text-slate-200 hover:border-slate-500 hover:bg-slate-700">
+          <button id="mobile-menu-button" class="lg:hidden absolute left-0 flex items-center px-3 py-2 border rounded text-white border-slate-600 hover:text-slate-200 hover:border-slate-500 hover:bg-slate-700">
             <svg class="fill-current h-3 w-3" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
               <title>Menu</title>
               <path d="M0 3h20v2H0V3zm0 6h20v2H0V9zm0 6h20v2H0v-2z"/>
             </svg>
           </button>
           
-          <!-- Logo and brand -->
-          <a href="{{ url_for('main.home') }}" class="flex items-center space-x-2 mr-4">
-            <img src="{{ url_for('main.static', filename='images/uj_logo.jpg') }}" class="h-8 w-8" alt="Pabulib">
-            <span class="font-bold text-xl">Pabulib</span>
-          </a>
-          
-          <!-- Desktop navigation -->
-          <div class="hidden lg:flex lg:items-center lg:space-x-1">
-            <a href="{{ url_for('main.home') }}" class="px-3 py-2 rounded-md text-sm font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.home') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Search</a>
-            <a href="{{ url_for('main.format_page') }}" class="px-3 py-2 rounded-md text-sm font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.format_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Data format</a>
-            <a href="{{ url_for('main.tools_page') }}" class="px-3 py-2 rounded-md text-sm font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.tools_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Tools</a>
-            <a href="{{ url_for('main.comments_page') }}" class="px-3 py-2 rounded-md text-sm font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.comments_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Comments</a>
-            <a href="{{ url_for('main.statistics_page') }}" class="px-3 py-2 rounded-md text-sm font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.statistics_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Statistics</a>
-            <a href="{{ url_for('main.publications_page') }}" class="px-3 py-2 rounded-md text-sm font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.publications_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Publications</a>
-            <a href="{{ url_for('main.about_page') }}" class="px-3 py-2 rounded-md text-sm font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.about_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">About</a>
-            <a href="{{ url_for('main.contact_page') }}" class="px-3 py-2 rounded-md text-sm font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.contact_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Contact</a>
+          <!-- Centered navigation content -->
+          <div class="flex items-center space-x-2">
+            <!-- Logo and brand -->
+            <a href="{{ url_for('main.home') }}" class="flex items-center mr-20">
+              <span class="font-bold text-3xl">Pabulib</span>
+            </a>
+            
+            <!-- Desktop navigation -->
+            <div class="hidden lg:flex lg:items-center lg:space-x-1">
+              <a href="{{ url_for('main.home') }}" class="px-3 py-2 rounded-md text-base font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.home') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Search</a>
+              <a href="{{ url_for('main.format_page') }}" class="px-3 py-2 rounded-md text-base font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.format_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Data format</a>
+              <a href="{{ url_for('main.tools_page') }}" class="px-3 py-2 rounded-md text-base font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.tools_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Tools</a>
+              <a href="{{ url_for('main.comments_page') }}" class="px-3 py-2 rounded-md text-base font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.comments_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Comments</a>
+              <a href="{{ url_for('main.statistics_page') }}" class="px-3 py-2 rounded-md text-base font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.statistics_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Statistics</a>
+              <a href="{{ url_for('main.publications_page') }}" class="px-3 py-2 rounded-md text-base font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.publications_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Publications</a>
+              <a href="{{ url_for('main.about_page') }}" class="px-3 py-2 rounded-md text-base font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.about_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">About</a>
+              <a href="{{ url_for('main.contact_page') }}" class="px-3 py-2 rounded-md text-base font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.contact_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Contact</a>
+            </div>
           </div>
         </div>
         

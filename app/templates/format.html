@@ -62,6 +62,19 @@
             outline: 2px solid #3b82f6;
             outline-offset: 2px;
         }
+        
+        /* Arrow styling for accordion buttons */
+        body.format .accordion-button::after {
+            content: "▼";
+            margin-left: auto;
+            transition: transform 0.2s ease;
+            font-size: 0.8em;
+            color: #6b7280;
+        }
+        
+        body.format .accordion-button.expanded::after {
+            transform: rotate(180deg);
+        }
 
         /* Code color accents (from old theme) */
         body.format .format-content code .code-keyword { color: #0033B3; }
@@ -108,7 +121,7 @@
                 <div class="space-y-4">
                     <div class="border border-gray-200 rounded-lg overflow-hidden">
                         <h2>
-                            <button class="w-full px-4 py-3 text-left bg-gray-50 hover:bg-gray-100 border-b border-gray-200 font-medium text-slate-800" type="button" onclick="toggleAccordion('code')">
+                            <button class="w-full px-4 py-3 text-left bg-gray-50 hover:bg-gray-100 border-b border-gray-200 font-medium text-slate-800 accordion-button flex items-center" type="button" onclick="toggleAccordion('code')">
                                 A Simple Example
                             </button>
                         </h2>
@@ -186,7 +199,7 @@ voter_id; age; sex; vote
     <div class="space-y-4">
         <div class="border border-gray-200 rounded-lg overflow-hidden">
             <h2>
-                <button class="w-full px-4 py-3 text-left bg-gray-50 hover:bg-gray-100 border-b border-gray-200 font-medium text-slate-800" type="button" onclick="toggleAccordion('section-one')">
+                <button class="w-full px-4 py-3 text-left bg-gray-50 hover:bg-gray-100 border-b border-gray-200 font-medium text-slate-800 accordion-button expanded flex items-center" type="button" onclick="toggleAccordion('section-one')">
                     Section 1: META
                 </button>
             </h2>
@@ -200,7 +213,7 @@ voter_id; age; sex; vote
 
         <div class="border border-gray-200 rounded-lg overflow-hidden mt-6">
             <h2>
-                <button class="w-full px-4 py-3 text-left bg-gray-50 hover:bg-gray-100 border-b border-gray-200 font-medium text-slate-800" type="button" onclick="toggleAccordion('section-two')">
+                <button class="w-full px-4 py-3 text-left bg-gray-50 hover:bg-gray-100 border-b border-gray-200 font-medium text-slate-800 accordion-button flex items-center" type="button" onclick="toggleAccordion('section-two')">
                     Section 2: PROJECTS
                 </button>
             </h2>
@@ -213,7 +226,7 @@ voter_id; age; sex; vote
 
         <div class="border border-gray-200 rounded-lg overflow-hidden mt-6 mb-8">
             <h2>
-                <button class="w-full px-4 py-3 text-left bg-gray-50 hover:bg-gray-100 border-b border-gray-200 font-medium text-slate-800" type="button" onclick="toggleAccordion('section-three')">
+                <button class="w-full px-4 py-3 text-left bg-gray-50 hover:bg-gray-100 border-b border-gray-200 font-medium text-slate-800 accordion-button flex items-center" type="button" onclick="toggleAccordion('section-three')">
                     Section 3: VOTES
                 </button>
             </h2>
@@ -243,12 +256,16 @@ voter_id; age; sex; vote
     // Accordion toggle function for Tailwind implementation
     function toggleAccordion(id) {
         const element = document.getElementById(id);
+        const button = document.querySelector(`button[onclick="toggleAccordion('${id}')"]`);
+        
         if (element.classList.contains('hidden')) {
             element.classList.remove('hidden');
             element.classList.add('block');
+            button.classList.add('expanded');
         } else {
             element.classList.remove('block');
             element.classList.add('hidden');
+            button.classList.remove('expanded');
         }
     }
 </script>
