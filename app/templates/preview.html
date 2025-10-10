@@ -4,101 +4,161 @@
 {% block bodyClass %}preview{% endblock %}
 
 {% block body %}
-<div class="container">
-  <div class="toolbar" style="margin-top:12px">
-    <a class="back-link" href="{{ url_for('main.home') }}">← Back to search</a>
+<section class="max-w-6xl mx-auto px-4">
+  <div class="mt-4 mb-6">
+    <a class="text-blue-800 hover:text-blue-900 underline" href="{{ url_for('main.home') }}">← Back to search</a>
   </div>
 
-  <section class="tile">
-    <div class="tile-header">
-      <h2>File: {{ filename }}</h2>
-      <div class="badges">
-        <span class="tag">Projects: {{ counts.projects }}</span>
-        <span class="tag">Votes: {{ counts.votes }}</span>
+  <!-- File header with name, stats, and download -->
+  <div class="bg-white rounded-lg shadow-lg mb-6 p-6">
+    <div class="flex justify-between items-start">
+      <div>
+        <h2 class="text-2xl font-bold text-slate-800 mb-2">File: {{ filename }}</h2>
+        <div class="flex gap-2">
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800">Projects: {{ counts.projects }}</span>
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800">Votes: {{ counts.votes }}</span>
+        </div>
       </div>
-      <a class="download" href="{{ url_for('main.download', filename=filename) }}" title="Download"></a>
+      <a class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" href="{{ url_for('main.download', filename=filename) }}">Download</a>
     </div>
+  </div>
 
-    <div class="grid head">
-      <div>Meta key</div>
-      <div>Value</div>
-      <div></div>
-      <div></div>
-      <div></div>
-      <div></div>
+  <!-- Meta section (collapsible) -->
+  <div class="bg-white rounded-lg shadow-lg mb-6">
+    <div class="border-b border-gray-200">
+      <button class="w-full px-6 py-4 text-left hover:bg-gray-50 focus:outline-none focus:bg-gray-50" onclick="toggleSection('meta-section')">
+        <div class="flex justify-between items-center">
+          <h2 class="text-xl font-bold text-slate-800">Meta</h2>
+          <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200" id="meta-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </div>
+      </button>
     </div>
-    <div class="grid">
-      <div class="col" style="grid-column: span 6; padding:0">
-        <table class="table table-sm" style="width:100%">
-          <tbody>
+    <div id="meta-section" class="block">
+      <div class="p-6 overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style="width:240px">Meta Key</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
           {% for k, v in meta_items %}
             <tr>
-              <th style="width:240px">{{ k }}</th>
-              <td>{{ v }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ k }}</td>
+              <td class="px-6 py-4 text-sm text-gray-700">{{ v }}</td>
             </tr>
           {% endfor %}
           </tbody>
         </table>
       </div>
     </div>
-  </section>
+  </div>
 
-  <section class="tile">
-    <div class="tile-header">
-      <h2>Projects ({{ counts.projects }})</h2>
-      <div class="badges">
-        {% if votes_in_projects %}<span class="tag">votes in projects</span>{% endif %}
-        {% if scores_in_projects %}<span class="tag">scores in projects</span>{% endif %}
+  <div class="bg-white rounded-lg shadow-lg mb-6">
+    <div class="border-b border-gray-200">
+      <button class="w-full px-6 py-4 text-left hover:bg-gray-50 focus:outline-none focus:bg-gray-50" onclick="toggleSection('projects-section')">
+        <div class="flex justify-between items-center">
+          <div>
+            <h2 class="text-xl font-bold text-slate-800">Projects ({{ counts.projects }})</h2>
+            <div class="flex gap-2 mt-1">
+              {% if votes_in_projects %}<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">votes in projects</span>{% endif %}
+              {% if scores_in_projects %}<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">scores in projects</span>{% endif %}
+            </div>
+          </div>
+          <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200" id="projects-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </div>
+      </button>
+    </div>
+    <div id="projects-section" class="block">
+      <div class="p-6 overflow-x-auto">
+        <table class="w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              {% for c in project_columns %}
+                <th class="px-8 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ c }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            {% for row in project_rows %}
+            <tr class="hover:bg-gray-50">
+              {% for c in project_columns %}
+                <td class="px-8 py-4 text-xs text-gray-700{% if c == 'name' or c == 'category' %} break-words{% else %} whitespace-nowrap{% endif %}">{{ row.get(c, '') }}</td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     </div>
-    <div style="overflow:auto">
-      <table class="table table-striped table-sm">
-        <thead>
-          <tr>
-            {% for c in project_columns %}<th>{{ c }}</th>{% endfor %}
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in project_rows %}
-          <tr>
-            {% for c in project_columns %}
-              <td>{{ row.get(c, '') }}</td>
-            {% endfor %}
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </section>
+  </div>
 
-  <section class="tile">
-    <div class="tile-header">
-      <h2>Votes ({{ total_votes_count }})</h2>
-      {% if votes_truncated %}
-        <div class="badges"><span class="tag">showing first {{ votes_preview|length }} rows</span></div>
-      {% endif %}
+  <div class="bg-white rounded-lg shadow-lg mb-6">
+    <div class="border-b border-gray-200">
+      <button class="w-full px-6 py-4 text-left hover:bg-gray-50 focus:outline-none focus:bg-gray-50" onclick="toggleSection('votes-section')">
+        <div class="flex justify-between items-center">
+          <div>
+            <h2 class="text-xl font-bold text-slate-800">Votes ({{ total_votes_count }})</h2>
+            {% if votes_truncated %}
+            <div class="mt-1">
+              <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800">showing first {{ votes_preview|length }} rows</span>
+            </div>
+            {% endif %}
+          </div>
+          <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200" id="votes-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </div>
+      </button>
     </div>
-    <div style="overflow:auto">
-      <table class="table table-striped table-sm">
-        <thead>
-          <tr>
-            {% for c in vote_columns %}<th>{{ c }}</th>{% endfor %}
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in votes_preview %}
-          <tr>
-            {% for c in vote_columns %}
-              <td>{{ row.get(c, '') }}</td>
+    <div id="votes-section" class="block">
+      <div class="p-6 overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              {% for c in vote_columns %}<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ c }}</th>{% endfor %}
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            {% for row in votes_preview %}
+            <tr class="hover:bg-gray-50">
+              {% for c in vote_columns %}
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ row.get(c, '') }}</td>
+              {% endfor %}
+            </tr>
             {% endfor %}
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+          </tbody>
+        </table>
+        {% if votes_truncated %}
+        <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+          <p class="text-sm text-blue-700">Votes table truncated to keep the page fast. You can download the file for full data.</p>
+        </div>
+        {% endif %}
+      </div>
     </div>
-    {% if votes_truncated %}
-    <div class="note">Votes table truncated to keep the page fast. You can download the file for full data.</div>
-    {% endif %}
-  </section>
-</div>
+  </div>
+</section>
+
+<script>
+function toggleSection(sectionId) {
+    const section = document.getElementById(sectionId);
+    const icon = document.getElementById(sectionId.replace('-section', '-icon'));
+    
+    if (section.classList.contains('hidden')) {
+        section.classList.remove('hidden');
+        section.classList.add('block');
+        icon.classList.remove('rotate-180');
+    } else {
+        section.classList.remove('block');
+        section.classList.add('hidden');
+        icon.classList.add('rotate-180');
+    }
+}
+</script>
+
 {% endblock %}
