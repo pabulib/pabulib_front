@@ -91,11 +91,16 @@
         data-votes="{{ t.num_votes_raw if t.num_votes_raw is not none else '' }}"
         data-projects="{{ t.num_projects_raw if t.num_projects_raw is not none else '' }}"
         data-budget="{{ t.budget_raw if t.budget_raw is not none else '' }}"
+        data-currency="{{ t.currency|e }}"
         data-type="{{ t.vote_type|e }}"
         data-vlen="{{ '%.3f' % t.vote_length_raw if t.vote_length_raw is not none else '' }}"
         data-fully="{{ '1' if t.fully_funded else '0' }}"
         data-experimental="{{ '1' if t.experimental else '0' }}"
         data-quality="{{ '%.6f' % t.quality }}"
+         {% if t.has_selected_col %}data-selected="{{ t.num_selected_projects_raw if t.num_selected_projects_raw is not none else '' }}"{% endif %}
+         data-rule="{{ t.rule_raw }}"
+         data-edition="{{ t.edition }}"
+         data-language="{{ t.language }}"
       >
         <div class="tile-header">
           <input class="row-check" type="checkbox" data-file="{{ t.file_name|e }}" />

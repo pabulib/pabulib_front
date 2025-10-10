@@ -147,10 +147,13 @@ def build_tile_data(pb_path: Path) -> Dict[str, Any]:
     # fully funded heuristic: if all projects are selected OR sum(selected costs) >= budget
     fully_funded = False
     selected_count = 0
+    has_selected_col = False
     try:
-        selected_flags = [
-            str(p.get("selected", "0")).strip() for p in projects.values()
-        ]
+        selected_flags = []
+        for p in projects.values():
+            if "selected" in p:
+                has_selected_col = True
+            selected_flags.append(str(p.get("selected", "0")).strip())
         all_selected = len(selected_flags) > 0 and all(v == "1" for v in selected_flags)
         sum_selected_cost = 0
         for p in projects.values():
@@ -215,6 +218,11 @@ def build_tile_data(pb_path: Path) -> Dict[str, Any]:
     quality = (vlen**3) * (float(num_projects) ** 2) * float(num_votes)
     quality_short = _format_short_number(quality)
 
+    # extra meta fields potentially useful in UI
+    rule_raw = str(meta.get("rule", "")).strip()
+    edition = str(meta.get("edition", "")).strip()
+    language = str(meta.get("language", "")).strip()
+
     return {
         "file_name": pb_path.name,
         "title": title,
@@ -237,9 +245,13 @@ def build_tile_data(pb_path: Path) -> Dict[str, Any]:
         "year": year_str,
         "year_raw": year_int,
         "fully_funded": fully_funded,
+        "has_selected_col": has_selected_col,
         "experimental": experimental,
         "quality": quality,
         "quality_short": quality_short,
+        "rule_raw": rule_raw,
+        "edition": edition,
+        "language": language,
     }
 
 

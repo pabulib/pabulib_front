@@ -230,12 +230,15 @@
     sub.textContent = [tile.dataset.country, tile.dataset.city, tile.dataset.year].filter(Boolean).join(' • ');
     grid.innerHTML = '';
     function row(k,v){ const dk=document.createElement('div'); dk.className='k'; dk.textContent=k; const dv=document.createElement('div'); dv.className='v'; dv.textContent=v; grid.appendChild(dk); grid.appendChild(dv); }
-    if(tile.dataset.desc) row('Description', tile.dataset.desc);
-    if(tile.dataset.votes) row('# votes', tile.dataset.votes);
-    if(tile.dataset.projects) row('# projects', tile.dataset.projects);
-    if(tile.dataset.budget) row('Budget', tile.dataset.budget);
-    if(tile.dataset.type) row('Vote type', tile.dataset.type);
-    if(tile.dataset.vlen) row('Vote length', tile.dataset.vlen);
+    // Show items that are NOT already shown in the tile grid itself
+    if(tile.dataset.rule) row('Rule', tile.dataset.rule);
+    if(tile.dataset.edition) row('Edition', tile.dataset.edition);
+    if(tile.dataset.language) row('Language', tile.dataset.language);
+    if(tile.dataset.selected) row('# selected projects', tile.dataset.selected);
+    if(tile.dataset.fully === '1') row('Funding status', 'Fully funded');
+    if(tile.dataset.experimental === '1') row('Flag', 'Experimental');
+    // Keep a short description only if tile's description is empty (fallback)
+    if(!tile.dataset.desc && tile.dataset.webpage) row('Webpage', tile.dataset.webpage);
     link.href = href;
   }
   // Use mouseover/mouseout for reliable delegation
