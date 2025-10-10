@@ -16,11 +16,11 @@
         body.format { --pabu-border-radius: 10px; }
 
         body.format .format-content {
-            font-family: Arial, sans-serif;
+            font-family: inherit;
         }
 
         body.format .format-content h1, body.format .format-content h2, body.format .format-content h3 {
-            color: navy;
+            color: rgb(30, 41, 59); /* slate-800 */
         }
 
         body.format .format-content pre {
@@ -54,17 +54,13 @@
         body.format .format-content code.optional { color: #2e7d32; font-weight: 600; }
         body.format kbd { background:#DEE2E6FF; color: inherit; border:1px solid #ddd; border-bottom-width:2px; border-radius: var(--pabu-border-radius); padding:0 4px; }
 
-        /* Accordion polish */
-        body.format .format-content .accordion-item {
-            border-radius: var(--pabu-border-radius);
-            overflow: hidden;
-            border: 1px solid #e0e0e0;
+        /* Accordion polish - updated for Tailwind */
+        body.format .format-content .accordion-button:hover {
+            background-color: #f9fafb;
         }
-        body.format .format-content .accordion-button {
-            border-radius: 0;
-        }
-        body.format .format-content .accordion-button:not(.collapsed) {
-            background-color: #f8f9fa;
+        body.format .format-content .accordion-button:focus {
+            outline: 2px solid #3b82f6;
+            outline-offset: 2px;
         }
 
         /* Code color accents (from old theme) */
@@ -81,10 +77,10 @@
         body.format .offcanvas-size-md { --bs-offcanvas-width: min(95vw, 400px) !important; }
         body.format .offcanvas-size-sm { --bs-offcanvas-width: min(95vw, 250px) !important; }
     </style>
-    <div class="container format-content">
-        <div class="row justify-content-center">
-            <div class="col-12 col-lg-8 mt-5">
-                <h1>The <kbd>.pb</kbd> File Format</h1>
+    <section class="max-w-4xl mx-auto px-4 format-content">
+        <div class="flex justify-center">
+            <div class="w-full max-w-3xl bg-white rounded-lg shadow-lg p-8 mt-8">
+                <h1 class="text-3xl font-bold text-slate-800 mb-6">The <kbd>.pb</kbd> File Format</h1>
                 <p>The data concerning one instance of participatory budgeting is to be stored in a single UTF-8 text
                     file with the extension&nbsp;<kbd>.pb</kbd>. The content of the file is to be divided into three
                     sections:</p>
@@ -109,16 +105,15 @@
 
 
 
-                <div class="accordion">
-                    <div class="accordion-item">
-                        <h2 class="accordion-header">
-                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                    data-bs-target="#code" aria-expanded="false"
-                                    aria-controls="code">A Simple Example
+                <div class="space-y-4">
+                    <div class="border border-gray-200 rounded-lg overflow-hidden">
+                        <h2>
+                            <button class="w-full px-4 py-3 text-left bg-gray-50 hover:bg-gray-100 border-b border-gray-200 font-medium text-slate-800" type="button" onclick="toggleAccordion('code')">
+                                A Simple Example
                             </button>
                         </h2>
-                        <div id="code" class="accordion-collapse collapse">
-                            <div class="accordion-body">
+                        <div id="code" class="hidden">
+                            <div class="p-4">
                 <pre>
 META
 key; value
@@ -180,7 +175,7 @@ voter_id; age; sex; vote
 
                 </p>
 
-                <h2 class="mb-3 mt-5">Detailed Description</h2>
+                <h2 class="text-2xl font-bold text-slate-800 mb-3 mt-8">Detailed Description</h2>
 
 
 
@@ -188,57 +183,75 @@ voter_id; age; sex; vote
 <section>
     <p class="my-3">The <code class="required header">red</code> part is obligatory.</p>
 
-    <div class="accordion">
-        <div class="accordion-item">
-            <h2 class="accordion-header">
-                <button class="accordion-button" type="button" data-bs-toggle="collapse"
-                        data-bs-target="#section-one" aria-expanded="false" aria-controls="section-one">
+    <div class="space-y-4">
+        <div class="border border-gray-200 rounded-lg overflow-hidden">
+            <h2>
+                <button class="w-full px-4 py-3 text-left bg-gray-50 hover:bg-gray-100 border-b border-gray-200 font-medium text-slate-800" type="button" onclick="toggleAccordion('section-one')">
                     Section 1: META
                 </button>
             </h2>
-            <div id="section-one" class="accordion-collapse collapse show">
-                <div class="accordion-body">
+            <div id="section-one" class="block">
+                <div class="p-4">
                     <p><i>All fields are provided as <b>key:value</b> pairs.</i></p>
                     <ul id="fields-container"></ul>
                 </div>
             </div>
         </div>
-    </div>
-</section>
-<section class="mt-3">
-    <div class="accordion">
-        <div class="accordion-item">
-            <h2 class="accordion-header">
-                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                        data-bs-target="#section-two" aria-expanded="false" aria-controls="section-two">
+
+        <div class="border border-gray-200 rounded-lg overflow-hidden mt-6">
+            <h2>
+                <button class="w-full px-4 py-3 text-left bg-gray-50 hover:bg-gray-100 border-b border-gray-200 font-medium text-slate-800" type="button" onclick="toggleAccordion('section-two')">
                     Section 2: PROJECTS
                 </button>
             </h2>
-            <div id="section-two" class="accordion-collapse collapse">
-                <div class="accordion-body">
+            <div id="section-two" class="hidden">
+                <div class="p-4">
                     <ul id="projects-container"></ul>
                 </div>
             </div>
         </div>
-    </div>
-</section>
-<section class="mt-3 mb-5">
-    <div class="accordion">
-        <div class="accordion-item">
-            <h2 class="accordion-header">
-                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                        data-bs-target="#section-three" aria-expanded="false" aria-controls="section-three">
+
+        <div class="border border-gray-200 rounded-lg overflow-hidden mt-6 mb-8">
+            <h2>
+                <button class="w-full px-4 py-3 text-left bg-gray-50 hover:bg-gray-100 border-b border-gray-200 font-medium text-slate-800" type="button" onclick="toggleAccordion('section-three')">
                     Section 3: VOTES
                 </button>
             </h2>
-            <div id="section-three" class="accordion-collapse collapse">
-                <div class="accordion-body">
+            <div id="section-three" class="hidden">
+                <div class="p-4">
                     <ul id="votes-container"></ul>
                 </div>
             </div>
         </div>
-    </div>
-</section>
+
+        <div class="mt-8 p-4 bg-gray-50 rounded-lg border-l-4 border-blue-500">
+            <p class="text-sm text-gray-700 italic">
+                <strong>Note:</strong> We use integers instead of booleans for flag values (such as 1 and 0) 
+                as this approach provides more flexibility. For example, a project can be either selected (1) 
+                or not (0). But there are cases where a project is selected for another reason, such as 
+                an error made by the company conducting the voting process. 
+                In such cases, we can assign a special value, like 2, and explain it in a comment.
+            </p>
+        </div>
+
+                <!-- Close the main containers -->
+            </div>
+        </div>
+    </section>
+
+<script>
+    // Accordion toggle function for Tailwind implementation
+    function toggleAccordion(id) {
+        const element = document.getElementById(id);
+        if (element.classList.contains('hidden')) {
+            element.classList.remove('hidden');
+            element.classList.add('block');
+        } else {
+            element.classList.remove('block');
+            element.classList.add('hidden');
+        }
+    }
+</script>
 
 <script>
     const metaFields = [
@@ -776,11 +789,7 @@ voter_id; age; sex; vote
 </script>
 
 
-    <p class="my-3" align="justify"><i>* we use integers instead of booleans for flag values (such as 1 and 0)
-     as this approach provides more flexibility. For example, a project can be either selected (1)
-    or not (0). But there are cases where a project is selected for another reason, such as 
-    an error made by the company conducting the voting process. 
-    In such cases, we can assign a special value, like 2, and explain it in a comment.</i></p>
+
 
 
 
