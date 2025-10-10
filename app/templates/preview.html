@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+
+{% block title %}Preview – {{ filename }}{% endblock %}
+{% block bodyClass %}preview{% endblock %}
+
+{% block body %}
+<div class="container">
+  <div class="toolbar" style="margin-top:12px">
+    <a class="nav-link btn btn-primary" href="{{ url_for('main.home') }}">← Back to search</a>
+    <div class="spacer"></div>
+    <a class="nav-link btn btn-primary" href="{{ url_for('main.download', filename=filename) }}">Download</a>
+  </div>
+
+  <section class="tile">
+    <div class="tile-header">
+      <h2>File: {{ filename }}</h2>
+      <div class="badges">
+        <span class="tag">Projects: {{ counts.projects }}</span>
+        <span class="tag">Votes: {{ counts.votes }}</span>
+      </div>
+      <a class="download" href="{{ url_for('main.download', filename=filename) }}" title="Download"></a>
+    </div>
+
+    <div class="grid head">
+      <div>Meta key</div>
+      <div>Value</div>
+      <div></div>
+      <div></div>
+      <div></div>
+      <div></div>
+    </div>
+    <div class="grid">
+      <div class="col" style="grid-column: span 6; padding:0">
+        <table class="table table-sm" style="width:100%">
+          <tbody>
+          {% for k, v in meta_items %}
+            <tr>
+              <th style="width:240px">{{ k }}</th>
+              <td>{{ v }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="tile">
+    <div class="tile-header">
+      <h2>Projects ({{ counts.projects }})</h2>
+      <div class="badges">
+        {% if votes_in_projects %}<span class="tag">votes in projects</span>{% endif %}
+        {% if scores_in_projects %}<span class="tag">scores in projects</span>{% endif %}
+      </div>
+    </div>
+    <div style="overflow:auto">
+      <table class="table table-striped table-sm">
+        <thead>
+          <tr>
+            {% for c in project_columns %}<th>{{ c }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in project_rows %}
+          <tr>
+            {% for c in project_columns %}
+              <td>{{ row.get(c, '') }}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="tile">
+    <div class="tile-header">
+      <h2>Votes ({{ total_votes_count }})</h2>
+      {% if votes_truncated %}
+        <div class="badges"><span class="tag">showing first {{ votes_preview|length }} rows</span></div>
+      {% endif %}
+    </div>
+    <div style="overflow:auto">
+      <table class="table table-striped table-sm">
+        <thead>
+          <tr>
+            {% for c in vote_columns %}<th>{{ c }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in votes_preview %}
+          <tr>
+            {% for c in vote_columns %}
+              <td>{{ row.get(c, '') }}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if votes_truncated %}
+    <div class="note">Votes table truncated to keep the page fast. You can download the file for full data.</div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

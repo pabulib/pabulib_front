@@ -5,7 +5,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from flask import Blueprint, abort, current_app, render_template, request, send_file
+from flask import (
+    Blueprint,
+    Response,
+    abort,
+    current_app,
+    render_template,
+    request,
+    send_file,
+    url_for,
+)
 
 from .utils.load_pb_file import parse_pb_lines
 
@@ -579,3 +588,173 @@ def download_selected():
     return send_file(
         mem, as_attachment=True, download_name=filename, mimetype="application/zip"
     )
+
+
+def _is_safe_filename(name: str) -> bool:
+    # basic safety for path traversal and extension
+    return (
+        name.endswith(".pb")
+        and ".." not in name
+        and not name.startswith("/")
+        and "/" not in name
+        and "\\" not in name
+    )
+
+
+def _order_columns(all_keys: List[str], preferred_order: List[str]) -> List[str]:
+    seen = set()
+    cols: List[str] = []
+    for k in preferred_order:
+        if k in all_keys and k not in seen:
+            cols.append(k)
+            seen.add(k)
+    for k in sorted(all_keys):
+        if k not in seen:
+            cols.append(k)
+            seen.add(k)
+    return cols
+
+
+@bp.route("/preview/<path:filename>")
+def preview_file(filename: str):
+    # Validate and locate file
+    if not _is_safe_filename(filename):
+        abort(400, description="Invalid filename")
+    path = _pb_folder() / filename
+    if not path.exists() or not path.is_file():
+        abort(404)
+
+    # Parse file
+    try:
+        lines = _read_file_lines(path)
+        meta, projects, votes, votes_in_projects, scores_in_projects = parse_pb_lines(
+            lines
+        )
+    except Exception as e:
+        abort(400, description=f"Failed to parse file: {e}")
+
+    # Prepare META as list of (key, value) sorted with some preferred keys on top
+    meta_items = list(meta.items())
+    preferred_meta = [
+        "country",
+        "unit",
+        "city",
+        "district",
+        "subunit",
+        "instance",
+        "year",
+        "date_begin",
+        "date_end",
+        "budget",
+        "currency",
+        "num_projects",
+        "num_votes",
+        "vote_type",
+        "rule",
+        "description",
+        "comment",
+    ]
+    # Sort with preferred keys first (in that order), then the rest alphabetically
+    meta_order_map = {k: i for i, k in enumerate(preferred_meta)}
+    meta_items.sort(
+        key=lambda kv: (
+            kv[0] not in meta_order_map,
+            meta_order_map.get(kv[0], 9999),
+            kv[0],
+        )
+    )
+
+    # Prepare PROJECTS table
+    project_rows: List[Dict[str, Any]] = []
+    project_keys_set = set()
+    for pid, row in projects.items():
+        # ensure project_id exists in row
+        r = dict(row)
+        r.setdefault("project_id", pid)
+        project_rows.append(r)
+        project_keys_set.update(r.keys())
+    preferred_project_cols = [
+        "project_id",
+        "name",
+        "title",
+        "cost",
+        "score",
+        "votes",
+        "selected",
+        "category",
+        "district",
+        "description",
+    ]
+    project_columns = _order_columns(list(project_keys_set), preferred_project_cols)
+
+    # Prepare VOTES table (may be large)
+    vote_rows: List[Dict[str, Any]] = []
+    vote_keys_set = set(["voter_id"])  # we include voter_id explicitly
+    for vid, row in votes.items():
+        r = {"voter_id": vid}
+        r.update(row)
+        vote_rows.append(r)
+        vote_keys_set.update(r.keys())
+    preferred_vote_cols = [
+        "voter_id",
+        "vote",
+        "ranking",
+        "points",
+        "weight",
+        "age",
+        "gender",
+        "district",
+    ]
+    vote_columns = _order_columns(list(vote_keys_set), preferred_vote_cols)
+
+    # For very large votes tables, show only first N by default; can expand on client
+    VOTES_PREVIEW_LIMIT = 200
+    total_votes_count = len(vote_rows)
+    votes_preview = vote_rows[:VOTES_PREVIEW_LIMIT]
+    votes_truncated = total_votes_count > VOTES_PREVIEW_LIMIT
+
+    # Basic counts for header
+    counts = {
+        "projects": len(project_rows),
+        "votes": total_votes_count,
+    }
+
+    return render_template(
+        "preview.html",
+        filename=filename,
+        meta_items=meta_items,
+        project_columns=project_columns,
+        project_rows=project_rows,
+        vote_columns=vote_columns,
+        votes_preview=votes_preview,
+        votes_truncated=votes_truncated,
+        total_votes_count=total_votes_count,
+        votes_in_projects=votes_in_projects,
+        scores_in_projects=scores_in_projects,
+        counts=counts,
+    )
+
+
+@bp.route("/preview-snippet/<path:filename>")
+def preview_snippet(filename: str):
+    """Return a small, plain-text preview of the PB file (first N lines)."""
+    if not _is_safe_filename(filename):
+        abort(400, description="Invalid filename")
+    path = _pb_folder() / filename
+    if not path.exists() or not path.is_file():
+        abort(404)
+
+    # Number of lines to include; default 80, cap 400
+    try:
+        n = int(request.args.get("lines", "80"))
+    except Exception:
+        n = 80
+    n = max(1, min(n, 400))
+
+    try:
+        lines = _read_file_lines(path)[:n]
+        text = "\n".join(lines)
+    except Exception as e:
+        abort(400, description=f"Failed to read file: {e}")
+
+    return Response(text, mimetype="text/plain; charset=utf-8")
