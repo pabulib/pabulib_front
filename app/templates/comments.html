@@ -4,62 +4,63 @@
 {% block title %}Pabulib – Comments{% endblock %}
 
 {% block body %}
-<div class="container py-3">
-  <h1 class="mb-3">Comments</h1>
-  <p class="text-muted">Parsed from META key <code>comment</code> using pattern <code>#n:</code> segments. Showing how many PB files share each comment.</p>
+<section class="max-w-4xl mx-auto px-4">
+  <div class="flex justify-center">
+    <div class="w-full max-w-3xl bg-white rounded-lg shadow-lg p-8 mt-8">
+      <h1 class="text-3xl font-bold text-slate-800 mb-6">Comments</h1>
+      <p class="text-gray-600 mb-6">Parsed from META key <code class="bg-gray-100 px-2 py-1 rounded text-sm">comment</code> using pattern <code class="bg-gray-100 px-2 py-1 rounded text-sm">#n:</code> segments. Showing how many PB files share each comment.</p>
 
-  <div class="table-responsive">
-    <table class="table table-striped align-middle comments-table">
-      <colgroup>
-        <col style="width:45%">
-        <col style="width:10%">
-        <col style="width:45%">
-      </colgroup>
-      <thead class="table-light">
-        <tr>
-          <th>Comment</th>
-          <th># files</th>
-          <th>
-            <div style="display:flex;align-items:center;gap:8px">
-              <span>Files</span>
-              <label style="display:flex;align-items:center;gap:6px;font-weight:400;font-size:12px;color:#6c757d">
-                Group by
-                <select id="groupMode" style="margin:0;border:1px solid #dee2e6;border-radius:6px;padding:2px 6px;font-size:12px;color:#495057;background:#fff">
-                  <option value="none">None</option>
-                  <option value="country">Country</option>
-                  <option value="country_unit" selected>Country + Unit</option>
-                  <option value="country_unit_instance">Country + Unit + Instance</option>
-                </select>
-              </label>
-            </div>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for comment, count, files in rows %}
-        <tr>
-          <td class="comment-cell">{{ comment }}</td>
-          <td><span class="badge text-bg-secondary">{{ count }}</span></td>
-          <td>
-            {% set preview = files[:5] %}
-            <div class="files-cell">
-        <div class="file-list"
-          data-files='{{ files|tojson|e }}'
-          data-groups-country='{{ (groups_by_comment_country.get(comment) or [])|tojson|e }}'
-          data-groups-country-unit='{{ (groups_by_comment_country_unit.get(comment) or [])|tojson|e }}'
-          data-groups-country-unit-instance='{{ (groups_by_comment_country_unit_instance.get(comment) or [])|tojson|e }}'
-          data-expanded="0"></div>
-              {% if files|length > preview|length %}
-                <button type="button" class="btn btn-sm btn-outline-primary mt-1 btn-expand" aria-label="Show all files" aria-expanded="false">+</button>
-              {% endif %}
-            </div>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+      <div class="overflow-x-auto">
+        <table class="min-w-full bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-b border-gray-200" style="width:45%">Comment</th>
+              <th class="px-4 py-4 text-center text-sm font-semibold text-gray-700 border-b border-gray-200" style="width:10%"># files</th>
+              <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-b border-gray-200" style="width:45%">
+                <div class="flex items-center gap-3">
+                  <span>Files</span>
+                  <label class="flex items-center gap-2 text-xs font-normal text-gray-500">
+                    Group by
+                    <select id="groupMode" class="text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-700">
+                      <option value="none">None</option>
+                      <option value="country">Country</option>
+                      <option value="country_unit" selected>Country + Unit</option>
+                      <option value="country_unit_instance">Country + Unit + Instance</option>
+                    </select>
+                  </label>
+                </div>
+              </th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200">
+            {% for comment, count, files in rows %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-sm text-gray-900">{{ comment }}</td>
+              <td class="px-4 py-4 text-center">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800">{{ count }}</span>
+              </td>
+              <td class="px-6 py-4">
+                {% set preview = files[:5] %}
+                <div class="files-cell">
+                  <div class="file-list text-sm"
+                    data-files='{{ files|tojson|e }}'
+                    data-groups-country='{{ (groups_by_comment_country.get(comment) or [])|tojson|e }}'
+                    data-groups-country-unit='{{ (groups_by_comment_country_unit.get(comment) or [])|tojson|e }}'
+                    data-groups-country-unit-instance='{{ (groups_by_comment_country_unit_instance.get(comment) or [])|tojson|e }}'
+                    data-expanded="0"></div>
+                  {% if files|length > preview|length %}
+                    <button type="button" class="mt-2 px-3 py-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 btn-expand" aria-label="Show all files" aria-expanded="false">+ Show more</button>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
-</div>
+</section>
 
 <script>
 // Expand/collapse behavior for files list (+ to expand, − to collapse)
@@ -146,26 +147,67 @@
 </script>
 
 <style>
-/* Make the comment column the longest and allow wrapping */
-.comments-table{table-layout:fixed;width:100%}
-.comments-table th:nth-child(1),
-.comments-table td:nth-child(1){width:70%}
-.comments-table th:nth-child(2),
-.comments-table td:nth-child(2){width:5%;white-space:nowrap}
-.comments-table th:nth-child(3),
-.comments-table td:nth-child(3){width:25%}
-.comments-table .comment-cell { word-break: break-word; }
-.comments-table .files-cell { display: flex; flex-direction: column; align-items: flex-start; max-width: 100%; overflow-x: auto; }
-.comments-table .file-list { display: block; max-width: 100%; }
-.comments-table .file-item { display: block; line-height: 1.2; margin-bottom: 1px; white-space: nowrap; font-size: 12px; color: #333; }
-.comments-table .more-count { display: block; margin-top: 2px; }
-.comments-table td:nth-child(2) { white-space: nowrap; }
-.comments-table td:nth-child(3) { white-space: nowrap; }
+/* Enhanced styles for better readability */
+.files-cell { 
+  display: flex; 
+  flex-direction: column; 
+  align-items: flex-start; 
+  max-width: 100%; 
+}
+.file-list { 
+  display: block; 
+  max-width: 100%; 
+  line-height: 1.4;
+}
+.file-item { 
+  display: inline-block; 
+  margin-right: 8px;
+  margin-bottom: 4px;
+  padding: 2px 8px;
+  background: #f3f4f6;
+  border-radius: 4px;
+  font-size: 12px; 
+  color: #374151;
+  border: 1px solid #e5e7eb;
+}
+.more-count { 
+  display: block; 
+  margin-top: 4px; 
+  font-size: 12px;
+  color: #6b7280;
+  font-style: italic;
+}
 /* Grouped view styles */
-.comments-table .group{margin-bottom:6px}
-.comments-table .group-head{display:flex;align-items:center;gap:8px;font-size:12px;color:#6c757d;margin-bottom:2px}
-.comments-table .group-label{font-weight:600;color:#555}
-.comments-table .group-count{background:#e9ecef;color:#495057;border-radius:999px;padding:2px 6px;font-size:11px}
-.comments-table .group-files{margin-left:8px}
+.group {
+  margin-bottom: 12px;
+  padding: 8px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #4b5563;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+.group-label {
+  font-weight: 600;
+  color: #374151;
+}
+.group-count {
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.group-files {
+  margin-left: 0;
+}
 </style>
 {% endblock %}

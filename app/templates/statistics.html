@@ -4,116 +4,84 @@
 {% block title %}Pabulib – Statistics{% endblock %}
 
 {% block body %}
-<div class="container py-4" style="max-width: 900px;">
-  <h1 class="mb-4">Statistics</h1>
+<section class="max-w-4xl mx-auto px-4">
+  <div class="flex justify-center">
+    <div class="w-full max-w-3xl bg-white rounded-lg shadow-lg p-8 mt-8">
+      <h1 class="text-3xl font-bold text-slate-800 mb-6">Statistics</h1>
 
-  <div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
-      <div class="card text-center">
-        <div class="card-body">
-          <div class="fs-1">{{ formatted.files }}</div>
-          <div class="text-muted">Files</div>
-        </div>
-      </div>
+  <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+    <div class="bg-gray-50 rounded-lg p-4 text-center border border-gray-200">
+      <div class="text-4xl font-bold text-slate-800 mb-1">{{ formatted.files }}</div>
+      <div class="text-gray-600 text-sm">Files</div>
     </div>
-    <div class="col-6 col-md-3">
-      <div class="card text-center">
-        <div class="card-body">
-          <div class="fs-1">{{ formatted.countries }}</div>
-          <div class="text-muted">Countries</div>
-        </div>
-      </div>
+    <div class="bg-gray-50 rounded-lg p-4 text-center border border-gray-200">
+      <div class="text-4xl font-bold text-slate-800 mb-1">{{ formatted.countries }}</div>
+      <div class="text-gray-600 text-sm">Countries</div>
     </div>
-    <div class="col-6 col-md-3">
-      <div class="card text-center">
-        <div class="card-body">
-          <div class="fs-1">{{ formatted.cities }}</div>
-          <div class="text-muted">Cities</div>
-        </div>
-      </div>
+    <div class="bg-gray-50 rounded-lg p-4 text-center border border-gray-200">
+      <div class="text-4xl font-bold text-slate-800 mb-1">{{ formatted.cities }}</div>
+      <div class="text-gray-600 text-sm">Cities</div>
     </div>
-    <div class="col-6 col-md-3">
-      <div class="card text-center">
-        <div class="card-body">
-          <div class="fs-1">{{ formatted.projects }}</div>
-          <div class="text-muted">Projects</div>
-        </div>
-      </div>
+    <div class="bg-gray-50 rounded-lg p-4 text-center border border-gray-200">
+      <div class="text-4xl font-bold text-slate-800 mb-1">{{ formatted.projects }}</div>
+      <div class="text-gray-600 text-sm">Projects</div>
     </div>
-    <div class="col-6 col-md-3">
-      <div class="card text-center">
-        <div class="card-body">
-          <div class="fs-1">{{ formatted.votes }}</div>
-          <div class="text-muted">Votes</div>
-        </div>
-      </div>
+    <div class="bg-gray-50 rounded-lg p-4 text-center border border-gray-200">
+      <div class="text-4xl font-bold text-slate-800 mb-1">{{ formatted.votes }}</div>
+      <div class="text-gray-600 text-sm">Votes</div>
     </div>
-    <div class="col-6 col-md-3">
-      <div class="card text-center">
-        <div class="card-body">
-          <div class="fs-1">{{ formatted.funded }}</div>
-          <div class="text-muted">Projects funded</div>
-        </div>
-      </div>
+    <div class="bg-gray-50 rounded-lg p-4 text-center border border-gray-200">
+      <div class="text-4xl font-bold text-slate-800 mb-1">{{ formatted.funded }}</div>
+      <div class="text-gray-600 text-sm">Projects funded</div>
     </div>
-    <div class="col-12">
-      <div class="card">
-        <div class="card-body">
-          <div class="d-flex justify-content-between align-items-center flex-wrap">
-            <div class="me-3">
-              <div class="fw-semibold">Budgets by currency</div>
-              <div class="small text-muted">Sum of file budgets per currency</div>
-            </div>
-            <div class="d-flex flex-wrap gap-2">
-              {% for b in budgets_list %}
-              <span class="badge text-bg-light border">
-                <span class="fw-semibold">{{ b.currency }}</span>
-                <span class="ms-1">{{ b.amount }}</span>
-              </span>
-              {% endfor %}
-            </div>
+    <div class="col-span-full">
+      <div class="bg-gray-50 rounded-lg border border-gray-200 p-6">
+        <div class="flex justify-between items-center flex-wrap gap-4">
+          <div>
+            <div class="font-semibold text-gray-800 text-lg">Budgets by currency</div>
+            <div class="text-sm text-gray-600 mt-1">Sum of file budgets per currency</div>
+          </div>
+          <div class="flex flex-wrap gap-3">
+            {% for b in budgets_list %}
+            <span class="inline-flex items-center px-3 py-2 rounded-md bg-white border border-gray-300 shadow-sm">
+              <span class="font-semibold text-slate-800">{{ b.currency }}</span>
+              <span class="ml-2 text-gray-700">{{ b.amount }}</span>
+            </span>
+            {% endfor %}
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="row g-4">
-    <div class="col-12 col-md-6">
-      <div class="card h-100">
-        <div class="card-header">Files per year</div>
-        <div class="card-body"><canvas id="chartYear" style="height: 120px"></canvas></div>
-      </div>
+  <div class="grid grid-cols-1 gap-6">
+    <div class="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+      <div class="bg-gray-200 px-4 py-3 text-sm font-medium text-gray-700">Files per year</div>
+      <div class="p-4"><canvas id="chartYear" class="h-32"></canvas></div>
     </div>
-    <div class="col-12 col-md-6">
-      <div class="card h-100">
-        <div class="card-header">Vote types</div>
-        <div class="card-body"><canvas id="chartTypes" style="height: 140px"></canvas></div>
-      </div>
+    <div class="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+      <div class="bg-gray-200 px-4 py-3 text-sm font-medium text-gray-700">Vote types</div>
+      <div class="p-4"><canvas id="chartTypes" class="h-36"></canvas></div>
     </div>
-    <div class="col-12 col-md-6">
-      <div class="card h-100">
-        <div class="card-header">Votes by country</div>
-        <div class="card-body"><canvas id="chartVotesCountry" style="height: 140px"></canvas></div>
-      </div>
+    <div class="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+      <div class="bg-gray-200 px-4 py-3 text-sm font-medium text-gray-700">Votes by country</div>
+      <div class="p-4"><canvas id="chartVotesCountry" class="h-36"></canvas></div>
     </div>
-    <div class="col-12 col-md-6">
-      <div class="card h-100">
-        <div class="card-header d-flex align-items-center justify-content-between">
-          <span>Budget by country</span>
-          <select id="currencySelect" class="form-select form-select-sm" style="width:auto"></select>
-        </div>
-        <div class="card-body"><canvas id="chartBudgetCountry" style="height: 140px"></canvas></div>
+    <div class="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+      <div class="bg-gray-200 px-4 py-3 text-sm font-medium text-gray-700 flex items-center justify-between">
+        <span>Budget by country</span>
+        <select id="currencySelect" class="text-xs px-2 py-1 border border-gray-300 rounded bg-white w-auto"></select>
       </div>
+      <div class="p-4"><canvas id="chartBudgetCountry" class="h-36"></canvas></div>
     </div>
-    <div class="col-12 col-md-6">
-      <div class="card h-100">
-        <div class="card-header">Top cities by votes</div>
-        <div class="card-body"><canvas id="chartTopCities" style="height: 140px"></canvas></div>
-      </div>
+    <div class="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+      <div class="bg-gray-200 px-4 py-3 text-sm font-medium text-gray-700">Top cities by votes</div>
+      <div class="p-4"><canvas id="chartTopCities" class="h-36"></canvas></div>
     </div>
   </div>
-</div>
+    </div>
+  </div>
+</section>
 
 <script id="stats-series" type="application/json">{{ series | tojson }}</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
