@@ -19,7 +19,10 @@
           <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800">Votes: {{ counts.votes }}</span>
         </div>
       </div>
-      <a class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" href="{{ url_for('main.download', filename=filename) }}">Download</a>
+      <div class="flex gap-2">
+        <a class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" href="{{ url_for('main.visualize_file', filename=filename) }}">Visualize</a>
+        <a class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" href="{{ url_for('main.download', filename=filename) }}">Download</a>
+      </div>
     </div>
   </div>
 

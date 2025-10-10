@@ -985,14 +985,34 @@ def visualize_file(filename: str):
     vote_counts_per_project = {}
     vote_lengths = []  # Track how many projects each voter selected
     
+    # Process all votes to extract vote data
     for vote_id, vote_data in votes.items():
+        # Look specifically for the "vote" column (this works for both Amsterdam and Warsaw formats)
         vote_list = vote_data.get('vote', '')
-        if isinstance(vote_list, str) and vote_list:
+        
+        if isinstance(vote_list, str) and vote_list.strip():
             # Parse comma-separated project IDs
             voted_projects = [pid.strip() for pid in vote_list.split(',') if pid.strip()]
-            vote_lengths.append(len(voted_projects))
-            for pid in voted_projects:
-                vote_counts_per_project[pid] = vote_counts_per_project.get(pid, 0) + 1
+            if voted_projects:  # Only add if we have valid projects
+                vote_lengths.append(len(voted_projects))
+                for pid in voted_projects:
+                    vote_counts_per_project[pid] = vote_counts_per_project.get(pid, 0) + 1
+        elif isinstance(vote_list, list) and vote_list:
+            # Handle case where vote is already a list
+            valid_projects = [pid for pid in vote_list if pid and str(pid).strip()]
+            if valid_projects:
+                vote_lengths.append(len(valid_projects))
+                for pid in valid_projects:
+                    vote_counts_per_project[str(pid)] = vote_counts_per_project.get(str(pid), 0) + 1
+    
+    print(f"DEBUG: Processed {len(votes)} total votes")
+    print(f"DEBUG: Valid vote lengths collected: {len(vote_lengths)}")
+    print(f"DEBUG: Projects with votes: {len(vote_counts_per_project)}")
+    if vote_lengths:
+        print(f"DEBUG: Sample vote lengths: {vote_lengths[:10]}")
+        print(f"DEBUG: Vote length range: {min(vote_lengths)} - {max(vote_lengths)}")
+    else:
+        print("DEBUG: No valid vote lengths found!")
     
     # Prepare data for charts
     project_data = {
@@ -1000,10 +1020,22 @@ def visualize_file(filename: str):
         'scatter_data': []  # Will be populated with {x: cost, y: votes} points
     }
     
-    vote_data = {
-        'project_labels': list(vote_counts_per_project.keys())[:20],  # Limit for readability
-        'votes_per_project': list(vote_counts_per_project.values())[:20]
-    }
+    # Debug information
+    print(f"DEBUG: Total votes processed: {len(votes)}")
+    print(f"DEBUG: Vote counts per project: {len(vote_counts_per_project)} projects have votes")
+    print(f"DEBUG: Sample vote counts: {dict(list(vote_counts_per_project.items())[:5])}")
+    
+    # Ensure we have data before creating the structure
+    if vote_counts_per_project:
+        vote_data = {
+            'project_labels': list(vote_counts_per_project.keys())[:20],  # Limit for readability
+            'votes_per_project': list(vote_counts_per_project.values())[:20]
+        }
+    else:
+        vote_data = {
+            'project_labels': [],
+            'votes_per_project': []
+        }
     
     # Vote length distribution
     vote_length_counts = {}
@@ -1017,6 +1049,10 @@ def visualize_file(filename: str):
             'labels': [str(length) for length in sorted_lengths],
             'counts': [vote_length_counts[length] for length in sorted_lengths]
         }
+        print(f"DEBUG: Vote length distribution created with {len(sorted_lengths)} different lengths")
+        print(f"DEBUG: Most common vote lengths: {sorted(vote_length_counts.items(), key=lambda x: x[1], reverse=True)[:5]}")
+    else:
+        print("DEBUG: No vote length data - no valid votes found with project selections")
     
     # Top projects by votes
     top_projects_data = None
@@ -1266,7 +1302,7 @@ def visualize_file(filename: str):
             }
 
     return render_template(
-        "visualization.html",
+        "visualize.html",
         filename=filename,
         counts=counts,
         project_data=project_data,

@@ -35,6 +35,15 @@
   <!-- Visualization Charts -->
   <div class="space-y-6">
     
+    <!-- Vote Length Distribution -->
+    <div class="bg-white rounded-lg shadow-lg p-6">
+      <h3 class="text-xl font-bold text-slate-800 mb-4">Vote Length Distribution</h3>
+      <p class="text-sm text-gray-600 mb-4">Distribution of how many projects each voter selected</p>
+      <div class="h-96">
+        <canvas id="voteLengthChart"></canvas>
+      </div>
+    </div>
+
     <!-- Project Cost Distribution -->
     <div class="bg-white rounded-lg shadow-lg p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Project Cost Distribution</h3>
@@ -92,15 +101,6 @@
       </div>
     </div>
 
-    <!-- Vote Length Distribution -->
-    <div class="bg-white rounded-lg shadow-lg p-6">
-      <h3 class="text-xl font-bold text-slate-800 mb-4">Vote Length Distribution</h3>
-      <p class="text-sm text-gray-600 mb-4">Distribution of how many projects each voter selected</p>
-      <div class="h-96">
-        <canvas id="voteLengthChart"></canvas>
-      </div>
-    </div>
-
     <!-- Top Projects by Votes -->
     <div class="bg-white rounded-lg shadow-lg p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Top 15 Most Popular Projects</h3>
@@ -110,7 +110,7 @@
     </div>
 
     <!-- Project Selection Rate -->
-    {% if project_selection_data %}
+    {% if selection_data %}
     <div class="bg-white rounded-lg shadow-lg p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Project Selection vs Cost Efficiency</h3>
       <p class="text-sm text-gray-600 mb-4">Selected projects (green) vs not selected (red) by cost and votes</p>
@@ -130,30 +130,20 @@
     </div>
     {% endif %}
 
-    <!-- Voting Timeline (if date information available) -->
-    {% if voting_timeline %}
-    <div class="bg-white rounded-lg shadow-lg p-6">
-      <h3 class="text-xl font-bold text-slate-800 mb-4">Voting Activity Over Time</h3>
-      <div class="h-96">
-        <canvas id="timelineChart"></canvas>
-      </div>
-    </div>
-    {% endif %}
-
     <!-- Summary Statistics -->
     <div class="bg-white rounded-lg shadow-lg p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Summary Statistics</h3>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div class="text-center">
-          <div class="text-3xl font-bold text-blue-600">{{ summary_stats.avg_cost|round(2) if summary_stats.avg_cost }}</div>
+          <div class="text-3xl font-bold text-blue-600">{{ summary_stats.avg_project_cost|round(2) if summary_stats.avg_project_cost else 0 }}</div>
           <div class="text-sm text-gray-600">Average Project Cost</div>
         </div>
         <div class="text-center">
-          <div class="text-3xl font-bold text-green-600">{{ summary_stats.avg_votes_per_project|round(1) if summary_stats.avg_votes_per_project }}</div>
-          <div class="text-sm text-gray-600">Average Votes per Project</div>
+          <div class="text-3xl font-bold text-green-600">{{ summary_stats.total_voters }}</div>
+          <div class="text-sm text-gray-600">Total Voters</div>
         </div>
         <div class="text-center">
-          <div class="text-3xl font-bold text-purple-600">{{ summary_stats.avg_vote_length|round(1) if summary_stats.avg_vote_length }}</div>
+          <div class="text-3xl font-bold text-purple-600">{{ summary_stats.avg_vote_length|round(1) if summary_stats.avg_vote_length else 0 }}</div>
           <div class="text-sm text-gray-600">Average Vote Length</div>
         </div>
       </div>
@@ -178,12 +168,16 @@
 const projectData = {{ project_data|tojson }};
 const voteData = {{ vote_data|tojson }};
 const categoryData = {{ category_data|tojson if category_data else 'null' }};
+
+// Debug logging
+console.log('Vote Data:', voteData);
 const demographicData = {{ demographic_data|tojson if demographic_data else 'null' }};
 const voteLengthData = {{ vote_length_data|tojson if vote_length_data else 'null' }};
+console.log('Vote Length Data:', voteLengthData);
 const topProjectsData = {{ top_projects_data|tojson if top_projects_data else 'null' }};
-const selectionData = {{ project_selection_data|tojson if project_selection_data else 'null' }};
+const selectionData = {{ selection_data|tojson if selection_data else 'null' }};
 const categoryCostData = {{ category_cost_data|tojson if category_cost_data else 'null' }};
-const timelineData = {{ voting_timeline|tojson if voting_timeline else 'null' }};
+const timelineData = {{ timeline_data|tojson if timeline_data else 'null' }};
 const correlationData = {{ correlation_data|tojson if correlation_data else 'null' }};
 
 // Chart configurations
@@ -256,7 +250,9 @@ if (projectData && projectData.costs && projectData.costs.length > 0) {
 }
 
 // Vote Distribution
-if (voteData && voteData.votes_per_project) {
+console.log('Checking voteData:', voteData);
+if (voteData && voteData.votes_per_project && voteData.votes_per_project.length > 0) {
+  console.log('Creating vote chart with data:', voteData);
   const ctx2 = document.getElementById('voteChart').getContext('2d');
   new Chart(ctx2, {
     type: 'bar',
@@ -295,6 +291,17 @@ if (voteData && voteData.votes_per_project) {
       }
     }
   });
+} else {
+  console.log('Vote chart not created - no data available:', {
+    voteData: voteData,
+    hasVoteData: !!voteData,
+    hasVotesPerProject: voteData && !!voteData.votes_per_project,
+    votesLength: voteData && voteData.votes_per_project ? voteData.votes_per_project.length : 0
+  });
+  
+  // Show a message if no data is available
+  const voteChartContainer = document.getElementById('voteChart').parentElement;
+  voteChartContainer.innerHTML = '<p class="text-center text-gray-500 py-8">No vote data available for this dataset.</p>';
 }
 
 // Category Distribution
@@ -443,7 +450,8 @@ if (projectData && projectData.scatter_data) {
 }
 
 // Vote Length Distribution
-if (voteLengthData) {
+console.log('Checking voteLengthData:', voteLengthData);
+if (voteLengthData && voteLengthData.labels && voteLengthData.labels.length > 0 && voteLengthData.counts && voteLengthData.counts.length > 0) {
   const ctx7 = document.getElementById('voteLengthChart').getContext('2d');
   new Chart(ctx7, {
     type: 'bar',
@@ -482,13 +490,24 @@ if (voteLengthData) {
       }
     }
   });
+} else {
+  console.log('Vote length chart not created - no data available:', {
+    voteLengthData: voteLengthData,
+    hasVoteLengthData: !!voteLengthData,
+    hasLabels: voteLengthData && !!voteLengthData.labels,
+    labelsLength: voteLengthData && voteLengthData.labels ? voteLengthData.labels.length : 0
+  });
+  
+  // Show a message if no data is available
+  const voteLengthChartContainer = document.getElementById('voteLengthChart').parentElement;
+  voteLengthChartContainer.innerHTML = '<p class="text-center text-gray-500 py-8">No vote length data available for this dataset.</p>';
 }
 
 // Top Projects Chart
 if (topProjectsData) {
   const ctx8 = document.getElementById('topProjectsChart').getContext('2d');
   new Chart(ctx8, {
-    type: 'horizontalBar',
+    type: 'bar',
     data: {
       labels: topProjectsData.labels,
       datasets: [{
@@ -603,49 +622,6 @@ if (categoryCostData) {
           title: {
             display: true,
             text: 'Average Cost'
-          }
-        }
-      }
-    }
-  });
-}
-
-// Voting Timeline
-if (timelineData) {
-  const ctx11 = document.getElementById('timelineChart').getContext('2d');
-  new Chart(ctx11, {
-    type: 'line',
-    data: {
-      labels: timelineData.dates,
-      datasets: [{
-        label: 'Votes per Day',
-        data: timelineData.votes_per_day,
-        backgroundColor: 'rgba(6, 182, 212, 0.2)',
-        borderColor: 'rgba(6, 182, 212, 1)',
-        borderWidth: 2,
-        fill: true
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        title: {
-          display: true,
-          text: 'Voting Activity Timeline'
-        }
-      },
-      scales: {
-        x: {
-          title: {
-            display: true,
-            text: 'Date'
-          }
-        },
-        y: {
-          title: {
-            display: true,
-            text: 'Number of Votes'
           }
         }
       }
