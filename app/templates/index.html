@@ -100,7 +100,15 @@
         <div class="tile-header">
           <input class="row-check" type="checkbox" data-file="{{ t.file_name|e }}" />
           <h2>{{ t.title }}</h2>
-          <span class="qs" title="QS = (avg vote length)³ × (projects)² × (votes). Higher is better.">QS {{ t.quality_short }}</span>
+          <div class="badges">
+            <span class="qs" title="QS = (avg vote length)³ × (projects)² × (votes). Higher is better.">QS {{ t.quality_short }}</span>
+            {% if t.experimental %}
+            <span class="tag exp" title="Dataset marked as experimental">Experimental</span>
+            {% endif %}
+            {% if t.fully_funded %}
+            <span class="tag funded" title="All selected projects are funded">Fully funded</span>
+            {% endif %}
+          </div>
           <span class="doc" title="File"></span>
           <a class="download" href="{{ url_for('main.download', filename=t.file_name) }}" title="Download"></a>
         </div>
