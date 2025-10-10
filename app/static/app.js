@@ -231,15 +231,25 @@
     const sub = mini.querySelector('.mini-sub');
     const grid = mini.querySelector('.mini-grid');
     const link = mini.querySelector('.mini-actions a');
-    head.textContent = tile.dataset.title || tile.dataset.webpage || tile.dataset.file || 'Dataset';
-    sub.textContent = [tile.dataset.country, tile.dataset.city, tile.dataset.year].filter(Boolean).join(' • ');
+    // Hide title/sub; present key details in the info grid instead
+    head.textContent = '';
+    head.style.display = 'none';
+    sub.textContent = '';
+    sub.style.display = 'none';
     grid.innerHTML = '';
+    const esc = (s)=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const toTitle = (s)=>String(s||'').toLowerCase().replace(/\b\w/g, c=>c.toUpperCase());
     function row(k,v){ const dk=document.createElement('div'); dk.className='k'; dk.textContent=k; const dv=document.createElement('div'); dv.className='v'; dv.textContent=v; grid.appendChild(dk); grid.appendChild(dv); }
+    function rowHtml(k,vHtml){ const dk=document.createElement('div'); dk.className='k'; dk.textContent=k; const dv=document.createElement('div'); dv.className='v'; dv.innerHTML=vHtml; grid.appendChild(dk); grid.appendChild(dv); }
+    // Primary details first: Country / Unit / Year (of voting) with bold values
+    if(tile.dataset.country) rowHtml('Country', `<strong>${esc(toTitle(tile.dataset.country))}</strong>`);
+    if(tile.dataset.city) rowHtml('Unit', `<strong>${esc(tile.dataset.city)}</strong>`);
+    if(tile.dataset.year) rowHtml('Year (of voting)', `<strong>${esc(tile.dataset.year)}</strong>`);
     // Show items that are NOT already shown in the tile grid itself
-    if(tile.dataset.rule) row('Rule', tile.dataset.rule);
-    if(tile.dataset.edition) row('Edition', tile.dataset.edition);
-    if(tile.dataset.language) row('Language', tile.dataset.language);
-    if(tile.dataset.selected) row('# selected projects', tile.dataset.selected);
+  if(tile.dataset.rule) row('Rule', tile.dataset.rule); // keep leading capital for consistency in grid
+  if(tile.dataset.edition) row('Edition', tile.dataset.edition);
+  if(tile.dataset.language) row('Language', tile.dataset.language);
+  if(tile.dataset.selected) row('# selected projects', tile.dataset.selected);
     if(tile.dataset.fully === '1') row('Funding status', 'Fully funded');
     if(tile.dataset.experimental === '1') row('Flag', 'Experimental');
     // Keep a short description only if tile's description is empty (fallback)
