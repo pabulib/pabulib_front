@@ -11,9 +11,9 @@
   <div class="table-responsive">
     <table class="table table-striped align-middle comments-table">
       <colgroup>
-        <col style="width:75%">
-        <col style="width:5%">
-        <col style="width:20%">
+        <col style="width:45%">
+        <col style="width:10%">
+        <col style="width:45%">
       </colgroup>
       <thead class="table-light">
         <tr>
@@ -95,6 +95,13 @@
 
 <style>
 /* Make the comment column the longest and allow wrapping */
+.comments-table{table-layout:fixed;width:100%}
+.comments-table th:nth-child(1),
+.comments-table td:nth-child(1){width:70%}
+.comments-table th:nth-child(2),
+.comments-table td:nth-child(2){width:5%;white-space:nowrap}
+.comments-table th:nth-child(3),
+.comments-table td:nth-child(3){width:25%}
 .comments-table .comment-cell { word-break: break-word; }
 .comments-table .files-cell { display: flex; flex-direction: column; align-items: flex-start; max-width: 100%; overflow-x: auto; }
 .comments-table .file-list { display: block; max-width: 100%; }

@@ -493,6 +493,12 @@ def home():
         abort(404, description="PB files folder not found")
 
     tiles = _get_tiles_cached()
+    # Pre-warm comments aggregation so navigating to Comments is instant
+    try:
+        _aggregate_comments_cached()
+    except Exception:
+        # Non-fatal if comments pre-warm fails
+        pass
     return render_template("index.html", tiles=tiles, count=len(tiles))
 
 
