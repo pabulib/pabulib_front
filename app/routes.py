@@ -56,6 +56,29 @@ def _format_budget(currency: str, amount: int) -> str:
     return f"{formatted} {currency}" if currency else formatted
 
 
+def _format_short_number(n: float) -> str:
+    """Format large numbers into a short human-readable string (e.g., 1.2K, 3.4M).
+    Uses base 1000 units and rounds to one decimal when needed.
+    """
+    try:
+        num = float(n)
+    except Exception:
+        return "—"
+    neg = num < 0
+    num = abs(num)
+    units = ["", "K", "M", "B", "T", "Q"]
+    i = 0
+    while num >= 1000 and i < len(units) - 1:
+        num /= 1000.0
+        i += 1
+    # Use no decimals for small integers, one decimal otherwise
+    if num >= 100 or abs(num - round(num)) < 1e-6:
+        s = f"{int(round(num))}{units[i]}"
+    else:
+        s = f"{num:.1f}{units[i]}"
+    return f"-{s}" if neg else s
+
+
 def build_tile_data(pb_path: Path) -> Dict[str, Any]:
     lines = _read_file_lines(pb_path)
     meta, projects, votes, votes_in_projects, scores_in_projects = parse_pb_lines(lines)
@@ -181,6 +204,7 @@ def build_tile_data(pb_path: Path) -> Dict[str, Any]:
     # quality metric: (avg vote length)^3 * (num_projects)^2 * (num_votes)
     vlen = vote_length_float or 0.0
     quality = (vlen**3) * (float(num_projects) ** 2) * float(num_votes)
+    quality_short = _format_short_number(quality)
 
     return {
         "file_name": pb_path.name,
@@ -206,6 +230,7 @@ def build_tile_data(pb_path: Path) -> Dict[str, Any]:
         "fully_funded": fully_funded,
         "experimental": experimental,
         "quality": quality,
+        "quality_short": quality_short,
     }
 
 

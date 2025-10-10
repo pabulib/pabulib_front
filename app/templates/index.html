@@ -10,7 +10,7 @@
           <label>Order by</label>
           <div class="row">
             <select id="orderBy">
-              <option value="quality">Quality</option>
+              <option value="quality" selected>Quality</option>
               <option value="votes"># votes</option>
               <option value="projects"># projects</option>
               <option value="budget">Budget</option>
@@ -18,6 +18,14 @@
             </select>
             <button type="button" id="orderDir" title="Toggle sort direction">⇅</button>
           </div>
+          <details class="micro-note">
+            <summary>Quality score (QS)</summary>
+            <div>
+              QS is a simple heuristic to surface richer datasets. Higher is better.
+              <br><br>
+              <span class="formula">QS = (avg vote length)<sup>3</sup> × (projects)<sup>2</sup> × (votes)</span>.
+            </div>
+          </details>
         </div>
 
         <div class="field">
@@ -34,15 +42,15 @@
         </div>
         <div class="field two">
           <label>Number of votes</label>
-          <div class="range"><input id="votesMin" placeholder="-" inputmode="numeric"><span>-</span><input id="votesMax" placeholder="-" inputmode="numeric"></div>
+          <div class="range"><input id="votesMin" placeholder="" inputmode="numeric"><span>-</span><input id="votesMax" placeholder="" inputmode="numeric"></div>
         </div>
         <div class="field two">
           <label>Number of projects</label>
-          <div class="range"><input id="projectsMin" placeholder="-" inputmode="numeric"><span>-</span><input id="projectsMax" placeholder="-" inputmode="numeric"></div>
+          <div class="range"><input id="projectsMin" placeholder="" inputmode="numeric"><span>-</span><input id="projectsMax" placeholder="" inputmode="numeric"></div>
         </div>
         <div class="field two">
           <label>Average vote length</label>
-          <div class="range"><input id="lenMin" placeholder="-" inputmode="decimal"><span>-</span><input id="lenMax" placeholder="-" inputmode="decimal"></div>
+          <div class="range"><input id="lenMin" placeholder="" inputmode="decimal"><span>-</span><input id="lenMax" placeholder="" inputmode="decimal"></div>
         </div>
         <div class="field">
           <label>Vote type</label>
@@ -92,6 +100,7 @@
         <div class="tile-header">
           <input class="row-check" type="checkbox" data-file="{{ t.file_name|e }}" />
           <h2>{{ t.title }}</h2>
+          <span class="qs" title="QS = (avg vote length)³ × (projects)² × (votes). Higher is better.">QS {{ t.quality_short }}</span>
           <span class="doc" title="File"></span>
           <a class="download" href="{{ url_for('main.download', filename=t.file_name) }}" title="Download"></a>
         </div>

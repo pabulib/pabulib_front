@@ -88,18 +88,24 @@
     const items = $$('.tile');
     items.sort((a,b)=>{
       const av = (key==='quality')?Number(a.dataset.quality||0):
-                 (key==='votes')?Number(a.dataset.votes):
-                 (key==='projects')?Number(a.dataset.projects):
+                 (key==='votes')?Number(a.dataset.votes||0):
+                 (key==='projects')?Number(a.dataset.projects||0):
                  (key==='budget')?Number(a.dataset.budget||0):
                  (key==='year')?Number(a.dataset.year||0):
-                 0; // quality placeholder
+                 0;
       const bv = (key==='quality')?Number(b.dataset.quality||0):
-                 (key==='votes')?Number(b.dataset.votes):
-                 (key==='projects')?Number(b.dataset.projects):
+                 (key==='votes')?Number(b.dataset.votes||0):
+                 (key==='projects')?Number(b.dataset.projects||0):
                  (key==='budget')?Number(b.dataset.budget||0):
                  (key==='year')?Number(b.dataset.year||0):
                  0;
-      return (av-bv)*dir;
+      if(av === bv){
+        // stable-ish secondary sort by title asc
+        const at = (a.dataset.title||'').toLowerCase();
+        const bt = (b.dataset.title||'').toLowerCase();
+        return at.localeCompare(bt);
+      }
+      return (av < bv ? -1 : 1) * dir;
     });
     items.forEach(it=>container.appendChild(it));
   }
@@ -159,9 +165,10 @@
     sortTiles();
   });
 
-  // initial
-  orderDir.dataset.dir = 'asc';
-  orderDir.textContent = '↑';
+  // initial: default to Quality, descending (bigger score first)
+  orderBy.value = 'quality';
+  orderDir.dataset.dir = 'desc';
+  orderDir.textContent = '↓';
   initOptions();
   updateChecks();
   sortTiles();
