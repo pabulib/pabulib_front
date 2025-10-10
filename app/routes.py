@@ -29,6 +29,9 @@ bp = Blueprint(
 
 # Simple in-process cache so we don't parse 1000+ files every request
 _TILES_CACHE: Optional[List[Dict[str, Any]]] = None
+# Maintain an incremental cache per file so we don't rebuild all tiles on any change
+# _TILES_BY_FILE[filename] = {"mtime": int, "size": int, "data": tile_dict}
+_TILES_BY_FILE: Dict[str, Dict[str, Any]] = {}
 _CACHE_SIGNATURE: Optional[str] = None
 
 # Cache for comments aggregation
@@ -237,6 +240,9 @@ def build_tile_data(pb_path: Path) -> Dict[str, Any]:
     edition = str(meta.get("edition", "")).strip()
     language = str(meta.get("language", "")).strip()
 
+    # Parse comments once and keep in the tile for later aggregations
+    comments_list = _extract_comments_from_meta(meta)
+
     return {
         "file_name": pb_path.name,
         "title": title,
@@ -266,6 +272,11 @@ def build_tile_data(pb_path: Path) -> Dict[str, Any]:
         "rule_raw": rule_raw,
         "edition": edition,
         "language": language,
+        # Keep raw bits needed for aggregations (but small enough to be cheap)
+        "comments": comments_list,
+        "country_raw": country,
+        "unit_raw": unit,
+        "instance_raw": instance,
     }
 
 
@@ -282,14 +293,52 @@ def _compute_signature(paths: List[Path]) -> str:
 
 
 def _get_tiles_cached() -> List[Dict[str, Any]]:
-    global _TILES_CACHE, _CACHE_SIGNATURE
+    """Return cached tiles; incrementally rebuild only changed files.
+
+    We still need to stat the directory to detect changes, but we avoid parsing
+    all PB files when only a few were updated.
+    """
+    global _TILES_CACHE, _TILES_BY_FILE, _CACHE_SIGNATURE
     folder = _pb_folder()
     files = sorted(folder.glob("*.pb"))
+
+    # Build a quick signature from names+mtime+size to determine if anything changed
     signature = _compute_signature(files)
-    if _TILES_CACHE is None or signature != _CACHE_SIGNATURE:
-        _TILES_CACHE = [build_tile_data(p) for p in files]
-        _CACHE_SIGNATURE = signature
-    return _TILES_CACHE
+    if _TILES_CACHE is not None and signature == _CACHE_SIGNATURE:
+        return _TILES_CACHE
+
+    # Detect removed files
+    existing_names = {p.name for p in files}
+    removed = [
+        name for name in list(_TILES_BY_FILE.keys()) if name not in existing_names
+    ]
+    for name in removed:
+        _TILES_BY_FILE.pop(name, None)
+
+    # Upsert changed files
+    for p in files:
+        try:
+            st = p.stat()
+            mtime = int(st.st_mtime)
+            size = int(st.st_size)
+        except FileNotFoundError:
+            continue
+        entry = _TILES_BY_FILE.get(p.name)
+        if entry is None or entry.get("mtime") != mtime or entry.get("size") != size:
+            # Rebuild tile data for this file only
+            data = build_tile_data(p)
+            _TILES_BY_FILE[p.name] = {"mtime": mtime, "size": size, "data": data}
+
+    # Compose ordered list
+    ordered = []
+    for p in files:
+        entry = _TILES_BY_FILE.get(p.name)
+        if entry and "data" in entry:
+            ordered.append(entry["data"])  # type: ignore
+
+    _TILES_CACHE = ordered
+    _CACHE_SIGNATURE = signature
+    return ordered
 
 
 def _extract_comments_from_meta(meta: Dict[str, Any]) -> List[str]:
@@ -349,9 +398,9 @@ def _aggregate_comments_cached() -> Tuple[
     Uses a cache based on files signature.
     """
     global _COMMENTS_CACHE, _COMMENTS_SIGNATURE
-    folder = _pb_folder()
-    files = sorted(folder.glob("*.pb"))
-    signature = _compute_signature(files)
+    # Reuse the same signature as tiles; comments are derived from tiles now
+    tiles = _get_tiles_cached()
+    signature = _CACHE_SIGNATURE
     if _COMMENTS_CACHE is not None and signature == _COMMENTS_SIGNATURE:
         try:
             # If cache matches new 5-item shape, reuse; otherwise rebuild
@@ -366,25 +415,22 @@ def _aggregate_comments_cached() -> Tuple[
     groups_temp_country_unit: Dict[str, Dict[str, Dict[str, Any]]] = {}
     groups_temp_country_unit_instance: Dict[str, Dict[str, Dict[str, Any]]] = {}
     # groups_temp_*[comment][group_key] -> {"label": display_label, "files": [filenames...]}
-    for p in files:
+    for t in tiles:
         try:
-            lines = _read_file_lines(p)
-            meta, _, _, _, _ = parse_pb_lines(lines)
-            comments = _extract_comments_from_meta(meta)
-            country = str(meta.get("country", "")).strip()
-            unit = str(
-                meta.get("unit", meta.get("city", meta.get("district", "")))
-            ).strip()
-            instance = str(meta.get("instance", meta.get("year", ""))).strip()
+            comments = t.get("comments", []) or []
+            country = str(t.get("country_raw", "")).strip()
+            unit = str(t.get("unit_raw", "")).strip()
+            instance = str(t.get("instance_raw", "")).strip()
+            fname = str(t.get("file_name", "")).strip()
             for c in comments:
-                mapping.setdefault(c, []).append(p.name)
+                mapping.setdefault(c, []).append(fname)
                 # Group by country
                 if country:
                     cm_c = groups_temp_country.setdefault(c, {})
                     key_c = country.lower()
                     label_c = country
                     bucket_c = cm_c.setdefault(key_c, {"label": label_c, "files": []})
-                    bucket_c["files"].append(p.name)
+                    bucket_c["files"].append(fname)
                 # Group by country + unit
                 if country or unit:
                     cm_cu = groups_temp_country_unit.setdefault(c, {})
@@ -395,7 +441,7 @@ def _aggregate_comments_cached() -> Tuple[
                     bucket_cu = cm_cu.setdefault(
                         key_cu, {"label": label_cu, "files": []}
                     )
-                    bucket_cu["files"].append(p.name)
+                    bucket_cu["files"].append(fname)
                 # Group by country + unit + instance
                 if country or unit or instance:
                     cm_cui = groups_temp_country_unit_instance.setdefault(c, {})
@@ -408,9 +454,8 @@ def _aggregate_comments_cached() -> Tuple[
                     bucket_cui = cm_cui.setdefault(
                         key_cui, {"label": label_cui, "files": []}
                     )
-                    bucket_cui["files"].append(p.name)
+                    bucket_cui["files"].append(fname)
         except Exception:
-            # Ignore broken files for comments aggregation
             continue
 
     # Create sorted list
@@ -457,6 +502,20 @@ def _aggregate_comments_cached() -> Tuple[
     )
     _COMMENTS_SIGNATURE = signature
     return _COMMENTS_CACHE
+
+
+def _invalidate_all_caches() -> None:
+    """Invalidate all in-memory caches and signatures. Next access will rebuild."""
+    global _TILES_CACHE, _TILES_BY_FILE, _CACHE_SIGNATURE
+    global _COMMENTS_CACHE, _COMMENTS_SIGNATURE
+    global _STATS_CACHE, _STATS_SIGNATURE
+    _TILES_CACHE = None
+    _TILES_BY_FILE.clear()
+    _CACHE_SIGNATURE = None
+    _COMMENTS_CACHE = None
+    _COMMENTS_SIGNATURE = None
+    _STATS_CACHE = None
+    _STATS_SIGNATURE = None
 
 
 def _aggregate_statistics_cached() -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -718,6 +777,34 @@ def download_selected():
     return send_file(
         mem, as_attachment=True, download_name=filename, mimetype="application/zip"
     )
+
+
+@bp.route("/admin/refresh", methods=["POST", "GET"])
+def admin_refresh():
+    """Forcefully clear caches and rebuild once.
+
+    Optional protection: set environment variable ADMIN_TOKEN to a secret value
+    and provide it via query string ?token=... or header X-Admin-Token.
+    """
+    token_expected = os.environ.get("ADMIN_TOKEN", "").strip()
+    if token_expected:
+        token = (
+            request.args.get("token", "").strip()
+            or str(request.headers.get("X-Admin-Token", "")).strip()
+        )
+        if token != token_expected:
+            abort(403)
+
+    _invalidate_all_caches()
+    # Optionally pre-warm to ensure next request is fast
+    try:
+        _get_tiles_cached()
+        _aggregate_comments_cached()
+        _aggregate_statistics_cached()
+    except Exception:
+        # Ignore warmup errors; they'll be handled on demand
+        pass
+    return {"status": "ok", "message": "caches rebuilt"}
 
 
 def _is_safe_filename(name: str) -> bool:
