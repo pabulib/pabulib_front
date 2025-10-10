@@ -4,7 +4,7 @@
 {% block title %}Pabulib – Statistics{% endblock %}
 
 {% block body %}
-<div class="container py-4">
+<div class="container py-4" style="max-width: 900px;">
   <h1 class="mb-4">Statistics</h1>
 
   <div class="row g-3 mb-4">
@@ -79,37 +79,37 @@
   </div>
 
   <div class="row g-4">
-    <div class="col-12 col-lg-6">
+    <div class="col-12 col-md-6">
       <div class="card h-100">
         <div class="card-header">Files per year</div>
-  <div class="card-body"><canvas id="chartYear" height="140"></canvas></div>
+        <div class="card-body"><canvas id="chartYear" style="height: 120px"></canvas></div>
       </div>
     </div>
-    <div class="col-12 col-lg-6">
+    <div class="col-12 col-md-6">
       <div class="card h-100">
         <div class="card-header">Vote types</div>
-  <div class="card-body"><canvas id="chartTypes" height="140"></canvas></div>
+        <div class="card-body"><canvas id="chartTypes" style="height: 140px"></canvas></div>
       </div>
     </div>
-    <div class="col-12 col-lg-6">
+    <div class="col-12 col-md-6">
       <div class="card h-100">
         <div class="card-header">Votes by country</div>
-  <div class="card-body"><canvas id="chartVotesCountry" height="160"></canvas></div>
+        <div class="card-body"><canvas id="chartVotesCountry" style="height: 140px"></canvas></div>
       </div>
     </div>
-    <div class="col-12 col-lg-6">
+    <div class="col-12 col-md-6">
       <div class="card h-100">
         <div class="card-header d-flex align-items-center justify-content-between">
           <span>Budget by country</span>
           <select id="currencySelect" class="form-select form-select-sm" style="width:auto"></select>
         </div>
-        <div class="card-body"><canvas id="chartBudgetCountry" height="160"></canvas></div>
+        <div class="card-body"><canvas id="chartBudgetCountry" style="height: 140px"></canvas></div>
       </div>
     </div>
-    <div class="col-12">
+    <div class="col-12 col-md-6">
       <div class="card h-100">
         <div class="card-header">Top cities by votes</div>
-  <div class="card-body"><canvas id="chartTopCities" height="160"></canvas></div>
+        <div class="card-body"><canvas id="chartTopCities" style="height: 140px"></canvas></div>
       </div>
     </div>
   </div>
@@ -142,8 +142,8 @@
   const data = statsSeries.files_per_year.map(d => d.value);
     new Chart(ctx, {
       type: 'bar',
-      data: { labels, datasets: [{ label: '# files', data, backgroundColor: mkColors(data.length, 0.7), maxBarThickness: 14 }] },
-      options: { scales: { y: { beginAtZero: true, ticks: { font: { size: 10 } } }, x: { ticks: { font: { size: 10 } } } }, plugins: { legend: { labels: { font: { size: 10 } } } } }
+      data: { labels, datasets: [{ label: '# files', data, backgroundColor: mkColors(data.length, 0.7), maxBarThickness: 32 }] },
+      options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { font: { size: 10 } } }, x: { ticks: { font: { size: 10 } } } }, plugins: { legend: { labels: { font: { size: 10 } } } } }
     });
   })();
 
@@ -155,7 +155,7 @@
     new Chart(ctx, {
       type: 'doughnut',
       data: { labels, datasets: [{ data, backgroundColor: mkColors(data.length) }] },
-      options: { plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } } }
+      options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } } }
     });
   })();
 
@@ -166,8 +166,8 @@
   const data = statsSeries.votes_per_country.map(d => d.value);
     new Chart(ctx, {
       type: 'bar',
-      data: { labels, datasets: [{ label: 'Votes', data, backgroundColor: mkColors(data.length, 0.7), maxBarThickness: 14 }] },
-      options: { indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { font: { size: 10 } } }, y: { ticks: { font: { size: 10 } } } }, plugins: { legend: { labels: { font: { size: 10 } } } } }
+      data: { labels, datasets: [{ label: 'Votes', data, backgroundColor: mkColors(data.length, 0.7), maxBarThickness: 32 }] },
+      options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { font: { size: 10 } } }, y: { ticks: { font: { size: 10 } } } }, plugins: { legend: { labels: { font: { size: 10 } } } } }
     });
   })();
 
@@ -194,8 +194,8 @@
     let base = datasetFor(pick);
     const chart = new Chart(ctx, {
       type: 'bar',
-      data: { labels: base.labels, datasets: [{ label: `Budget (${pick})`, data: base.data, backgroundColor: mkColors(base.data.length, 0.7), maxBarThickness: 14 }] },
-      options: { indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { font: { size: 10 } } }, y: { ticks: { font: { size: 10 } } } }, plugins: { legend: { labels: { font: { size: 10 } } } } }
+      data: { labels: base.labels, datasets: [{ label: `Budget (${pick})`, data: base.data, backgroundColor: mkColors(base.data.length, 0.7), maxBarThickness: 32 }] },
+      options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { font: { size: 10 } } }, y: { ticks: { font: { size: 10 } } } }, plugins: { legend: { labels: { font: { size: 10 } } } } }
     });
     sel.addEventListener('change', () => {
       const cur = sel.value;
@@ -214,8 +214,8 @@
   const data = statsSeries.top_cities_by_votes.map(d => d.value);
     new Chart(ctx, {
       type: 'bar',
-      data: { labels, datasets: [{ label: 'Votes', data, backgroundColor: mkColors(data.length, 0.7), maxBarThickness: 14 }] },
-      options: { scales: { y: { beginAtZero: true, ticks: { font: { size: 10 } } }, x: { ticks: { font: { size: 10 } } } }, plugins: { legend: { display: false } } }
+      data: { labels, datasets: [{ label: 'Votes', data, backgroundColor: mkColors(data.length, 0.7), maxBarThickness: 32 }] },
+      options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { font: { size: 10 } } }, x: { ticks: { font: { size: 10 } } } }, plugins: { legend: { display: false } } }
     });
   })();
 </script>
