@@ -7,6 +7,9 @@
 
     <style>
         /* CSS Styles */
+        /* Page-scoped variables */
+        body.format { --pabu-border-radius: 10px; }
+
         body.format .format-content {
             font-family: Arial, sans-serif;
         }
@@ -40,8 +43,35 @@
 
         /* Field label helpers */
         body.format .required.header { color: #c62828; font-weight: 700; }
-        body.format .optional.header { color: #1e88e5; font-weight: 600; }
-        body.format kbd { background:#DEE2E6FF; color: inherit; border:1px solid #ddd; border-bottom-width:2px; border-radius:4px; padding:0 4px; }
+        body.format .optional.header { color: #2e7d32; font-weight: 600; }
+        body.format kbd { background:#DEE2E6FF; color: inherit; border:1px solid #ddd; border-bottom-width:2px; border-radius: var(--pabu-border-radius); padding:0 4px; }
+
+        /* Accordion polish */
+        body.format .format-content .accordion-item {
+            border-radius: var(--pabu-border-radius);
+            overflow: hidden;
+            border: 1px solid #e0e0e0;
+        }
+        body.format .format-content .accordion-button {
+            border-radius: 0;
+        }
+        body.format .format-content .accordion-button:not(.collapsed) {
+            background-color: #f8f9fa;
+        }
+
+        /* Code color accents (from old theme) */
+        body.format .format-content code .code-keyword { color: #0033B3; }
+        body.format .format-content code .code-num { color: #1750EB; }
+        body.format .format-content code .code-param { color: #660099; }
+        body.format .format-content code .code-func { color: #000080; }
+        body.format .format-content code .code-string { color: #008080; font-weight: bold; }
+        body.format .format-content code .code-comment { color: #8C8C8C; font-style: italic; }
+
+        /* Offcanvas helpers (scoped to this page) */
+        body.format .offcanvas-size-xl { --bs-offcanvas-width: min(95vw, 600px) !important; }
+        body.format .offcanvas-size-xxl { --bs-offcanvas-width: min(95vw, 90vw) !important; }
+        body.format .offcanvas-size-md { --bs-offcanvas-width: min(95vw, 400px) !important; }
+        body.format .offcanvas-size-sm { --bs-offcanvas-width: min(95vw, 250px) !important; }
     </style>
     <div class="container format-content">
         <div class="row justify-content-center">
@@ -135,9 +165,9 @@ voter_id; age; sex; vote
                     <br>
 
                     <code>
-                        <br>18;1000000;8640;<strong>Rowerowy Wrocław 2017</strong>;category
-                        <br>50;1000000;10796;<strong>"Zielona rowerowo-piesza obwodnica Wrocławia; ETAP II"</strong>;category
-                        <br>499;1000000;3949;<strong>"""Konikowo"" - Budowa autorskiego placu zabaw"</strong>;category
+                        <br><span class="code-num">18</span>;<span class="code-num">1000000</span>;<span class="code-num">8640</span>;<span class="code-string"><strong>Rowerowy Wrocław 2017</strong></span>;<span class="code-num">category</span>
+                        <br><span class="code-num">50</span>;<span class="code-num">1000000</span>;<span class="code-num">10796</span>;<span class="code-string"><strong>"Zielona rowerowo-piesza obwodnica Wrocławia; ETAP II"</strong></span>;<span class="code-num">category</span>
+                        <br><span class="code-num">499</span>;<span class="code-num">1000000</span>;<span class="code-num">3949</span>;<span class="code-string"><strong>"""Konikowo"" - Budowa autorskiego placu zabaw"</strong></span>;<span class="code-num">category</span>
                     </code>
 
                 </p>
