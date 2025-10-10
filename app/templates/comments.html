@@ -27,7 +27,8 @@
                 <select id="groupMode" style="margin:0;border:1px solid #dee2e6;border-radius:6px;padding:2px 6px;font-size:12px;color:#495057;background:#fff">
                   <option value="none">None</option>
                   <option value="country">Country</option>
-                  <option value="country_unit">Country + Unit</option>
+                  <option value="country_unit" selected>Country + Unit</option>
+                  <option value="country_unit_instance">Country + Unit + Instance</option>
                 </select>
               </label>
             </div>
@@ -46,6 +47,7 @@
           data-files='{{ files|tojson|e }}'
           data-groups-country='{{ (groups_by_comment_country.get(comment) or [])|tojson|e }}'
           data-groups-country-unit='{{ (groups_by_comment_country_unit.get(comment) or [])|tojson|e }}'
+          data-groups-country-unit-instance='{{ (groups_by_comment_country_unit_instance.get(comment) or [])|tojson|e }}'
           data-expanded="0"></div>
               {% if files|length > preview|length %}
                 <button type="button" class="btn btn-sm btn-outline-primary mt-1 btn-expand" aria-label="Show all files" aria-expanded="false">+</button>
@@ -104,6 +106,8 @@
       try{ groups = JSON.parse(container.getAttribute('data-groups-country')||'[]') || []; }catch(e){ groups=[]; }
     }else if(mode === 'country_unit'){
       try{ groups = JSON.parse(container.getAttribute('data-groups-country-unit')||'[]') || []; }catch(e){ groups=[]; }
+    }else if(mode === 'country_unit_instance'){
+      try{ groups = JSON.parse(container.getAttribute('data-groups-country-unit-instance')||'[]') || []; }catch(e){ groups=[]; }
     }else{
       groups = [];
     }

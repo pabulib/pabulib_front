@@ -36,12 +36,14 @@ _CACHE_SIGNATURE: Optional[str] = None
 #   mapping: Dict[comment_text, List[filename]],
 #   rows: List[Tuple[comment_text, count, List[filename]]],
 #   groups_by_comment_country: Dict[comment_text, List[{label, count, files}]],
-#   groups_by_comment_country_unit: Dict[comment_text, List[{label, count, files}]]
+#   groups_by_comment_country_unit: Dict[comment_text, List[{label, count, files}]],
+#   groups_by_comment_country_unit_instance: Dict[comment_text, List[{label, count, files}]]
 # )
 _COMMENTS_CACHE: Optional[
     Tuple[
         Dict[str, List[str]],
         List[Tuple[str, int, List[str]]],
+        Dict[str, List[Dict[str, Any]]],
         Dict[str, List[Dict[str, Any]]],
         Dict[str, List[Dict[str, Any]]],
     ]
@@ -338,6 +340,7 @@ def _aggregate_comments_cached() -> Tuple[
     List[Tuple[str, int, List[str]]],
     Dict[str, List[Dict[str, Any]]],
     Dict[str, List[Dict[str, Any]]],
+    Dict[str, List[Dict[str, Any]]],
 ]:
     """
     Returns a tuple:
@@ -351,16 +354,17 @@ def _aggregate_comments_cached() -> Tuple[
     signature = _compute_signature(files)
     if _COMMENTS_CACHE is not None and signature == _COMMENTS_SIGNATURE:
         try:
-            # If cache matches new 4-item shape, reuse; otherwise rebuild
-            if isinstance(_COMMENTS_CACHE, tuple) and len(_COMMENTS_CACHE) == 4:
+            # If cache matches new 5-item shape, reuse; otherwise rebuild
+            if isinstance(_COMMENTS_CACHE, tuple) and len(_COMMENTS_CACHE) == 5:
                 return _COMMENTS_CACHE
         except Exception:
             pass
 
     mapping: Dict[str, List[str]] = {}
-    # For grouping files: country and country + unit
+    # For grouping files: country; country + unit; country + unit + instance
     groups_temp_country: Dict[str, Dict[str, Dict[str, Any]]] = {}
     groups_temp_country_unit: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    groups_temp_country_unit_instance: Dict[str, Dict[str, Dict[str, Any]]] = {}
     # groups_temp_*[comment][group_key] -> {"label": display_label, "files": [filenames...]}
     for p in files:
         try:
@@ -371,6 +375,7 @@ def _aggregate_comments_cached() -> Tuple[
             unit = str(
                 meta.get("unit", meta.get("city", meta.get("district", "")))
             ).strip()
+            instance = str(meta.get("instance", meta.get("year", ""))).strip()
             for c in comments:
                 mapping.setdefault(c, []).append(p.name)
                 # Group by country
@@ -391,6 +396,19 @@ def _aggregate_comments_cached() -> Tuple[
                         key_cu, {"label": label_cu, "files": []}
                     )
                     bucket_cu["files"].append(p.name)
+                # Group by country + unit + instance
+                if country or unit or instance:
+                    cm_cui = groups_temp_country_unit_instance.setdefault(c, {})
+                    key_cui = f"{country.lower()}::{unit.lower()}::{instance.lower()}"
+                    label_cui = (
+                        f"{country} – {unit} – {instance}".strip(" –")
+                        if (country or unit or instance)
+                        else "—"
+                    )
+                    bucket_cui = cm_cui.setdefault(
+                        key_cui, {"label": label_cui, "files": []}
+                    )
+                    bucket_cui["files"].append(p.name)
         except Exception:
             # Ignore broken files for comments aggregation
             continue
@@ -426,12 +444,16 @@ def _aggregate_comments_cached() -> Tuple[
 
     groups_by_comment_country = finalize_groups(groups_temp_country)
     groups_by_comment_country_unit = finalize_groups(groups_temp_country_unit)
+    groups_by_comment_country_unit_instance = finalize_groups(
+        groups_temp_country_unit_instance
+    )
 
     _COMMENTS_CACHE = (
         mapping,
         rows,
         groups_by_comment_country,
         groups_by_comment_country_unit,
+        groups_by_comment_country_unit_instance,
     )
     _COMMENTS_SIGNATURE = signature
     return _COMMENTS_CACHE
@@ -606,14 +628,19 @@ def contact_page():
 
 @bp.route("/comments")
 def comments_page():
-    _map, rows, groups_by_comment_country, groups_by_comment_country_unit = (
-        _aggregate_comments_cached()
-    )
+    (
+        _map,
+        rows,
+        groups_by_comment_country,
+        groups_by_comment_country_unit,
+        groups_by_comment_country_unit_instance,
+    ) = _aggregate_comments_cached()
     return render_template(
         "comments.html",
         rows=rows,
         groups_by_comment_country=groups_by_comment_country,
         groups_by_comment_country_unit=groups_by_comment_country_unit,
+        groups_by_comment_country_unit_instance=groups_by_comment_country_unit_instance,
         total=len(rows),
     )
 
