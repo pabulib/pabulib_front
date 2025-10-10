@@ -199,4 +199,64 @@
   function maybeLoadMore(){ if(nearBottom()) revealNext(); }
   window.addEventListener('scroll', maybeLoadMore, {passive:true});
   window.addEventListener('resize', maybeLoadMore);
+
+  // Hover chmurka with quick dataset summary from tile dataset (non-blocking)
+  let mini = null, hideMiniT = null;
+  function getMini(){
+    if(mini) return mini;
+    mini = document.createElement('div');
+    mini.className = 'mini-pop';
+    mini.innerHTML = '<div class="mini-head"></div><div class="mini-sub"></div><div class="mini-grid"></div><div class="mini-actions"><a target="_blank" rel="noopener">Open full preview →</a></div>';
+    document.body.appendChild(mini);
+    mini.addEventListener('mouseenter', ()=>{ if(hideMiniT){ clearTimeout(hideMiniT); hideMiniT=null; } });
+    mini.addEventListener('mouseleave', ()=> scheduleMiniHide());
+    return mini;
+  }
+  function scheduleMiniHide(){ if(hideMiniT){ clearTimeout(hideMiniT); } hideMiniT = setTimeout(()=>{ if(mini) mini.classList.remove('show'); }, 80); }
+  function positionMini(anchor){
+    const r = anchor.getBoundingClientRect();
+    const top = Math.max(8, r.bottom + 8);
+    const left = Math.min(window.innerWidth - 16 - 360, Math.max(8, r.right - 360));
+    // mini is position: fixed -> use viewport coordinates, no scroll offsets
+    mini.style.top = `${top}px`;
+    mini.style.left = `${left}px`;
+  }
+  function fillMini(tile, href){
+    const head = mini.querySelector('.mini-head');
+    const sub = mini.querySelector('.mini-sub');
+    const grid = mini.querySelector('.mini-grid');
+    const link = mini.querySelector('.mini-actions a');
+    head.textContent = tile.dataset.title || tile.dataset.webpage || tile.dataset.file || 'Dataset';
+    sub.textContent = [tile.dataset.country, tile.dataset.city, tile.dataset.year].filter(Boolean).join(' • ');
+    grid.innerHTML = '';
+    function row(k,v){ const dk=document.createElement('div'); dk.className='k'; dk.textContent=k; const dv=document.createElement('div'); dv.className='v'; dv.textContent=v; grid.appendChild(dk); grid.appendChild(dv); }
+    if(tile.dataset.desc) row('Description', tile.dataset.desc);
+    if(tile.dataset.votes) row('# votes', tile.dataset.votes);
+    if(tile.dataset.projects) row('# projects', tile.dataset.projects);
+    if(tile.dataset.budget) row('Budget', tile.dataset.budget);
+    if(tile.dataset.type) row('Vote type', tile.dataset.type);
+    if(tile.dataset.vlen) row('Vote length', tile.dataset.vlen);
+    link.href = href;
+  }
+  // Use mouseover/mouseout for reliable delegation
+  document.addEventListener('mouseover', (e)=>{
+    const a = e.target && e.target.closest && e.target.closest('a.doc');
+    if(!a) return;
+    const tile = a.closest('.tile');
+    if(!tile) return;
+    const href = a.href || `/preview/${encodeURIComponent(tile.dataset.file || '')}`;
+    getMini();
+    fillMini(tile, href);
+    positionMini(a);
+    mini.classList.add('show');
+  }, true);
+  document.addEventListener('mouseout', (e)=>{
+    const a = e.target && e.target.closest && e.target.closest('a.doc');
+    if(!a) return;
+    // If moving into the mini popover itself, keep it shown
+    const toEl = e.relatedTarget;
+    if(toEl && mini && (toEl === mini || (toEl.closest && toEl.closest('.mini-pop')))) return;
+    scheduleMiniHide();
+  }, true);
+  window.addEventListener('scroll', ()=>{ if(mini) mini.classList.remove('show'); }, {passive:true});
 })();

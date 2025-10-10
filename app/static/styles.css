@@ -139,3 +139,23 @@ body{margin:0;font-family: -apple-system,BlinkMacSystemFont, "Segoe UI", Roboto,
 .navbar .nav-link.active{background:#0b6ec5;color:#fff}
 .img-nav{height:40px;border-radius:4px}
 .toastContainer{position:fixed;bottom:12px;right:12px}
+
+/* Lightweight hover popover (chmurka) near the File icon */
+.mini-pop{position:fixed;top:0;left:0;max-width:420px;min-width:280px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:9999;padding:10px 12px;display:none}
+.mini-pop.show{display:block}
+.mini-pop .mini-head{font-weight:700;margin:0 0 6px}
+.mini-pop .mini-sub{color:var(--muted);font-size:12px;margin:0 0 10px}
+.mini-pop .mini-grid{display:grid;grid-template-columns:auto auto;gap:6px 12px;font-size:13px}
+.mini-pop .mini-grid .k{color:var(--muted)}
+.mini-pop .mini-actions{margin-top:10px;text-align:right}
+.mini-pop .mini-actions a{color:#065aa0;text-decoration:none}
+
+/* Lightweight hover popover (chmurka) shown near the File icon */
+.mini-pop{position:fixed;top:0;left:0;max-width:420px;min-width:280px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:9999;padding:10px 12px;display:none}
+.mini-pop.show{display:block}
+.mini-pop .mini-head{font-weight:700;margin:0 0 6px}
+.mini-pop .mini-sub{color:var(--muted);font-size:12px;margin:0 0 10px}
+.mini-pop .mini-grid{display:grid;grid-template-columns:auto auto;gap:6px 12px;font-size:13px}
+.mini-pop .mini-grid .k{color:var(--muted)}
+.mini-pop .mini-actions{margin-top:10px;text-align:right}
+.mini-pop .mini-actions a{color:#065aa0;text-decoration:none}
