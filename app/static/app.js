@@ -24,6 +24,7 @@
   const filterType = $('#filterType');
   const excludeFully = $('#excludeFully');
   const excludeExperimental = $('#excludeExperimental');
+  const filtersClear = document.getElementById('filtersClear');
 
   function normalize(s){ return (s||'').toString().toLowerCase(); }
 
@@ -221,6 +222,26 @@
   updateSelectStates();
   updateChecks();
   sortTiles();
+  if(filtersClear){
+    filtersClear.addEventListener('click', ()=>{
+      input.value='';
+      filterCountry.value='';
+      filterCity.value='';
+      filterYear.value='';
+      votesMin.value='';
+      votesMax.value='';
+      projectsMin.value='';
+      projectsMax.value='';
+      lenMin.value='';
+      lenMax.value='';
+      filterType.value='';
+      excludeFully.checked=false;
+      excludeExperimental.checked=false;
+      updateSelectStates();
+      filter();
+      input.focus();
+    });
+  }
   // pagination
   function revealNext(){
     // Use current DOM order so pagination respects the latest sort order
