@@ -25,6 +25,20 @@ def pb_folder() -> Path:
     return workspace_root() / "pb_files"
 
 
+def pb_depreciated_folder() -> Path:
+    """Return the folder path for archived (depreciated) PB files.
+    If PB_FILES_DEPRECIATED_DIR is set, use it (resolve relative to workspace root).
+    Otherwise, default to <workspace>/pb_files_depreciated.
+    """
+    env_val = os.environ.get("PB_FILES_DEPRECIATED_DIR")
+    if env_val:
+        p = Path(env_val).expanduser()
+        if not p.is_absolute():
+            p = workspace_root() / p
+        return p
+    return workspace_root() / "pb_files_depreciated"
+
+
 def read_file_lines(path: Path) -> List[str]:
     with path.open("r", encoding="utf-8", newline="") as f:
         return [line.rstrip("\n") for line in f]

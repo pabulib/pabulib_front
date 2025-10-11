@@ -78,5 +78,10 @@ pb_files/*
 !pb_files/README.md
 !pb_files/.gitkeep
 
+# PB dataset files (keep directory, ignore datasets)
+pb_files_depreciated/*
+!pb_files_depreciated/README.md
+!pb_files_depreciated/.gitkeep
+
 # Local environment overrides
 .env

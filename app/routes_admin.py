@@ -29,6 +29,7 @@ from .utils.formatting import format_int as _format_int
 from .utils.formatting import format_vote_length as _format_vote_length
 from .utils.pb_utils import build_group_key as _build_group_key
 from .utils.pb_utils import parse_pb_to_tile as _parse_pb_to_tile
+from .utils.pb_utils import pb_depreciated_folder as _pb_depr_folder
 from .utils.pb_utils import pb_folder as _pb_folder
 
 bp = Blueprint(
@@ -312,7 +313,7 @@ def upload_tiles_ingest():
         tile_preview.get("subunit") or "",
     )
 
-    # If a current record exists for this file name or group and no confirm provided, request confirmation
+    # If a current record exists for this file name, webpage_name, or group and no confirm provided, request confirmation
     with get_session() as s:
         name_exists = (
             s.query(PBFile.id)
@@ -320,6 +321,18 @@ def upload_tiles_ingest():
             .first()
             is not None
         )
+        webpage_exists = False
+        webpage_val = (tile_preview.get("webpage_name") or "").strip()
+        if webpage_val:
+            webpage_exists = (
+                s.query(PBFile.id)
+                .filter(
+                    PBFile.webpage_name == webpage_val,
+                    PBFile.is_current == True,
+                )  # noqa: E712
+                .first()
+                is not None
+            )
         group_exists = False
         if group_key:
             group_exists = (
@@ -330,7 +343,7 @@ def upload_tiles_ingest():
                 .first()
                 is not None
             )
-    if (name_exists or group_exists) and not confirm:
+    if (name_exists or webpage_exists or group_exists) and not confirm:
         # For fetch-based calls, return a 409 to trigger a prompt client-side
         return (
             jsonify(
@@ -338,8 +351,9 @@ def upload_tiles_ingest():
                     "ok": False,
                     "requires_confirm": True,
                     "name_conflict": bool(name_exists),
+                    "webpage_conflict": bool(webpage_exists),
                     "group_conflict": bool(group_exists),
-                    "message": "A current record exists for this file or dataset. Confirm overwrite to proceed.",
+                    "message": "A current record exists for this dataset. Confirm overwrite to proceed.",
                 }
             ),
             409,
@@ -349,6 +363,80 @@ def upload_tiles_ingest():
     dest_dir = _pb_folder()
     dest_dir.mkdir(parents=True, exist_ok=True)
     target = dest_dir / name
+    # If there is a current record matching the same dataset, archive its file first (prefer webpage_name, then group)
+    archived_to: Optional[Path] = None
+    try:
+        with get_session() as s:
+            prev_rec = None
+            webpage_val = (tile_preview.get("webpage_name") or "").strip()
+            if webpage_val:
+                prev_rec = (
+                    s.query(PBFile)
+                    .filter(
+                        PBFile.webpage_name == webpage_val,
+                        PBFile.is_current == True,
+                    )  # noqa: E712
+                    .one_or_none()
+                )
+                if prev_rec:
+                    logger.debug(
+                        "Archiving previous by webpage_name=%s: %s",
+                        webpage_val,
+                        prev_rec.path,
+                    )
+            if prev_rec is None and group_key:
+                prev_rec = (
+                    s.query(PBFile)
+                    .filter(
+                        PBFile.group_key == group_key,
+                        PBFile.is_current == True,
+                    )  # noqa: E712
+                    .one_or_none()
+                )
+                if prev_rec:
+                    logger.debug(
+                        "Archiving previous by group_key=%s: %s",
+                        group_key,
+                        prev_rec.path,
+                    )
+            if prev_rec and prev_rec.path:
+                src_path = Path(prev_rec.path)
+                if src_path.exists():
+                    archive_root = _pb_depr_folder()
+                    # Use UTC timestamp-based folder name to keep history
+                    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+                    dest_folder = archive_root / ts
+                    dest_folder.mkdir(parents=True, exist_ok=True)
+                    # Preserve the previous file's own name in the archive
+                    try:
+                        prev_name = (
+                            getattr(prev_rec, "file_name", None)
+                            or Path(prev_rec.path).name
+                        )
+                    except Exception:
+                        prev_name = name
+                    archived_to = dest_folder / prev_name
+                    try:
+                        if archived_to.exists():
+                            archived_to.unlink()
+                    except Exception:
+                        logger.warning(
+                            "Could not unlink existing archived target before move: %s",
+                            archived_to,
+                        )
+                    shutil.move(str(src_path), str(archived_to))
+                    logger.debug("Archived previous file to %s", archived_to)
+                    # Update DB path for the old record to point to archived location
+                    prev_rec.path = str(archived_to)
+                else:
+                    logger.debug(
+                        "Previous file missing on disk, skip archive: %s", src_path
+                    )
+            else:
+                logger.debug("No previous record found to archive (webpage/group)")
+    except Exception as e:
+        # Archival failures shouldn't block ingest; proceed with move of new file
+        logger.exception("Archival step failed but will proceed with ingest: %s", e)
     try:
         if target.exists():
             try:
@@ -524,6 +612,7 @@ def upload_tiles_check():
         group_key = None
     name_exists = False
     group_exists = False
+    webpage_exists = False
     with get_session() as s:
         name_exists = (
             s.query(PBFile.id)
@@ -531,6 +620,17 @@ def upload_tiles_check():
             .first()
             is not None
         )
+        webpage_val = (tile_preview.get("webpage_name") or "").strip()
+        if webpage_val:
+            webpage_exists = (
+                s.query(PBFile.id)
+                .filter(
+                    PBFile.webpage_name == webpage_val,
+                    PBFile.is_current == True,
+                )  # noqa: E712
+                .first()
+                is not None
+            )
         if group_key:
             group_exists = (
                 s.query(PBFile.id)
@@ -542,8 +642,9 @@ def upload_tiles_check():
             )
     return jsonify(
         {
-            "exists": bool(name_exists or group_exists),
+            "exists": bool(name_exists or webpage_exists or group_exists),
             "name_conflict": bool(name_exists),
+            "webpage_conflict": bool(webpage_exists),
             "group_conflict": bool(group_exists),
             "name": name,
             "group_key": group_key,
