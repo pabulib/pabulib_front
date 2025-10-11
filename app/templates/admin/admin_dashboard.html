@@ -1,48 +1,113 @@
 {% extends 'base.html' %}
 
-{% block bodyClass %}Admin{% endblock %}
+{% block bodyClass %}admin{% endblock %}
 {% block title %}Admin Dashboard{% endblock %}
 
 {% block body %}
-<div class="container mt-4">
-  <h1 class="mb-3">Admin – Active Files</h1>
-  <p class="text-muted">Showing {{ count }} current files (is_current = True). Sorted by file modification time (newest first).</p>
+<section class="max-w-5xl mx-auto px-4">
+  <div class="flex justify-center">
+    <div class="w-full bg-white rounded-lg shadow-lg p-8 mt-8">
+      <div class="flex items-baseline justify-between mb-6">
+        <h1 class="text-3xl font-bold text-slate-800">Admin – Active Files</h1>
+        <span class="text-sm text-slate-500">{{ count }} current files</span>
+      </div>
+      <p class="text-gray-600 mb-6">Sorted by file modification time (newest first).</p>
 
-  <div class="table-responsive">
-    <table class="table table-sm table-striped align-middle">
-      <thead>
-        <tr>
-          <th scope="col">File</th>
-          <th scope="col">Title</th>
-          <th scope="col">Country</th>
-          <th scope="col">City/Unit</th>
-          <th scope="col">Instance</th>
-          <th scope="col">Subunit</th>
-          <th scope="col">Year</th>
-          <th scope="col">File mtime</th>
-          <th scope="col">Ingested</th>
-          <th scope="col">Path</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for f in files %}
-        <tr>
-          <td><code>{{ f.file_name }}</code></td>
-          <td>{{ f.webpage_name or '' }}</td>
-          <td>{{ f.country or '' }}</td>
-          <td>{{ f.unit or '' }}</td>
-          <td>{{ f.instance or '' }}</td>
-          <td>{{ f.subunit or '' }}</td>
-          <td>{{ f.year or '' }}</td>
-          <td>{{ f.file_mtime.strftime('%Y-%m-%d %H:%M:%S') if f.file_mtime else '—' }}</td>
-          <td>{{ f.ingested_at.strftime('%Y-%m-%d %H:%M:%S') if f.ingested_at else '—' }}</td>
-          <td style="max-width: 420px;">
-            <span class="text-truncate d-inline-block" style="max-width: 420px;" title="{{ f.path }}">{{ f.path }}</span>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+      <!-- Toolbar: search -->
+      <div class="mb-4 flex items-center gap-3">
+        <div class="relative w-full max-w-md">
+          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M10.5 3.75a6.75 6.75 0 1 0 4.238 12.03l4.241 4.241a.75.75 0 1 0 1.06-1.06l-4.24-4.242A6.75 6.75 0 0 0 10.5 3.75Zm-5.25 6.75a5.25 5.25 0 1 1 10.5 0 5.25 5.25 0 0 1-10.5 0Z" clip-rule="evenodd"/></svg>
+          </span>
+          <input id="adminSearch" type="text" placeholder="Search file or date…" class="w-full pl-10 pr-10 py-2.5 rounded-md border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-800 placeholder-slate-400" />
+          <button id="adminSearchClear" type="button" class="hidden absolute inset-y-0 right-0 pr-3 text-slate-400 hover:text-slate-600" aria-label="Clear search">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M12 2.25a9.75 9.75 0 1 0 0 19.5 9.75 9.75 0 0 0 0-19.5Zm-2.47 6.78a.75.75 0 0 1 1.06 0L12 10.44l1.41-1.41a.75.75 0 0 1 1.06 1.06L13.06 11.5l1.41 1.41a.75.75 0 1 1-1.06 1.06L12 12.56l-1.41 1.41a.75.75 0 0 1-1.06-1.06l1.41-1.41-1.41-1.41a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg>
+          </button>
+        </div>
+        <span id="adminCount" class="text-sm text-slate-500 whitespace-nowrap"></span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table id="adminTable" class="min-w-full bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700 border-b border-gray-200">File</th>
+              <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700 border-b border-gray-200">File mtime</th>
+              <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700 border-b border-gray-200">Ingested</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200">
+            {% for f in files %}
+            <tr class="hover:bg-gray-50 admin-row" data-file="{{ f.file_name|e }}" data-mtime="{{ f.file_mtime.strftime('%Y-%m-%d %H:%M:%S') if f.file_mtime else '' }}" data-ingested="{{ f.ingested_at.strftime('%Y-%m-%d %H:%M:%S') if f.ingested_at else '' }}">
+              <td class="px-6 py-3 text-sm font-mono text-slate-800">
+                <span class="inline-block truncate max-w-[420px] align-middle" title="{{ f.file_name }}">{{ f.file_name }}</span>
+              </td>
+              <td class="px-6 py-3 text-sm text-slate-700 whitespace-nowrap">
+                {{ f.file_mtime.strftime('%Y-%m-%d %H:%M:%S') if f.file_mtime else '—' }}
+              </td>
+              <td class="px-6 py-3 text-sm text-slate-700 whitespace-nowrap">
+                {{ f.ingested_at.strftime('%Y-%m-%d %H:%M:%S') if f.ingested_at else '—' }}
+              </td>
+            </tr>
+            {% endfor %}
+            <tr id="noResultsRow" class="hidden">
+              <td colspan="3" class="px-6 py-6 text-center text-sm text-slate-500">No files match your search.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
-</div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  const input = document.getElementById('adminSearch');
+  const clearBtn = document.getElementById('adminSearchClear');
+  const rows = Array.from(document.querySelectorAll('#adminTable .admin-row'));
+  const noResults = document.getElementById('noResultsRow');
+  const countEl = document.getElementById('adminCount');
+  const total = rows.length;
+
+  function updateCount(visible){
+    if(countEl){ countEl.textContent = `${visible} / ${total}`; }
+  }
+
+  function filter(q){
+    const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+    let visible = 0;
+    rows.forEach(tr => {
+      const file = (tr.dataset.file || '').toLowerCase();
+      const mtime = (tr.dataset.mtime || '').toLowerCase();
+      const ing = (tr.dataset.ingested || '').toLowerCase();
+      const hay = `${file} ${mtime} ${ing}`;
+      const matches = terms.every(t => hay.includes(t));
+      tr.style.display = matches ? '' : 'none';
+      if(matches) visible++;
+    });
+    if(noResults){ noResults.classList.toggle('hidden', visible !== 0); }
+    updateCount(visible);
+  }
+
+  function onInput(){
+    const val = input.value || '';
+    clearBtn.classList.toggle('hidden', val.length === 0);
+    filter(val);
+  }
+
+  // Initial state
+  updateCount(total);
+  filter('');
+
+  let tid = null;
+  input.addEventListener('input', function(){
+    if(tid) cancelAnimationFrame(tid);
+    const self = this;
+    tid = requestAnimationFrame(() => onInput.call(self));
+  });
+  clearBtn.addEventListener('click', () => { input.value = ''; onInput(); input.focus(); });
+})();
+</script>
 {% endblock %}
