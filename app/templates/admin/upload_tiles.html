@@ -69,10 +69,7 @@
         </div>
         <div class="flex flex-col items-center gap-2 ml-2">
           <a class="p-2 rounded-md border border-slate-300 hover:bg-slate-50" title="Download" href="{{ url_for('admin.upload_tiles_download', name=t.file_name) }}">⬇</a>
-          <form method="post" action="{{ url_for('admin.upload_tiles_ingest') }}">
-            <input type="hidden" name="name" value="{{ t.file_name }}" />
-            <button class="p-2 rounded-md border border-slate-300 hover:bg-slate-50" title="Ingest" type="submit">⤴</button>
-          </form>
+          <button class="p-2 rounded-md border border-slate-300 hover:bg-slate-50 ingest-one" data-file="{{ t.file_name|e }}" title="Ingest" type="button">⤴</button>
           <form method="post" action="{{ url_for('admin.upload_tiles_delete') }}" onsubmit="return confirm('Delete this temp file?')">
             <input type="hidden" name="name" value="{{ t.file_name }}" />
             <button class="p-2 rounded-md border border-slate-300 hover:bg-slate-50 text-red-700" title="Delete" type="submit">🗑</button>
@@ -160,14 +157,67 @@
 
   async function postAction(url, name){
     const body = new URLSearchParams(); body.set('name', name);
-    const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() });
-    return resp.ok;
+    const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'fetch' }, body: body.toString() });
+    return resp;
   }
+
+  async function ingestOne(name){
+    if(!name) return;
+    // Check potential overwrite
+    let proceed = true;
+    try{
+      const chk = await fetch("{{ url_for('admin.upload_tiles_check') }}?name="+encodeURIComponent(name), { headers: { 'X-Requested-With': 'fetch' }});
+      if(chk.ok){ const data = await chk.json(); if(data.exists){ proceed = confirm(`A current dataset exists for ${name}. Overwrite?`); } }
+    }catch(_e){ /* ignore */ }
+    if(!proceed) return;
+    const params = new URLSearchParams(); params.set('name', name); params.set('confirm', '1');
+    const resp = await fetch("{{ url_for('admin.upload_tiles_ingest') }}", { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'fetch' }, body: params.toString() });
+    if(!resp.ok){
+      if(resp.status === 409){
+        const ask = confirm(`A current dataset exists for ${name}. Overwrite?`);
+        if(ask){
+          const retryParams = new URLSearchParams(); retryParams.set('name', name); retryParams.set('confirm', '1');
+          const retry = await fetch("{{ url_for('admin.upload_tiles_ingest') }}", { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'fetch' }, body: retryParams.toString() });
+          if(!retry.ok){
+            try { const data = await retry.json(); alert(`Failed to ingest ${name}: ${data.error || data.message || retry.status}`); } catch(_e) { alert(`Failed to ingest ${name}.`); }
+            return false;
+          }
+        } else { return; }
+      } else {
+        try { const data = await resp.json(); alert(`Failed to ingest ${name}: ${data.error || data.message || resp.status}`); } catch(_e) { alert(`Failed to ingest ${name}.`); }
+        return false;
+      }
+    }
+    return true;
+  }
+  // Per-row ingest button
+  document.querySelectorAll('.ingest-one').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const name = btn.dataset.file;
+      const ok = await ingestOne(name);
+      if(ok){
+        window.location.href = "{{ url_for('admin.upload_tiles') }}?message="+encodeURIComponent(`Ingested ${name}.`)+"&success=1";
+      } else {
+        alert(`Failed to ingest ${name}. See server logs for details.`);
+        window.location.reload();
+      }
+    });
+  });
 
   ingestSelected.addEventListener('click', async ()=>{
     const boxes = checkedBoxes(); if(!boxes.length){ alert('No files selected'); return; }
-  for(const cb of boxes){ const name = cb.dataset.file; await postAction("{{ url_for('admin.upload_tiles_ingest') }}", name); }
-    window.location.reload();
+    let allOk = true;
+    for(const cb of boxes){
+      const name = cb.dataset.file;
+      const ok = await ingestOne(name);
+      if(!ok) allOk = false;
+    }
+    if(allOk){
+      window.location.href = "{{ url_for('admin.upload_tiles') }}?message="+encodeURIComponent('New files ingested.')+"&success=1";
+    } else {
+      alert('Some ingests failed. See server logs for details.');
+      window.location.reload();
+    }
   });
   deleteSelected.addEventListener('click', async ()=>{
     const boxes = checkedBoxes(); if(!boxes.length){ alert('No files selected'); return; }

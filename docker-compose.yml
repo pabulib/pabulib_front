@@ -56,7 +56,8 @@ services:
     volumes:
       # Host path for PB files -> container path used by the app
       # Set PB_FILES_DIR in .env to point to your local folder; defaults to ./pb_files
-      - ${PB_FILES_DIR:-./pb_files}:/app/pb_files:ro
+      # Must be writable to allow ingest to move files into this folder
+      - ${PB_FILES_DIR:-./pb_files}:/app/pb_files
     entrypoint: ["scripts/entrypoint.sh"]
 
 volumes:

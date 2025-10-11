@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -8,6 +9,8 @@ from typing import Any, Dict, List, Optional
 from flask import (
     Blueprint,
     abort,
+    current_app,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -205,10 +208,16 @@ def _format_preview_tile(tile: dict) -> dict:
 @bp.get("/admin/upload")
 def upload_tiles():
     tiles = _list_tmp_tiles()
+    # Support message via query params after redirects
+    msg = request.args.get("message")
+    succ = request.args.get("success")
+    success: Optional[bool] = None
+    if succ is not None:
+        success = succ in {"1", "true", "True"}
     return render_template(
         "admin/upload_tiles.html",
-        message=None,
-        success=None,
+        message=msg,
+        success=success,
         tiles=tiles,
         count=len(tiles),
     )
@@ -271,20 +280,101 @@ def upload_tiles_post():
 @bp.post("/admin/upload/ingest")
 def upload_tiles_ingest():
     name = (request.form.get("name") or "").strip()
+    confirm = (request.form.get("confirm") or "").strip() in {"1", "true", "True"}
     if not name or "/" in name or ".." in name or not name.endswith(".pb"):
         abort(400)
     tmp_path = _tmp_upload_dir() / name
     if not tmp_path.exists() or not tmp_path.is_file():
         abort(404)
 
+    logger = current_app.logger
+    logger.debug("Ingest requested for %s (tmp: %s)", name, tmp_path)
+
+    # Parse at tmp first; if parsing fails, don't move
+    try:
+        tile_preview = _parse_pb_to_tile(tmp_path)
+    except Exception as e:
+        logger.exception("Failed to parse PB file before ingest: %s", name)
+        if request.headers.get("X-Requested-With") == "fetch" or request.is_json:
+            return jsonify({"ok": False, "error": f"Parse error: {e}"}), 400
+        return redirect(
+            url_for(
+                "admin.upload_tiles",
+                message=f"Failed to parse {name}: {e}",
+                success=0,
+            )
+        )
+
+    group_key = _build_group_key(
+        tile_preview.get("country") or "",
+        tile_preview.get("unit") or "",
+        tile_preview.get("instance") or "",
+        tile_preview.get("subunit") or "",
+    )
+
+    # If a current record exists for this file name or group and no confirm provided, request confirmation
+    with get_session() as s:
+        name_exists = (
+            s.query(PBFile.id)
+            .filter(PBFile.file_name == name, PBFile.is_current == True)  # noqa: E712
+            .first()
+            is not None
+        )
+        group_exists = False
+        if group_key:
+            group_exists = (
+                s.query(PBFile.id)
+                .filter(
+                    PBFile.group_key == group_key, PBFile.is_current == True
+                )  # noqa: E712
+                .first()
+                is not None
+            )
+    if (name_exists or group_exists) and not confirm:
+        # For fetch-based calls, return a 409 to trigger a prompt client-side
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "requires_confirm": True,
+                    "name_conflict": bool(name_exists),
+                    "group_conflict": bool(group_exists),
+                    "message": "A current record exists for this file or dataset. Confirm overwrite to proceed.",
+                }
+            ),
+            409,
+        )
+
     # Move into pb_files and ingest into DB
     dest_dir = _pb_folder()
     dest_dir.mkdir(parents=True, exist_ok=True)
     target = dest_dir / name
-    tmp_path.replace(target)
+    try:
+        if target.exists():
+            try:
+                target.unlink()
+            except Exception:
+                logger.warning(
+                    "Could not unlink existing target before move: %s", target
+                )
+        # Use shutil.move to support cross-device moves (copies then removes)
+        shutil.move(str(tmp_path), str(target))
+        logger.debug("Moved %s to %s", name, target)
+    except Exception as e:
+        # On failure, return JSON or redirect with error
+        logger.exception("Failed to move %s into pb folder", name)
+        if request.headers.get("X-Requested-With") == "fetch" or request.is_json:
+            return jsonify({"ok": False, "error": f"Failed to move file: {e}"}), 500
+        return redirect(
+            url_for(
+                "admin.upload_tiles",
+                message=f"Failed to ingest {name}: {e}",
+                success=0,
+            )
+        )
 
-    # Parse and insert as current version
-    tile = _parse_pb_to_tile(target)
+    # Insert as current version (reuse parsed tile)
+    tile = tile_preview
     stat = target.stat()
     file_mtime = datetime.utcfromtimestamp(stat.st_mtime)
 
@@ -316,54 +406,75 @@ def upload_tiles_ingest():
         subunit or "",
     )
 
-    with get_session() as s:
-        prev = (
-            s.query(PBFile)
-            .filter(PBFile.group_key == group_key, PBFile.is_current == True)
-            .order_by(PBFile.ingested_at.desc())
-            .first()
-        )
-        supersedes_id = prev.id if prev else None
-        if prev:
-            prev.is_current = False
+    try:
+        with get_session() as s:
+            prev = (
+                s.query(PBFile)
+                .filter(PBFile.group_key == group_key, PBFile.is_current == True)
+                .order_by(PBFile.ingested_at.desc())
+                .first()
+            )
+            supersedes_id = prev.id if prev else None
+            if prev:
+                prev.is_current = False
 
-        rec = PBFile(
-            file_name=name,
-            path=str(target),
-            country=country,
-            unit=unit,
-            instance=instance,
-            subunit=subunit,
-            webpage_name=webpage_name,
-            year=year,
-            description=description,
-            currency=currency,
-            num_votes=num_votes,
-            num_projects=num_projects,
-            budget=budget,
-            vote_type=vote_type,
-            vote_length=vote_length,
-            fully_funded=fully_funded,
-            has_selected_col=has_selected_col,
-            experimental=experimental,
-            rule_raw=rule_raw,
-            edition=edition,
-            language=language,
-            quality=quality,
-            file_mtime=file_mtime,
-            ingested_at=datetime.utcnow(),
-            is_current=True,
-            supersedes_id=supersedes_id,
-            group_key=group_key,
+            rec = PBFile(
+                file_name=name,
+                path=str(target),
+                country=country,
+                unit=unit,
+                instance=instance,
+                subunit=subunit,
+                webpage_name=webpage_name,
+                year=year,
+                description=description,
+                currency=currency,
+                num_votes=num_votes,
+                num_projects=num_projects,
+                budget=budget,
+                vote_type=vote_type,
+                vote_length=vote_length,
+                fully_funded=fully_funded,
+                has_selected_col=has_selected_col,
+                experimental=experimental,
+                rule_raw=rule_raw,
+                edition=edition,
+                language=language,
+                quality=quality,
+                file_mtime=file_mtime,
+                ingested_at=datetime.utcnow(),
+                is_current=True,
+                supersedes_id=supersedes_id,
+                group_key=group_key,
+            )
+            s.add(rec)
+    except Exception as e:
+        logger.exception("DB error while ingesting %s", name)
+        if request.headers.get("X-Requested-With") == "fetch" or request.is_json:
+            return jsonify({"ok": False, "error": f"DB error during ingest: {e}"}), 500
+        return redirect(
+            url_for(
+                "admin.upload_tiles",
+                message=f"Failed to ingest {name}: {e}",
+                success=0,
+            )
         )
-        s.add(rec)
 
     try:
         pb_service.invalidate_caches()
     except Exception:
         pass
 
-    return redirect(url_for("admin.upload_tiles"))
+    # If called via fetch, return JSON ok; otherwise redirect with a message
+    if request.headers.get("X-Requested-With") == "fetch" or request.is_json:
+        return jsonify({"ok": True, "message": f"Ingested {name}."})
+    return redirect(
+        url_for(
+            "admin.upload_tiles",
+            message=f"Ingested {name}.",
+            success=1,
+        )
+    )
 
 
 @bp.post("/admin/upload/delete")
@@ -388,3 +499,53 @@ def upload_tiles_download(name: str):
     if not p.exists() or not p.is_file():
         abort(404)
     return send_file(p, as_attachment=True)
+
+
+@bp.get("/admin/upload/check")
+def upload_tiles_check():
+    """Check if ingesting a given temp file would overwrite an existing current record.
+    Returns JSON {exists: bool, name: str, group_key: str | None}.
+    """
+    name = (request.args.get("name") or "").strip()
+    if not name or "/" in name or ".." in name or not name.endswith(".pb"):
+        return jsonify({"error": "invalid name"}), 400
+    tmp_path = _tmp_upload_dir() / name
+    if not tmp_path.exists() or not tmp_path.is_file():
+        return jsonify({"error": "not found"}), 404
+    try:
+        tile_preview = _parse_pb_to_tile(tmp_path)
+        group_key = _build_group_key(
+            tile_preview.get("country") or "",
+            tile_preview.get("unit") or "",
+            tile_preview.get("instance") or "",
+            tile_preview.get("subunit") or "",
+        )
+    except Exception:
+        group_key = None
+    name_exists = False
+    group_exists = False
+    with get_session() as s:
+        name_exists = (
+            s.query(PBFile.id)
+            .filter(PBFile.file_name == name, PBFile.is_current == True)  # noqa: E712
+            .first()
+            is not None
+        )
+        if group_key:
+            group_exists = (
+                s.query(PBFile.id)
+                .filter(
+                    PBFile.group_key == group_key, PBFile.is_current == True
+                )  # noqa: E712
+                .first()
+                is not None
+            )
+    return jsonify(
+        {
+            "exists": bool(name_exists or group_exists),
+            "name_conflict": bool(name_exists),
+            "group_conflict": bool(group_exists),
+            "name": name,
+            "group_key": group_key,
+        }
+    )
