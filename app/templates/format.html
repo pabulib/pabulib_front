@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
+{% block title %}Data Format{% endblock %}
 {% block bodyClass %}format{% endblock %}
-{% block title %}Data format{% endblock %}
 
 {% block body %}
 
@@ -90,9 +90,9 @@
         body.format .offcanvas-size-md { --bs-offcanvas-width: min(95vw, 400px) !important; }
         body.format .offcanvas-size-sm { --bs-offcanvas-width: min(95vw, 250px) !important; }
     </style>
-    <section class="max-w-4xl mx-auto px-4 format-content">
+    <section class="max-w-4xl mx-auto px-4">
         <div class="flex justify-center">
-            <div class="w-full max-w-3xl bg-white rounded-lg shadow-lg p-8 mt-8">
+            <div class="w-full max-w-3xl bg-white rounded-lg shadow-lg p-8 mt-8 mb-32">
                 <h1 class="text-3xl font-bold text-slate-800 mb-6">The <kbd>.pb</kbd> File Format</h1>
                 <p>The data concerning one instance of participatory budgeting is to be stored in a single UTF-8 text
                     file with the extension&nbsp;<kbd>.pb</kbd>. The content of the file is to be divided into three
@@ -137,7 +137,7 @@ instance; 2020
 num_projects; 5
 num_votes; 10
 budget; 2500
-rule; greedy
+rule: greedy
 vote_type; approval
 min_length; 1
 max_length; 3
@@ -814,4 +814,5 @@ voter_id; age; sex; vote
             </div>
         </div>
     </div>
+    {% include 'footer.html' %}
 {% endblock %}

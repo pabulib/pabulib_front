@@ -75,7 +75,7 @@
         </div>
       </aside>
 
-      <div class="container">
+      <div class="container mb-32">
       <form id="downloadForm" method="post" action="{{ url_for('main.download_selected') }}">
         <header class="toolbar">
           <input id="search" class="search" placeholder="Search..." />
@@ -155,4 +155,5 @@
     <script src="{{ url_for('main.static', filename='app.js') }}"></script>
   </div>
     </div>
+    {% include 'footer.html' %}
 {% endblock %}

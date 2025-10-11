@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 
 from flask import Flask, render_template, request
 
@@ -37,5 +38,9 @@ def create_app():
     @app.errorhandler(500)
     def server_error(e):  # pragma: no cover
         return render_template("500.html"), 500
+
+    @app.context_processor
+    def inject_now():
+        return {"now": datetime.now()}
 
     return app

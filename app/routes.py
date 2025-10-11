@@ -88,7 +88,7 @@ def about_page():
 
 @bp.route("/contact")
 def contact_page():
-    return render_template("contact.html")
+    return render_template("contact.html", now=datetime.now())
 
 
 @bp.route("/comments")
