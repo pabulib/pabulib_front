@@ -53,7 +53,7 @@
         <h1 class="text-3xl font-bold text-slate-800">Admin – Active Files</h1>
         <span class="text-sm text-slate-500">{{ count }} current files</span>
       </div>
-      <p class="text-gray-600 mb-6">Sorted by file modification time (newest first).</p>
+  <p class="text-gray-600 mb-6">Tip: search filters by title only (years ignored). Click a column header to sort by File, File mtime, or Ingested.</p>
 
       <!-- Toolbar: search -->
       <div class="mb-4 flex items-center gap-3">
@@ -61,7 +61,7 @@
           <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M10.5 3.75a6.75 6.75 0 1 0 4.238 12.03l4.241 4.241a.75.75 0 1 0 1.06-1.06l-4.24-4.242A6.75 6.75 0 0 0 10.5 3.75Zm-5.25 6.75a5.25 5.25 0 1 1 10.5 0 5.25 5.25 0 0 1-10.5 0Z" clip-rule="evenodd"/></svg>
           </span>
-          <input id="adminSearch" type="text" placeholder="Search file or date…" class="w-full pl-10 pr-10 py-2.5 rounded-md border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-800 placeholder-slate-400" />
+          <input id="adminSearch" type="text" placeholder="Search titles…" class="w-full pl-10 pr-10 py-2.5 rounded-md border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-800 placeholder-slate-400" />
           <button id="adminSearchClear" type="button" class="hidden absolute inset-y-0 right-0 pr-3 text-slate-400 hover:text-slate-600" aria-label="Clear search">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M12 2.25a9.75 9.75 0 1 0 0 19.5 9.75 9.75 0 0 0 0-19.5Zm-2.47 6.78a.75.75 0 0 1 1.06 0L12 10.44l1.41-1.41a.75.75 0 0 1 1.06 1.06L13.06 11.5l1.41 1.41a.75.75 0 1 1-1.06 1.06L12 12.56l-1.41 1.41a.75.75 0 0 1-1.06-1.06l1.41-1.41-1.41-1.41a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg>
           </button>
@@ -73,15 +73,46 @@
         <table id="adminTable" class="min-w-full bg-white border border-gray-200 rounded-lg overflow-hidden">
           <thead class="bg-gray-100">
             <tr>
-              <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700 border-b border-gray-200">File</th>
-              <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700 border-b border-gray-200">File mtime</th>
-              <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700 border-b border-gray-200">Ingested</th>
+              <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700 border-b border-gray-200">
+                <button type="button" class="sort-btn inline-flex items-center gap-1 select-none" data-key="file" data-type="string" aria-label="Sort by file">
+                  <span>File</span>
+                  <span class="sort-icons inline-flex text-slate-400">
+                    <!-- neutral -->
+                    <svg class="icon-neutral w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4a1 1 0 0 1 .707.293l3 3a1 1 0 1 1-1.414 1.414L8 7.414V19a1 1 0 1 1-2 0V7.414L4.707 8.707A1 1 0 1 1 3.293 7.293l3-3A1 1 0 0 1 7 4Zm10 16a1 1 0 0 0 .707-.293l3-3a1 1 0 1 0-1.414-1.414L20 16.586V5a1 1 0 1 0-2 0v11.586l-1.293-1.293a1 1 0 1 0-1.414 1.414l3 3A1 1 0 0 0 17 20Z"/></svg>
+                    <!-- asc -->
+                    <svg class="icon-asc w-4 h-4 hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4a1 1 0 0 1 .707.293l3 3a1 1 0 1 1-1.414 1.414L8 7.414V19a1 1 0 1 1-2 0V7.414L4.707 8.707A1 1 0 1 1 3.293 7.293l3-3A1 1 0 0 1 7 4Z"/></svg>
+                    <!-- desc -->
+                    <svg class="icon-desc w-4 h-4 hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M17 20a1 1 0 0 1-.707-.293l-3-3a1 1 0 1 1 1.414-1.414L16 16.586V5a1 1 0 1 1 2 0v11.586l1.293-1.293a1 1 0 1 1 1.414 1.414l-3 3A1 1 0 0 1 17 20Z"/></svg>
+                  </span>
+                </button>
+              </th>
+              <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700 border-b border-gray-200">
+                <button type="button" class="sort-btn inline-flex items-center gap-1 select-none" data-key="mtime" data-type="date" aria-label="Sort by file modification time">
+                  <span>File mtime</span>
+                  <span class="sort-icons inline-flex text-slate-400">
+                    <svg class="icon-neutral w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4a1 1 0 0 1 .707.293l3 3a1 1 0 1 1-1.414 1.414L8 7.414V19a1 1 0 1 1-2 0V7.414L4.707 8.707A1 1 0 1 1 3.293 7.293l3-3A1 1 0 0 1 7 4Zm10 16a1 1 0 0 0 .707-.293l3-3a1 1 0 1 0-1.414-1.414L20 16.586V5a1 1 0 1 0-2 0v11.586l-1.293-1.293a1 1 0 1 0-1.414 1.414l3 3A1 1 0 0 0 17 20Z"/></svg>
+                    <svg class="icon-asc w-4 h-4 hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4a1 1 0 0 1 .707.293l3 3a1 1 0 1 1-1.414 1.414L8 7.414V19a1 1 0 1 1-2 0V7.414L4.707 8.707A1 1 0 1 1 3.293 7.293l3-3A1 1 0 0 1 7 4Z"/></svg>
+                    <svg class="icon-desc w-4 h-4 hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M17 20a1 1 0 0 1-.707-.293l-3-3a1 1 0 1 1 1.414-1.414L16 16.586V5a1 1 0 1 1 2 0v11.586l1.293-1.293a1 1 0 1 1 1.414 1.414l-3 3A1 1 0 0 1 17 20Z"/></svg>
+                  </span>
+                </button>
+              </th>
+              <th class="px-6 py-3 text-left text-sm font-semibold text-gray-700 border-b border-gray-200">
+                <button type="button" class="sort-btn inline-flex items-center gap-1 select-none" data-key="ingested" data-type="date" aria-label="Sort by ingested time">
+                  <span>Ingested</span>
+                  <span class="sort-icons inline-flex text-slate-400">
+                    <svg class="icon-neutral w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4a1 1 0 0 1 .707.293l3 3a1 1 0 1 1-1.414 1.414L8 7.414V19a1 1 0 1 1-2 0V7.414L4.707 8.707A1 1 0 1 1 3.293 7.293l3-3A1 1 0 0 1 7 4Zm10 16a1 1 0 0 0 .707-.293l3-3a1 1 0 1 0-1.414-1.414L20 16.586V5a1 1 0 1 0-2 0v11.586l-1.293-1.293a1 1 0 1 0-1.414 1.414l3 3A1 1 0 0 0 17 20Z"/></svg>
+                    <svg class="icon-asc w-4 h-4 hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4a1 1 0 0 1 .707.293l3 3a1 1 0 1 1-1.414 1.414L8 7.414V19a1 1 0 1 1-2 0V7.414L4.707 8.707A1 1 0 1 1 3.293 7.293l3-3A1 1 0 0 1 7 4Z"/></svg>
+                    <svg class="icon-desc w-4 h-4 hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M17 20a1 1 0 0 1-.707-.293l-3-3a1 1 0 1 1 1.414-1.414L16 16.586V5a1 1 0 1 1 2 0v11.586l1.293-1.293a1 1 0 1 1 1.414 1.414l-3 3A1 1 0 0 1 17 20Z"/></svg>
+                  </span>
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200">
             {% for f in files %}
-            <tr class="hover:bg-gray-50 admin-row"
-                data-file="{{ f.file_name|e }}"
+      <tr class="hover:bg-gray-50 admin-row"
+        data-file="{{ f.file_name|e }}"
+        data-title="{{ f.file_name|e }}"
                 data-year="{{ f.year if f.year is not none else '' }}"
                 data-country="{{ f.country|e if f.country else '' }}"
                 data-city="{{ f.unit|e if f.unit else '' }}"
@@ -131,6 +162,14 @@
     if(countEl){ countEl.textContent = `${visible} / ${total}`; }
   }
 
+  function normalizeTitle(s){
+    // Remove standalone 4-digit years (1900-2099) and collapse separators/whitespace
+    return (s || '')
+      .replace(/(?:^|[\s_\-\.\(\)\[\]])(19|20)\d{2}(?=$|[\s_\-\.\(\)\[\]])/g, ' ')
+      .replace(/[\s_\-\.]+/g, ' ')
+      .trim();
+  }
+
   function filter(q){
     const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
     const fy = (selYear && selYear.value)||'';
@@ -139,15 +178,13 @@
     const ft = ((selType && selType.value)||'').toLowerCase();
     let visible = 0;
     rows.forEach(tr => {
-      const file = (tr.dataset.file || '').toLowerCase();
-      const mtime = (tr.dataset.mtime || '').toLowerCase();
-      const ing = (tr.dataset.ingested || '').toLowerCase();
+      const title = normalizeTitle(tr.dataset.title || tr.dataset.file || '').toLowerCase();
       const year = (tr.dataset.year || '');
       const country = (tr.dataset.country || '').toLowerCase();
       const city = (tr.dataset.city || '').toLowerCase();
       const type = (tr.dataset.type || '').toLowerCase();
-      const hay = `${file} ${mtime} ${ing}`;
-      const matchesText = terms.every(t => hay.includes(t));
+      // Title-only search (no dates)
+      const matchesText = terms.every(t => title.includes(t));
       const matchesYear = !fy || year === fy;
       const matchesCountry = !fc || country === fc;
       const matchesCity = !fcity || city === fcity;
@@ -215,6 +252,72 @@
       filter(input.value||'');
     });
   }
+
+  // Sorting
+  const tbody = document.querySelector('#adminTable tbody');
+  const sortButtons = Array.from(document.querySelectorAll('.sort-btn'));
+  let sortState = { key: null, dir: 'desc' }; // default dir when clicking first time
+
+  function parseDate(s){
+    if(!s) return 0;
+    const dt = new Date(s.replace(' ', 'T'));
+    return isNaN(dt.getTime()) ? 0 : dt.getTime();
+    }
+
+  function compare(a,b,key,type,dir){
+    let va, vb;
+    if(type === 'date'){
+      va = parseDate(a.dataset[key]);
+      vb = parseDate(b.dataset[key]);
+    } else { // string: use title for file
+      va = key === 'file' ? (a.dataset.file||'').toLowerCase() : (a.dataset[key]||'').toLowerCase();
+      vb = key === 'file' ? (b.dataset.file||'').toLowerCase() : (b.dataset[key]||'').toLowerCase();
+    }
+    if(va < vb) return dir === 'asc' ? -1 : 1;
+    if(va > vb) return dir === 'asc' ? 1 : -1;
+    // tie-breaker by file name to be stable
+    const fa = (a.dataset.file||'').toLowerCase();
+    const fb = (b.dataset.file||'').toLowerCase();
+    if(fa < fb) return -1;
+    if(fa > fb) return 1;
+    return 0;
+  }
+
+  function updateIcons(){
+    sortButtons.forEach(btn => {
+      const icons = btn.querySelector('.sort-icons');
+      const iconNeutral = icons.querySelector('.icon-neutral');
+      const iconAsc = icons.querySelector('.icon-asc');
+      const iconDesc = icons.querySelector('.icon-desc');
+      if(btn.dataset.key === sortState.key){
+        iconNeutral.classList.add('hidden');
+        iconAsc.classList.toggle('hidden', sortState.dir !== 'asc');
+        iconDesc.classList.toggle('hidden', sortState.dir !== 'desc');
+      } else {
+        iconNeutral.classList.remove('hidden');
+        iconAsc.classList.add('hidden');
+        iconDesc.classList.add('hidden');
+      }
+    });
+  }
+
+  function applySort(key,type){
+    const dir = (sortState.key === key && sortState.dir === 'desc') ? 'asc' : 'desc';
+    sortState = { key, dir };
+    const visibleRows = rows.filter(tr => tr.style.display !== 'none');
+    const hiddenRows = rows.filter(tr => tr.style.display === 'none');
+    visibleRows.sort((a,b)=>compare(a,b,key,type,dir));
+    // Re-append in new order: keep hidden rows at the end in their current order
+    const frag = document.createDocumentFragment();
+    visibleRows.forEach(tr => frag.appendChild(tr));
+    hiddenRows.forEach(tr => frag.appendChild(tr));
+    tbody.insertBefore(frag, noResults);
+    updateIcons();
+  }
+
+  sortButtons.forEach(btn => {
+    btn.addEventListener('click', () => applySort(btn.dataset.key, btn.dataset.type));
+  });
 })();
 </script>
 {% endblock %}
