@@ -110,7 +110,7 @@
       >
         <div class="tile-header">
           <input class="row-check" type="checkbox" data-file="{{ t.file_name|e }}" />
-          <h2>{{ t.title }}</h2>
+          <h2>{{ t.title|replace('_', ' ') }}</h2>
           <div class="badges">
             <span class="qs" title="QS = (avg vote length)³ × (projects)² × (votes). Higher is better.">QS {{ t.quality_short }}</span>
             {% if t.experimental %}
