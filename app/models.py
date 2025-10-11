@@ -21,6 +21,20 @@ def _group_key(country: str, unit: str, instance: str, subunit: str) -> str:
     return "|".join(p.strip().lower() for p in parts)
 
 
+class AdminUser(Base):
+    __tablename__ = "admin_users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(
+        String(150), unique=True, nullable=False, index=True
+    )
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+
+
 class PBFile(Base):
     __tablename__ = "pb_files"
 

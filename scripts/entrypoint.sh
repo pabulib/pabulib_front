@@ -63,5 +63,40 @@ else
   python -m scripts.db_refresh || echo "Refresh failed (continuing to start app)"
 fi
 
+# Seed admin user from environment if provided
+if [ -n "${ADMIN_USERNAME}" ] && [ -n "${ADMIN_PASSWORD}" ]; then
+  echo "[ADMIN] Ensuring admin user exists for '${ADMIN_USERNAME}'..."
+  python - <<'PY'
+import os
+from werkzeug.security import generate_password_hash
+from sqlalchemy.exc import OperationalError
+from app.db import Base, engine, get_session
+from app.models import AdminUser
+
+def ensure_schema():
+    try:
+        Base.metadata.create_all(bind=engine)
+    except OperationalError:
+        pass
+
+ensure_schema()
+username = os.environ.get('ADMIN_USERNAME')
+password = os.environ.get('ADMIN_PASSWORD')
+if username and password:
+    with get_session() as s:
+        user = s.query(AdminUser).filter(AdminUser.username==username).one_or_none()
+        if user:
+            # Update password on every start for convenience in dev; comment out if undesired
+            user.password_hash = generate_password_hash(password)
+            user.is_active = True
+            print(f"[ADMIN] Updated password for '{username}'.", flush=True)
+        else:
+            s.add(AdminUser(username=username, password_hash=generate_password_hash(password), is_active=True))
+            print(f"[ADMIN] Created admin user '{username}'.", flush=True)
+else:
+    print("[ADMIN] ADMIN_USERNAME or ADMIN_PASSWORD missing; skipping.", flush=True)
+PY
+fi
+
 echo "Starting Flask app on port ${FLASK_PORT:-${APP_PORT:-${PORT:-5050}}}"
 exec python run.py

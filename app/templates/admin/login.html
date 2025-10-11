@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Login{% endblock %}
+
+{% block body %}
+<div class="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 bg-gradient-to-br from-slate-50 to-indigo-50">
+  <div class="relative w-full max-w-md">
+    <!-- Glow background -->
+    <div class="absolute -inset-1 rounded-3xl bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-blue-500/20 blur-2xl"></div>
+    <div class="relative bg-white/90 backdrop-blur-xl shadow-2xl rounded-3xl p-8 border border-slate-100">
+      <div class="text-center mb-6">
+        <div class="mx-auto h-12 w-12 rounded-xl bg-indigo-600 text-white grid place-items-center shadow-lg">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6"><path d="M12 2.25A4.5 4.5 0 0 0 7.5 6.75v.443c-.527.07-1.05.164-1.558.282a2.25 2.25 0 0 0-1.692 2.183v2.238a2.25 2.25 0 0 0 .605 1.548l.486.525a48.522 48.522 0 0 0 3.126 3.124c.339.3.53.73.53 1.183v.086a2.25 2.25 0 0 0 2.25 2.25h1.5a2.25 2.25 0 0 0 2.25-2.25v-.086c0-.453.191-.883.53-1.183a48.52 48.52 0 0 0 3.126-3.124l.486-.525a2.25 2.25 0 0 0 .605-1.548V9.658a2.25 2.25 0 0 0-1.692-2.183 11.947 11.947 0 0 0-1.558-.282V6.75A4.5 4.5 0 0 0 12 2.25Z"/></svg>
+        </div>
+        <h1 class="mt-4 text-2xl font-semibold text-slate-900">Admin Sign in</h1>
+        <p class="mt-1 text-sm text-slate-500">Access restricted to authorized users</p>
+      </div>
+
+      {% if error %}
+        <div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 px-4 py-3 text-sm">
+          {{ error }}
+        </div>
+      {% endif %}
+
+      <form method="post" class="space-y-4">
+        <div>
+          <label for="username" class="block text-sm font-medium text-slate-700">Username</label>
+          <input type="text" id="username" name="username" autocomplete="username" required
+            class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div>
+          <label for="password" class="block text-sm font-medium text-slate-700">Password</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" required
+            class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+
+        <button type="submit" class="w-full inline-flex justify-center items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2.5 shadow-sm transition">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path d="M4.5 12a7.5 7.5 0 0 1 13.39-4.045.75.75 0 1 0 1.22-.87A9 9 0 1 0 21 12a.75.75 0 0 0-1.5 0 7.5 7.5 0 1 1-15 0Z"/><path d="M15 12a3 3 0 1 0-3 3v2.25a.75.75 0 0 0 1.28.53l3.22-3.22A.75.75 0 0 0 16.22 14H15a2.99 2.99 0 0 0 0-2Z"/></svg>
+          Sign in
+        </button>
+      </form>
+
+      <div class="mt-6 text-center text-xs text-slate-400">
+        Protected area • Pabulib
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

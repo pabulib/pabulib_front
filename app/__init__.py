@@ -5,7 +5,7 @@ from flask import Flask, render_template, request
 
 def create_app():
     app = Flask(__name__)
-    app.config.setdefault("SECRET_KEY", "change-me")
+    app.config["SECRET_KEY"] = os.environ["SECRET_KEY"]
 
     # In debug mode, auto-reload templates and avoid static caching
     debug_env = os.environ.get("FLASK_DEBUG", "0").strip() not in {

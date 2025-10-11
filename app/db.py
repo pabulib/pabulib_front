@@ -31,7 +31,13 @@ engine = create_engine(
     pool_pre_ping=True,
     future=True,
 )
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+SessionLocal = sessionmaker(
+    bind=engine,
+    autoflush=False,
+    autocommit=False,
+    expire_on_commit=False,  # keep loaded attributes valid after commit
+    future=True,
+)
 
 
 @contextmanager
