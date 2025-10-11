@@ -314,29 +314,50 @@ def visualize_file(filename: str):
 
     # Process all votes to extract vote data
     for vote_id, vote_data in votes.items():
-        # Look specifically for the "vote" column (this works for both Amsterdam and Warsaw formats)
-        vote_list = vote_data.get("vote", "")
+        # Look for the vote column - try different possible names
+        vote_list = None
+        for possible_vote_key in ["vote", "votes", "projects", "selected_projects"]:
+            if possible_vote_key in vote_data:
+                vote_list = vote_data[possible_vote_key]
+                break
+        
+        # If no vote column found, skip this vote
+        if vote_list is None:
+            continue
 
+        # Handle different vote data formats
+        voted_projects = []
         if isinstance(vote_list, str) and vote_list.strip():
-            # Parse comma-separated project IDs
-            voted_projects = [
-                pid.strip() for pid in vote_list.split(",") if pid.strip()
-            ]
-            if voted_projects:  # Only add if we have valid projects
-                vote_lengths.append(len(voted_projects))
-                for pid in voted_projects:
-                    vote_counts_per_project[pid] = (
-                        vote_counts_per_project.get(pid, 0) + 1
-                    )
+            # Parse comma-separated project IDs OR single project ID
+            if "," in vote_list:
+                # Multiple projects separated by commas
+                voted_projects = [
+                    pid.strip() for pid in vote_list.split(",") if pid.strip() and pid.strip() != ""
+                ]
+            else:
+                # Single project ID (no comma) - could be a number or string
+                single_project = vote_list.strip()
+                if single_project and single_project != "":
+                    voted_projects = [single_project]
         elif isinstance(vote_list, list) and vote_list:
             # Handle case where vote is already a list
-            valid_projects = [pid for pid in vote_list if pid and str(pid).strip()]
-            if valid_projects:
-                vote_lengths.append(len(valid_projects))
-                for pid in valid_projects:
-                    vote_counts_per_project[str(pid)] = (
-                        vote_counts_per_project.get(str(pid), 0) + 1
+            voted_projects = [str(pid).strip() for pid in vote_list if pid and str(pid).strip()]
+        
+        # Only process if we have valid projects
+        if voted_projects:
+            vote_length = len(voted_projects)
+            vote_lengths.append(vote_length)
+            
+            for pid in voted_projects:
+                pid_str = str(pid).strip()
+                if pid_str:  # Ensure we have a non-empty project ID
+                    vote_counts_per_project[pid_str] = (
+                        vote_counts_per_project.get(pid_str, 0) + 1
                     )
+        else:
+            # Debug: Log when we can't extract voted projects from a vote
+            if vote_list is not None:  # Only log if we found a vote column but couldn't parse it
+                print(f"DEBUG: Could not parse voted projects from vote {vote_id}: '{vote_list}' (type: {type(vote_list)})")
 
     # removed debug prints
 
@@ -364,6 +385,13 @@ def visualize_file(filename: str):
     vote_length_counts = {}
     for length in vote_lengths:
         vote_length_counts[length] = vote_length_counts.get(length, 0) + 1
+    
+    # Debug: Log the vote length distribution we found
+    if vote_length_counts:
+        print(f"DEBUG: Vote length distribution: {dict(sorted(vote_length_counts.items()))}")
+        single_votes = vote_length_counts.get(1, 0)
+        total_votes = sum(vote_length_counts.values())
+        print(f"DEBUG: Single-project votes: {single_votes}/{total_votes} ({single_votes/total_votes*100:.1f}%)")
 
     vote_length_data = None
     if vote_length_counts:
@@ -372,7 +400,24 @@ def visualize_file(filename: str):
             "labels": [str(length) for length in sorted_lengths],
             "counts": [vote_length_counts[length] for length in sorted_lengths],
         }
-        # removed debug prints
+    else:
+        # Add debugging information when no vote length data is available
+        print(f"DEBUG: No vote length data - total votes: {len(votes)}, vote_lengths: {len(vote_lengths)}")
+        # Check a few sample votes for debugging
+        if votes:
+            sample_votes = list(votes.items())[:3]
+            for vote_id, vote_data in sample_votes:
+                print(f"DEBUG: Sample vote {vote_id}: {vote_data}")
+                # Check all possible vote columns
+                for possible_vote_key in ["vote", "votes", "projects", "selected_projects"]:
+                    if possible_vote_key in vote_data:
+                        vote_value = vote_data[possible_vote_key]
+                        print(f"DEBUG: Found {possible_vote_key}: '{vote_value}' (type: {type(vote_value)})")
+            
+            # Also check what columns are available in votes
+            if votes:
+                first_vote = next(iter(votes.values()))
+                print(f"DEBUG: Available vote columns: {list(first_vote.keys())}")
 
     # Top projects by votes
     top_projects_data = None
