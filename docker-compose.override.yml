@@ -1,0 +1,16 @@
+version: "3.9"
+
+# This override is used automatically by `docker compose up` for local development.
+# It bind-mounts source code so changes are reflected immediately without rebuilds
+# and enables Flask debug/reloader.
+services:
+  web:
+    environment:
+      FLASK_DEBUG: 1
+    volumes:
+      # Bind mount application source (Python, templates, static)
+      - ./app:/app/app
+      # Optionally bind the entry point script if you edit it frequently
+      # - ./scripts:/app/scripts
+      # Bind the app runner so edits are picked up too
+      - ./run.py:/app/run.py
