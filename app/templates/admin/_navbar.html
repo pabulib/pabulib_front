@@ -9,6 +9,10 @@
              class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors {{ 'bg-slate-900 text-white' if request.path == url_for('admin.admin_dashboard') else 'text-slate-700 hover:bg-slate-100' }}">
             Dashboard
           </a>
+          <a href="{{ url_for('admin.upload_tiles') }}"
+             class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors {{ 'bg-slate-900 text-white' if request.path == url_for('admin.upload_tiles') else 'text-slate-700 hover:bg-slate-100' }}">
+            Upload tiles
+          </a>
           {# Future tabs can be added here, e.g.:
           <a href="#" class="px-3 py-1.5 rounded-md text-sm font-medium text-slate-400 cursor-not-allowed">Users (soon)</a>
           #}
