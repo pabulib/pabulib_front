@@ -1,6 +1,6 @@
 import os
 
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 
 
 def create_app():
@@ -23,13 +23,16 @@ def create_app():
 
     # Register routes
     from .routes import bp as main_bp
+    from .routes_admin import bp as admin_bp
 
     app.register_blueprint(main_bp)
+    app.register_blueprint(admin_bp)
 
     # Error handlers
     @app.errorhandler(404)
     def not_found(e):  # pragma: no cover
-        return render_template("404.html"), 404
+        # Provide the requested path so the template can show what was missing
+        return render_template("404.html", path=request.path), 404
 
     @app.errorhandler(500)
     def server_error(e):  # pragma: no cover

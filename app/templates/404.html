@@ -1,14 +1,32 @@
 {% extends 'base.html' %}
 
 {% block title %}Not Found – Pabulib{% endblock %}
-{% block bodyClass %}error404{% endblock %}
+{% block bodyClass %}bg-slate-50{% endblock %}
 
 {% block body %}
-<div class="container py-5">
-  <div class="text-center">
-    <h1 class="display-5">404 – Page not found</h1>
-    <p class="text-muted">The page you’re looking for doesn’t exist.</p>
-    <a href="{{ url_for('main.home') }}" class="btn btn-primary mt-3">Back to home</a>
+<div class="min-h-[60vh] flex items-center justify-center px-4">
+  <div class="text-center max-w-2xl">
+    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-100 text-indigo-700 mb-4">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-8 h-8">
+        <path fill-rule="evenodd" d="M11.47 3.84a.75.75 0 0 1 1.06 0l7.5 7.5a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 1 1-1.06-1.06L17.94 12 11.47 5.56a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/>
+      </svg>
+    </div>
+    <h1 class="text-3xl font-semibold text-slate-900 tracking-tight">404 – Page not found</h1>
+    <p class="mt-3 text-slate-600">The page you’re looking for doesn’t exist or was moved.</p>
+    {% if path %}
+      <p class="mt-1 text-sm text-slate-500">Requested endpoint: <code class="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200">{{ path }}</code></p>
+    {% endif %}
+    <div class="mt-6">
+      <a href="{{ url_for('main.home') }}"
+         class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
+          <path fill-rule="evenodd" d="M7.28 11.47a.75.75 0 0 0 0 1.06l4.5 4.5a.75.75 0 1 0 1.06-1.06L9.81 12l3.03-3.97a.75.75 0 1 0-1.2-.9l-4.5 4.5Z" clip-rule="evenodd"/>
+          <path fill-rule="evenodd" d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0Zm9-7.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15Z" clip-rule="evenodd"/>
+        </svg>
+        Back to search
+      </a>
+    </div>
   </div>
+  
 </div>
 {% endblock %}
