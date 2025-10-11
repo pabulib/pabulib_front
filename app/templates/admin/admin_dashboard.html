@@ -56,7 +56,7 @@
       </div>
   <p class="text-gray-600 mb-6">Tip: search filters by title only (years ignored). Click a column header to sort by File, File mtime, or Ingested.</p>
 
-      <!-- Toolbar: search -->
+      <!-- Toolbar: search + bulk actions -->
       <div class="mb-4 flex items-center gap-3">
         <div class="relative w-full max-w-md">
           <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -68,6 +68,13 @@
           </button>
         </div>
         <span id="adminCount" class="text-sm text-slate-500 whitespace-nowrap"></span>
+        <div class="ml-auto flex items-center gap-2">
+          <label class="inline-flex items-center gap-2 text-slate-700">
+            <input id="adminSelectAll" type="checkbox" class="w-4 h-4">
+            <span>Select all</span>
+          </label>
+          <button id="adminDeleteSelected" type="button" class="px-3 py-2 rounded-md border border-red-300 text-red-700 hover:bg-red-50">Delete selected</button>
+        </div>
       </div>
 
       <div class="overflow-x-auto">
@@ -121,6 +128,7 @@
                 data-mtime="{{ f.file_mtime.strftime('%Y-%m-%d %H:%M:%S') if f.file_mtime else '' }}"
                 data-ingested="{{ f.ingested_at.strftime('%Y-%m-%d %H:%M:%S') if f.ingested_at else '' }}">
               <td class="px-6 py-3 text-sm font-mono text-slate-800">
+                <input class="mr-3 align-middle admin-row-check" type="checkbox" data-file="{{ f.file_name|e }}" />
                 <span class="inline-block truncate max-w-[420px] align-middle" title="{{ f.file_name }}">{{ f.file_name }}</span>
               </td>
               <td class="px-6 py-3 text-sm text-slate-700 whitespace-nowrap">
@@ -301,6 +309,8 @@
   const tbody = document.querySelector('#adminTable tbody');
   const sortButtons = Array.from(document.querySelectorAll('.sort-btn'));
   let sortState = { key: null, dir: 'desc' }; // default dir when clicking first time
+  const selAll = document.getElementById('adminSelectAll');
+  const btnDelSel = document.getElementById('adminDeleteSelected');
 
   function parseDate(s){
     if(!s) return 0;
@@ -365,6 +375,25 @@
 
   // Initialize select disabled states once options are populated
   updateSelectStates();
+
+  function visibleRows(){ return rows.filter(tr => tr.style.display !== 'none'); }
+  function checked(){ return Array.from(document.querySelectorAll('.admin-row-check')).filter(cb => cb.checked && cb.closest('tr').style.display !== 'none'); }
+  if(selAll){ selAll.addEventListener('change', ()=>{ visibleRows().forEach(tr => { const cb = tr.querySelector('.admin-row-check'); if(cb) cb.checked = selAll.checked; }); }); }
+
+  async function deleteNames(names){
+    if(!names.length){ alert('No files selected'); return; }
+    const n = names.length;
+    const plural = n === 1 ? '' : 's';
+    const msg = `Delete selected ${n} file${plural}? They will be archived and marked not current.`;
+    if(!confirm(msg)) return;
+    try{
+      const resp = await fetch("{{ url_for('admin.admin_delete_files_bulk') }}", { method:'POST', headers:{'Content-Type':'application/json','X-Requested-With':'fetch'}, body: JSON.stringify({ names }) });
+      if(!resp.ok){ const data = await resp.json().catch(()=>({})); alert('Delete failed: '+(data.error||resp.status)); return; }
+      const data = await resp.json();
+      window.location.href = "{{ url_for('admin.admin_dashboard') }}?message="+encodeURIComponent(`Deleted ${data.deleted||names.length} file(s).`)+"&success=1";
+    }catch(e){ alert('Delete failed'); }
+  }
+  if(btnDelSel){ btnDelSel.addEventListener('click', ()=>{ const names = checked().map(cb => cb.dataset.file); deleteNames(names); }); }
 })();
 </script>
 {% endblock %}

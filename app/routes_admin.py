@@ -127,10 +127,19 @@ def admin_dashboard():
             for r in rows
         ]
 
+    # Optional banner message
+    msg = request.args.get("message")
+    succ = request.args.get("success")
+    success: Optional[bool] = None
+    if succ is not None:
+        success = succ in {"1", "true", "True"}
+
     return render_template(
         "admin/admin_dashboard.html",
         files=files,
         count=len(files),
+        message=msg,
+        success=success,
     )
 
 
@@ -650,3 +659,113 @@ def upload_tiles_check():
             "group_key": group_key,
         }
     )
+
+
+@bp.post("/admin/files/delete")
+def admin_delete_file():
+    name = (request.form.get("name") or "").strip()
+    if not name or "/" in name or ".." in name:
+        abort(400)
+    from .utils.pb_utils import pb_depreciated_folder as _pb_depr_folder
+
+    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    archived = None
+    with get_session() as s:
+        rec = (
+            s.query(PBFile)
+            .filter(PBFile.file_name == name, PBFile.is_current == True)  # noqa: E712
+            .one_or_none()
+        )
+        if not rec:
+            if request.headers.get("X-Requested-With") == "fetch":
+                return jsonify({"ok": False, "error": "Not found or not current"}), 404
+            return redirect(
+                url_for("admin.admin_dashboard", message="File not found.", success=0)
+            )
+        # Try to archive the on-disk file if present
+        try:
+            if rec.path:
+                src = Path(rec.path)
+                if src.exists():
+                    dest_dir = _pb_depr_folder() / ts
+                    dest_dir.mkdir(parents=True, exist_ok=True)
+                    dest = dest_dir / Path(rec.path).name
+                    try:
+                        if dest.exists():
+                            dest.unlink()
+                    except Exception:
+                        pass
+                    shutil.move(str(src), str(dest))
+                    archived = str(dest)
+        except Exception:
+            archived = None
+        # Update DB: mark not current and update path if archived
+        rec.is_current = False
+        if archived:
+            rec.path = archived
+    try:
+        pb_service.invalidate_caches()
+    except Exception:
+        pass
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify({"ok": True})
+    return redirect(
+        url_for("admin.admin_dashboard", message=f"Deleted {name}.", success=1)
+    )
+
+
+@bp.post("/admin/files/delete_bulk")
+def admin_delete_files_bulk():
+    # Expect JSON body: { names: [file_name, ...] }
+    try:
+        payload = request.get_json(silent=True) or {}
+        names = payload.get("names") or []
+        names = [str(n).strip() for n in names if isinstance(n, str) and n.strip()]
+    except Exception:
+        names = []
+    if not names:
+        return jsonify({"ok": False, "error": "No names provided"}), 400
+    from .utils.pb_utils import pb_depreciated_folder as _pb_depr_folder
+
+    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    dest_root = _pb_depr_folder() / ts
+    try:
+        dest_root.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    done = 0
+    with get_session() as s:
+        for name in names:
+            rec = (
+                s.query(PBFile)
+                .filter(
+                    PBFile.file_name == name, PBFile.is_current == True
+                )  # noqa: E712
+                .one_or_none()
+            )
+            if not rec:
+                continue
+            archived = None
+            try:
+                if rec.path:
+                    src = Path(rec.path)
+                    if src.exists():
+                        dest = dest_root / Path(rec.path).name
+                        try:
+                            if dest.exists():
+                                dest.unlink()
+                        except Exception:
+                            pass
+                        shutil.move(str(src), str(dest))
+                        archived = str(dest)
+            except Exception:
+                archived = None
+            rec.is_current = False
+            if archived:
+                rec.path = archived
+            done += 1
+    try:
+        pb_service.invalidate_caches()
+    except Exception:
+        pass
+    return jsonify({"ok": True, "deleted": done})
