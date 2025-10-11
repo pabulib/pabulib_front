@@ -187,492 +187,534 @@ Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Rob
 Chart.defaults.color = '#64748b';
 
 // Project Cost Distribution
-if (projectData && projectData.costs && projectData.costs.length > 0) {
-  const ctx1 = document.getElementById('costChart').getContext('2d');
-  
-  // Create histogram bins
-  const costs = projectData.costs.sort((a, b) => a - b);
-  const min = Math.min(...costs);
-  const max = Math.max(...costs);
-  const binCount = Math.min(20, Math.ceil(Math.sqrt(costs.length)));
-  const binWidth = (max - min) / binCount;
-  
-  const bins = [];
-  const binLabels = [];
-  for (let i = 0; i < binCount; i++) {
-    const binStart = min + i * binWidth;
-    const binEnd = binStart + binWidth;
-    bins.push(0);
-    binLabels.push(`${binStart.toFixed(0)}-${binEnd.toFixed(0)}`);
-  }
-  
-  // Count items in each bin
-  costs.forEach(cost => {
-    const binIndex = Math.min(Math.floor((cost - min) / binWidth), binCount - 1);
-    bins[binIndex]++;
-  });
-  
-  new Chart(ctx1, {
-    type: 'bar',
-    data: {
-      labels: binLabels,
-      datasets: [{
-        label: 'Number of Projects',
-        data: bins,
-        backgroundColor: 'rgba(59, 130, 246, 0.6)',
-        borderColor: 'rgba(59, 130, 246, 1)',
-        borderWidth: 1
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        title: {
-          display: true,
-          text: 'Distribution of Project Costs'
-        }
+try {
+  if (projectData && projectData.costs && projectData.costs.length > 0) {
+    const ctx1 = document.getElementById('costChart').getContext('2d');
+    
+    // Create histogram bins
+    const costs = projectData.costs.sort((a, b) => a - b);
+    const min = Math.min(...costs);
+    const max = Math.max(...costs);
+    const binCount = Math.min(20, Math.ceil(Math.sqrt(costs.length)));
+    const binWidth = (max - min) / binCount;
+    
+    const bins = [];
+    const binLabels = [];
+    for (let i = 0; i < binCount; i++) {
+      const binStart = min + i * binWidth;
+      const binEnd = binStart + binWidth;
+      bins.push(0);
+      binLabels.push(`${binStart.toFixed(0)}-${binEnd.toFixed(0)}`);
+    }
+    
+    // Count items in each bin
+    costs.forEach(cost => {
+      const binIndex = Math.min(Math.floor((cost - min) / binWidth), binCount - 1);
+      bins[binIndex]++;
+    });
+    
+    new Chart(ctx1, {
+      type: 'bar',
+      data: {
+        labels: binLabels,
+        datasets: [{
+          label: 'Number of Projects',
+          data: bins,
+          backgroundColor: 'rgba(59, 130, 246, 0.6)',
+          borderColor: 'rgba(59, 130, 246, 1)',
+          borderWidth: 1
+        }]
       },
-      scales: {
-        x: {
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
           title: {
             display: true,
-            text: 'Cost'
+            text: 'Distribution of Project Costs'
           }
         },
-        y: {
-          title: {
-            display: true,
-            text: 'Number of Projects'
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: 'Cost'
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: 'Number of Projects'
+            }
           }
         }
       }
-    }
-  });
+    });
+  }
+} catch (e) {
+  console.error('Error rendering cost chart:', e);
 }
 
 // Vote Distribution
-console.log('Checking voteData:', voteData);
-if (voteData && voteData.votes_per_project && voteData.votes_per_project.length > 0) {
-  console.log('MY LOG:', voteData);
-  console.log('Creating vote chart with data:', voteData);
-  const ctx2 = document.getElementById('voteChart').getContext('2d');
-  new Chart(ctx2, {
-    type: 'bar',
-    data: {
-      labels: voteData.project_labels,
-      datasets: [{
-        label: 'Votes',
-        data: voteData.votes_per_project,
-        backgroundColor: 'rgba(16, 185, 129, 0.6)',
-        borderColor: 'rgba(16, 185, 129, 1)',
-        borderWidth: 1
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        title: {
-          display: true,
-          text: 'Votes Received by Each Project'
-        }
+try {
+  if (voteData && voteData.votes_per_project && voteData.votes_per_project.length > 0) {
+    console.log('MY LOG:', voteData);
+    console.log('Creating vote chart with data:', voteData);
+    const ctx2 = document.getElementById('voteChart').getContext('2d');
+    new Chart(ctx2, {
+      type: 'bar',
+      data: {
+        labels: voteData.project_labels,
+        datasets: [{
+          label: 'Votes',
+          data: voteData.votes_per_project,
+          backgroundColor: 'rgba(16, 185, 129, 0.6)',
+          borderColor: 'rgba(16, 185, 129, 1)',
+          borderWidth: 1
+        }]
       },
-      scales: {
-        x: {
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
           title: {
             display: true,
-            text: 'Projects'
+            text: 'Votes Received by Each Project'
           }
         },
-        y: {
-          title: {
-            display: true,
-            text: 'Number of Votes'
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: 'Projects'
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: 'Number of Votes'
+            }
           }
         }
       }
-    }
-  });
-} else {
-  console.log('Vote chart not created - no data available:', {
-    voteData: voteData,
-    hasVoteData: !!voteData,
-    hasVotesPerProject: voteData && !!voteData.votes_per_project,
-    votesLength: voteData && voteData.votes_per_project ? voteData.votes_per_project.length : 0
-  });
-  
-  // Show a message if no data is available
-  const voteChartContainer = document.getElementById('voteChart').parentElement;
-  voteChartContainer.innerHTML = '<p class="text-center text-gray-500 py-8">No vote data available for this dataset.</p>';
+    });
+  } else {
+    console.log('Vote chart not created - no data available:', {
+      voteData: voteData,
+      hasVoteData: !!voteData,
+      hasVotesPerProject: voteData && !!voteData.votes_per_project,
+      votesLength: voteData && voteData.votes_per_project ? voteData.votes_per_project.length : 0
+    });
+    
+    // Show a message if no data is available
+    const voteChartContainer = document.getElementById('voteChart').parentElement;
+    voteChartContainer.innerHTML = '<p class="text-center text-gray-500 py-8">No vote data available for this dataset.</p>';
+  }
+} catch (e) {
+  console.error('Error rendering vote chart:', e);
 }
 
 // Category Distribution
-if (categoryData) {
-  const ctx3 = document.getElementById('categoryChart').getContext('2d');
-  new Chart(ctx3, {
-    type: 'pie',
-    data: {
-      labels: categoryData.labels,
-      datasets: [{
-        data: categoryData.counts,
-        backgroundColor: [
-          'rgba(59, 130, 246, 0.8)',
-          'rgba(16, 185, 129, 0.8)',
-          'rgba(245, 101, 101, 0.8)',
-          'rgba(251, 191, 36, 0.8)',
-          'rgba(139, 92, 246, 0.8)',
-          'rgba(236, 72, 153, 0.8)',
-          'rgba(20, 184, 166, 0.8)',
-          'rgba(251, 146, 60, 0.8)'
-        ]
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        title: {
-          display: true,
-          text: 'Project Distribution by Category'
+try {
+  if (categoryData) {
+    const ctx3 = document.getElementById('categoryChart').getContext('2d');
+    new Chart(ctx3, {
+      type: 'pie',
+      data: {
+        labels: categoryData.labels,
+        datasets: [{
+          data: categoryData.counts,
+          backgroundColor: [
+            'rgba(59, 130, 246, 0.8)',
+            'rgba(16, 185, 129, 0.8)',
+            'rgba(245, 101, 101, 0.8)',
+            'rgba(251, 191, 36, 0.8)',
+            'rgba(139, 92, 246, 0.8)',
+            'rgba(236, 72, 153, 0.8)',
+            'rgba(20, 184, 166, 0.8)',
+            'rgba(251, 146, 60, 0.8)'
+          ]
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          title: {
+            display: true,
+            text: 'Project Distribution by Category'
+          }
         }
       }
-    }
-  });
+    });
+  }
+} catch (e) {
+  console.error('Error rendering category chart:', e);
 }
 
 
 // Vote Length Distribution
-console.log('Checking voteLengthData:', voteLengthData);
-if (voteLengthData && voteLengthData.labels && voteLengthData.labels.length > 0 && voteLengthData.counts && voteLengthData.counts.length > 0) {
-  const ctx7 = document.getElementById('voteLengthChart').getContext('2d');
-  new Chart(ctx7, {
-    type: 'bar',
-    data: {
-      labels: voteLengthData.labels,
-      datasets: [{
-        label: 'Number of Voters',
-        data: voteLengthData.counts,
-        backgroundColor: 'rgba(99, 102, 241, 0.6)',
-        borderColor: 'rgba(99, 102, 241, 1)',
-        borderWidth: 1
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        title: {
-          display: true,
-          text: 'Distribution of Vote Lengths'
-        }
+try {
+  if (voteLengthData && voteLengthData.labels && voteLengthData.labels.length > 0 && voteLengthData.counts && voteLengthData.counts.length > 0) {
+    const ctx7 = document.getElementById('voteLengthChart').getContext('2d');
+    new Chart(ctx7, {
+      type: 'bar',
+      data: {
+        labels: voteLengthData.labels,
+        datasets: [{
+          label: 'Number of Voters',
+          data: voteLengthData.counts,
+          backgroundColor: 'rgba(99, 102, 241, 0.6)',
+          borderColor: 'rgba(99, 102, 241, 1)',
+          borderWidth: 1
+        }]
       },
-      scales: {
-        x: {
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
           title: {
             display: true,
-            text: 'Number of Projects Selected'
+            text: 'Distribution of Vote Lengths'
           }
         },
-        y: {
-          title: {
-            display: true,
-            text: 'Number of Voters'
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: 'Number of Projects Selected'
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: 'Number of Voters'
+            }
           }
         }
       }
-    }
-  });
-} else {
-  console.log('Vote length chart not created - no data available:', {
-    voteLengthData: voteLengthData,
-    hasVoteLengthData: !!voteLengthData,
-    hasLabels: voteLengthData && !!voteLengthData.labels,
-    labelsLength: voteLengthData && voteLengthData.labels ? voteLengthData.labels.length : 0
-  });
-  
-  // Show a message if no data is available
-  const voteLengthChartContainer = document.getElementById('voteLengthChart').parentElement;
-  voteLengthChartContainer.innerHTML = '<p class="text-center text-gray-500 py-8">No vote length data available for this dataset.</p>';
+    });
+  } else {
+    console.log('Vote length chart not created - no data available:', {
+      voteLengthData: voteLengthData,
+      hasVoteLengthData: !!voteLengthData,
+      hasLabels: voteLengthData && !!voteLengthData.labels,
+      labelsLength: voteLengthData && voteLengthData.labels ? voteLengthData.labels.length : 0
+    });
+    
+    // Show a message if no data is available
+    const voteLengthChartContainer = document.getElementById('voteLengthChart').parentElement;
+    voteLengthChartContainer.innerHTML = '<p class="text-center text-gray-500 py-8">No vote length data available for this dataset.</p>';
+  }
+} catch (e) {
+  console.error('Error rendering vote length chart:', e);
 }
 
 
 // Age Distribution
-// if (demographicData && demographicData.age) {
-//   const ctx4 = document.getElementById('ageChart').getContext('2d');
-//   new Chart(ctx4, {
-//     type: 'bar',
-//     data: {
-//       labels: demographicData.age.labels,
-//       datasets: [{
-//         label: 'Number of Voters',
-//         data: demographicData.age.counts,
-//         backgroundColor: 'rgba(168, 85, 247, 0.6)',
-//         borderColor: 'rgba(168, 85, 247, 1)',
-//         borderWidth: 1
-//       }]
-//     },
-//     options: {
-//       responsive: true,
-//       maintainAspectRatio: false,
-//       plugins: {
-//         title: {
-//           display: true,
-//           text: 'Age Distribution of Voters'
-//         }
-//       },
-//       scales: {
-//         x: {
-//           title: {
-//             display: true,
-//             text: 'Age Range'
-//           }
-//         },
-//         y: {
-//           title: {
-//             display: true,
-//             text: 'Number of Voters'
-//           }
-//         }
-//       }
-//     }
-//   });
-// }
-
-// Gender Distribution
-// if (demographicData && demographicData.sex) {
-//   const ctx5 = document.getElementById('genderChart').getContext('2d');
-//   new Chart(ctx5, {
-//     type: 'doughnut',
-//     data: {
-//       labels: demographicData.sex.labels,
-//       datasets: [{
-//         data: demographicData.sex.counts,
-//         backgroundColor: [
-//           'rgba(236, 72, 153, 0.8)',
-//           'rgba(59, 130, 246, 0.8)'
-//         ]
-//       }]
-//     },
-//     options: {
-//       responsive: true,
-//       maintainAspectRatio: false,
-//       plugins: {
-//         title: {
-//           display: true,
-//           text: 'Gender Distribution of Voters'
-//         }
-//       }
-//     }
-//   });
-// }
-
-// // Scatter Plot: Cost vs Votes
-// if (projectData && projectData.scatter_data) {
-//   const ctx6 = document.getElementById('scatterChart').getContext('2d');
-//   new Chart(ctx6, {
-//     type: 'scatter',
-//     data: {
-//       datasets: [{
-//         label: 'Projects',
-//         data: projectData.scatter_data,
-//         backgroundColor: 'rgba(245, 101, 101, 0.6)',
-//         borderColor: 'rgba(245, 101, 101, 1)',
-//         borderWidth: 1
-//       }]
-//     },
-//     options: {
-//       responsive: true,
-//       maintainAspectRatio: false,
-//       plugins: {
-//         title: {
-//           display: true,
-//           text: 'Project Cost vs Votes Received'
-//         }
-//       },
-//       scales: {
-//         x: {
-//           title: {
-//             display: true,
-//             text: 'Project Cost'
-//           }
-//         },
-//         y: {
-//           title: {
-//             display: true,
-//             text: 'Votes Received'
-//           }
-//         }
-//       }
-//     }
-//   });
-// }
-
-// Top Projects Chart
-if (topProjectsData) {
-  const ctx8 = document.getElementById('topProjectsChart').getContext('2d');
-  new Chart(ctx8, {
-    type: 'bar',
-    data: {
-      labels: topProjectsData.labels,
-      datasets: [{
-        label: 'Votes Received',
-        data: topProjectsData.votes,
-        backgroundColor: 'rgba(34, 197, 94, 0.6)',
-        borderColor: 'rgba(34, 197, 94, 1)',
-        borderWidth: 1
-      }]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        title: {
-          display: true,
-          text: 'Most Popular Projects by Votes'
-        }
+try {
+  if (demographicData && demographicData.age) {
+    const ctx4 = document.getElementById('ageChart').getContext('2d');
+    new Chart(ctx4, {
+      type: 'bar',
+      data: {
+        labels: demographicData.age.labels,
+        datasets: [{
+          label: 'Number of Voters',
+          data: demographicData.age.counts,
+          backgroundColor: 'rgba(168, 85, 247, 0.6)',
+          borderColor: 'rgba(168, 85, 247, 1)',
+          borderWidth: 1
+        }]
       },
-      scales: {
-        x: {
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
           title: {
             display: true,
-            text: 'Number of Votes'
+            text: 'Age Distribution of Voters'
+          }
+        },
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: 'Age Range'
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: 'Number of Voters'
+            }
           }
         }
       }
-    }
-  });
+    });
+  }
+} catch (e) {
+  console.error('Error rendering age chart:', e);
+}
+
+// Gender Distribution
+try {
+  if (demographicData && demographicData.sex) {
+    const ctx5 = document.getElementById('genderChart').getContext('2d');
+    new Chart(ctx5, {
+      type: 'doughnut',
+      data: {
+        labels: demographicData.sex.labels,
+        datasets: [{
+          data: demographicData.sex.counts,
+          backgroundColor: [
+            'rgba(236, 72, 153, 0.8)',
+            'rgba(59, 130, 246, 0.8)'
+          ]
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          title: {
+            display: true,
+            text: 'Gender Distribution of Voters'
+          }
+        }
+      }
+    });
+  }
+} catch (e) {
+  console.error('Error rendering gender chart:', e);
+}
+
+// Scatter Plot: Cost vs Votes
+try {
+  if (projectData && projectData.scatter_data) {
+    const ctx6 = document.getElementById('scatterChart').getContext('2d');
+    new Chart(ctx6, {
+      type: 'scatter',
+      data: {
+        datasets: [{
+          label: 'Projects',
+          data: projectData.scatter_data,
+          backgroundColor: 'rgba(245, 101, 101, 0.6)',
+          borderColor: 'rgba(245, 101, 101, 1)',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          title: {
+            display: true,
+            text: 'Project Cost vs Votes Received'
+          }
+        },
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: 'Project Cost'
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: 'Votes Received'
+            }
+          }
+        }
+      }
+    });
+  }
+} catch (e) {
+  console.error('Error rendering scatter chart:', e);
+}
+
+// Top Projects Chart
+try {
+  if (topProjectsData) {
+    const ctx8 = document.getElementById('topProjectsChart').getContext('2d');
+    new Chart(ctx8, {
+      type: 'bar',
+      data: {
+        labels: topProjectsData.labels,
+        datasets: [{
+          label: 'Votes Received',
+          data: topProjectsData.votes,
+          backgroundColor: 'rgba(34, 197, 94, 0.6)',
+          borderColor: 'rgba(34, 197, 94, 1)',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          title: {
+            display: true,
+            text: 'Most Popular Projects by Votes'
+          }
+        },
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: 'Number of Votes'
+            }
+          }
+        }
+      }
+    });
+  }
+} catch (e) {
+  console.error('Error rendering top projects chart:', e);
 }
 
 // Project Selection Scatter Plot
-if (selectionData) {
-  const ctx9 = document.getElementById('selectionChart').getContext('2d');
-  new Chart(ctx9, {
-    type: 'scatter',
-    data: {
-      datasets: [{
-        label: 'Selected Projects',
-        data: selectionData.selected,
-        backgroundColor: 'rgba(34, 197, 94, 0.7)',
-        borderColor: 'rgba(34, 197, 94, 1)',
-        borderWidth: 1
-      }, {
-        label: 'Not Selected',
-        data: selectionData.not_selected,
-        backgroundColor: 'rgba(239, 68, 68, 0.7)',
-        borderColor: 'rgba(239, 68, 68, 1)',
-        borderWidth: 1
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        title: {
-          display: true,
-          text: 'Project Selection by Cost and Popularity'
-        }
+try {
+  if (selectionData) {
+    const ctx9 = document.getElementById('selectionChart').getContext('2d');
+    new Chart(ctx9, {
+      type: 'scatter',
+      data: {
+        datasets: [{
+          label: 'Selected Projects',
+          data: selectionData.selected,
+          backgroundColor: 'rgba(34, 197, 94, 0.7)',
+          borderColor: 'rgba(34, 197, 94, 1)',
+          borderWidth: 1
+        }, {
+          label: 'Not Selected',
+          data: selectionData.not_selected,
+          backgroundColor: 'rgba(239, 68, 68, 0.7)',
+          borderColor: 'rgba(239, 68, 68, 1)',
+          borderWidth: 1
+        }]
       },
-      scales: {
-        x: {
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
           title: {
             display: true,
-            text: 'Project Cost'
+            text: 'Project Selection by Cost and Popularity'
           }
         },
-        y: {
-          title: {
-            display: true,
-            text: 'Votes Received'
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: 'Project Cost'
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: 'Votes Received'
+            }
           }
         }
       }
-    }
-  });
+    });
+  }
+} catch (e) {
+  console.error('Error rendering selection chart:', e);
 }
 
 // Category Cost Chart
-if (categoryCostData) {
-  const ctx10 = document.getElementById('categoryCostChart').getContext('2d');
-  new Chart(ctx10, {
-    type: 'bar',
-    data: {
-      labels: categoryCostData.labels,
-      datasets: [{
-        label: 'Average Cost',
-        data: categoryCostData.avg_costs,
-        backgroundColor: 'rgba(147, 51, 234, 0.6)',
-        borderColor: 'rgba(147, 51, 234, 1)',
-        borderWidth: 1
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        title: {
-          display: true,
-          text: 'Average Project Cost by Category'
-        }
+try {
+  if (categoryCostData) {
+    const ctx10 = document.getElementById('categoryCostChart').getContext('2d');
+    new Chart(ctx10, {
+      type: 'bar',
+      data: {
+        labels: categoryCostData.labels,
+        datasets: [{
+          label: 'Average Cost',
+          data: categoryCostData.avg_costs,
+          backgroundColor: 'rgba(147, 51, 234, 0.6)',
+          borderColor: 'rgba(147, 51, 234, 1)',
+          borderWidth: 1
+        }]
       },
-      scales: {
-        x: {
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
           title: {
             display: true,
-            text: 'Category'
+            text: 'Average Project Cost by Category'
           }
         },
-        y: {
-          title: {
-            display: true,
-            text: 'Average Cost'
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: 'Category'
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: 'Average Cost'
+            }
           }
         }
       }
-    }
-  });
+    });
+  }
+} catch (e) {
+  console.error('Error rendering category cost chart:', e);
 }
 
 // Correlation Heatmap (simplified as bar chart)
-if (correlationData) {
-  const ctx12 = document.getElementById('correlationChart').getContext('2d');
-  new Chart(ctx12, {
-    type: 'bar',
-    data: {
-      labels: correlationData.labels,
-      datasets: [{
-        label: 'Correlation Coefficient',
-        data: correlationData.values,
-        backgroundColor: correlationData.values.map(val => 
-          val > 0.3 ? 'rgba(34, 197, 94, 0.8)' :
-          val < -0.3 ? 'rgba(239, 68, 68, 0.8)' :
-          'rgba(156, 163, 175, 0.8)'
-        ),
-        borderWidth: 1
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        title: {
-          display: true,
-          text: 'Correlation Between Project Metrics'
-        }
+try {
+  if (correlationData) {
+    const ctx12 = document.getElementById('correlationChart').getContext('2d');
+    new Chart(ctx12, {
+      type: 'bar',
+      data: {
+        labels: correlationData.labels,
+        datasets: [{
+          label: 'Correlation Coefficient',
+          data: correlationData.values,
+          backgroundColor: correlationData.values.map(val => 
+            val > 0.3 ? 'rgba(34, 197, 94, 0.8)' :
+            val < -0.3 ? 'rgba(239, 68, 68, 0.8)' :
+            'rgba(156, 163, 175, 0.8)'
+          ),
+          borderWidth: 1
+        }]
       },
-      scales: {
-        y: {
-          min: -1,
-          max: 1,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
           title: {
             display: true,
-            text: 'Correlation Coefficient'
+            text: 'Correlation Between Project Metrics'
+          }
+        },
+        scales: {
+          y: {
+            min: -1,
+            max: 1,
+            title: {
+              display: true,
+              text: 'Correlation Coefficient'
+            }
           }
         }
       }
-    }
-  });
+    });
+  }
+} catch (e) {
+  console.error('Error rendering correlation chart:', e);
 }
 </script>
 
