@@ -136,7 +136,15 @@
           <div class="muted">{{ t.description }}</div>
           <div>{{ t.num_votes }}</div>
           <div>{{ t.num_projects }}</div>
-          <div>{{ t.budget }}</div>
+          <div>
+            {% if t.currency == "EUR" %}
+              {{ t.budget|replace('EUR', '€') }}
+            {% elif t.currency == "USD" %}
+              ${{ t.budget|replace('USD', '') }}
+            {% else %}
+              {{ t.budget }}
+            {% endif %}
+          </div>
           <div>{{ t.vote_type }}</div>
           <div>{{ t.vote_length }}</div>
         </div>
