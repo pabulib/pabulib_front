@@ -238,9 +238,51 @@
   populateSelect(selCity, rows.map(tr => tr.dataset.city));
 
   // React to filter changes
+  function updateSelectStates(){
+    const vYear = (selYear && selYear.value) || '';
+    const vCountry = ((selCountry && selCountry.value) || '').toLowerCase();
+    const vCity = ((selCity && selCity.value) || '').toLowerCase();
+    const vType = ((selType && selType.value) || '').toLowerCase();
+
+    function eligibleRows(exclude){
+      return rows.filter(tr => {
+        const year = (tr.dataset.year || '');
+        const country = (tr.dataset.country || '').toLowerCase();
+        const city = (tr.dataset.city || '').toLowerCase();
+        const type = (tr.dataset.type || '').toLowerCase();
+        if(exclude !== 'year' && vYear && year !== vYear) return false;
+        if(exclude !== 'country' && vCountry && country !== vCountry) return false;
+        if(exclude !== 'city' && vCity && city !== vCity) return false;
+        if(exclude !== 'type' && vType && type !== vType) return false;
+        return true;
+      });
+    }
+
+    function disableOptions(selectEl, key){
+      if(!selectEl) return;
+      const allowed = new Set(eligibleRows(key).map(tr => {
+        if(key==='year') return tr.dataset.year || '';
+        if(key==='country') return (tr.dataset.country || '').toLowerCase();
+        if(key==='city') return (tr.dataset.city || '').toLowerCase();
+        if(key==='type') return (tr.dataset.type || '').toLowerCase();
+        return '';
+      }).filter(Boolean));
+      Array.from(selectEl.options).forEach(opt => {
+        if(opt.value === '') { opt.disabled = false; return; }
+        const val = (key==='year') ? opt.value : opt.value.toLowerCase();
+        opt.disabled = !allowed.has(val);
+      });
+    }
+
+    disableOptions(selYear, 'year');
+    disableOptions(selCountry, 'country');
+    disableOptions(selCity, 'city');
+    disableOptions(selType, 'type');
+  }
+
   [selYear, selCountry, selCity, selType].forEach(el => {
     if(!el) return;
-    el.addEventListener('change', () => filter(input.value||''));
+    el.addEventListener('change', () => { updateSelectStates(); filter(input.value||''); });
   });
 
   if(btnClear){
@@ -249,6 +291,7 @@
       if(selCountry) selCountry.value = '';
       if(selCity) selCity.value = '';
       if(selType) selType.value = '';
+      updateSelectStates();
       filter(input.value||'');
     });
   }
@@ -318,6 +361,9 @@
   sortButtons.forEach(btn => {
     btn.addEventListener('click', () => applySort(btn.dataset.key, btn.dataset.type));
   });
+
+  // Initialize select disabled states once options are populated
+  updateSelectStates();
 })();
 </script>
 {% endblock %}

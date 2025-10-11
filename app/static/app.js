@@ -39,6 +39,51 @@
     [...setYear].sort((a,b)=>Number(a||0)-Number(b||0)).forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; filterYear.appendChild(o); });
   }
 
+  // Disable options that are not compatible with current selections across selects (exclusive filters)
+  function updateSelectStates(){
+    const selCountry = normalize(filterCountry.value);
+    const selCity = normalize(filterCity.value);
+    const selYear = (filterYear.value || '');
+    const selType = normalize(filterType.value);
+
+    function eligibleTiles(excludeKey){
+      return tiles.filter(t => {
+        if(excludeKey !== 'country' && selCountry && normalize(t.dataset.country) !== selCountry) return false;
+        if(excludeKey !== 'city' && selCity && normalize(t.dataset.city) !== selCity) return false;
+        if(excludeKey !== 'year' && selYear && (t.dataset.year !== selYear)) return false;
+        if(excludeKey !== 'type' && selType && normalize(t.dataset.type) !== selType) return false;
+        return true;
+      });
+    }
+
+    function disableOptions(selectEl, key){
+      if(!selectEl) return;
+      const allowed = new Set(
+        eligibleTiles(key).map(t => {
+          if(key === 'country') return t.dataset.country || '';
+          if(key === 'city') return t.dataset.city || '';
+          if(key === 'year') return t.dataset.year || '';
+          if(key === 'type') return (t.dataset.type || '');
+          return '';
+        }).filter(Boolean)
+      );
+      Array.from(selectEl.options).forEach(opt => {
+        if(opt.value === ''){ opt.disabled = false; return; }
+        // For type select we compare normalized because its options are predefined
+        if(key === 'type'){
+          opt.disabled = !Array.from(allowed).some(v => normalize(v) === normalize(opt.value));
+        } else {
+          opt.disabled = !allowed.has(opt.value);
+        }
+      });
+    }
+
+    disableOptions(filterCountry, 'country');
+    disableOptions(filterCity, 'city');
+    disableOptions(filterYear, 'year');
+    disableOptions(filterType, 'type');
+  }
+
   function passesNumeric(val, min, max){
     const v = Number(val);
     const hasMin = min.value.trim() !== '' && !isNaN(Number(min.value));
@@ -154,7 +199,7 @@
   // simple debounce for input-heavy changes
   let tHandle;
   function debounced(){
-    clearTimeout(tHandle); tHandle = setTimeout(filter, 100);
+    clearTimeout(tHandle); tHandle = setTimeout(()=>{ updateSelectStates(); filter(); }, 100);
   }
 
   [input, filterCountry, filterCity, filterYear, votesMin, votesMax, projectsMin, projectsMax, lenMin, lenMax, filterType, excludeFully, excludeExperimental]
@@ -173,6 +218,7 @@
   orderDir.dataset.dir = 'desc';
   orderDir.textContent = '↓';
   initOptions();
+  updateSelectStates();
   updateChecks();
   sortTiles();
   // pagination
