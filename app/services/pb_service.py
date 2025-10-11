@@ -294,60 +294,62 @@ def aggregate_statistics_cached() -> Tuple[Dict[str, Any], Dict[str, Any]]:
                     PBFile.vote_type,
                 )
             )
-        rows: List[PBFile] = q.filter(PBFile.is_current == True).all()  # noqa: E712
+        pb_files: List[PBFile] = q.filter(PBFile.is_current == True).all()  # noqa: E712
+        
+        # Process data while still within the session context
+        total_files = len(pb_files)
+        countries = set()
+        cities = set()
+        sum_projects = 0
+        sum_votes = 0
+        sum_selected = 0
+        sum_budget = 0
+        budget_by_currency_total: Dict[str, int] = {}
 
-    total_files = len(rows)
-    countries = set()
-    cities = set()
-    sum_projects = 0
-    sum_votes = 0
-    sum_selected = 0
-    sum_budget = 0
-    budget_by_currency_total: Dict[str, int] = {}
+        by_year: Dict[str, int] = {}
+        votes_by_country: Dict[str, int] = {}
+        budget_by_country: Dict[str, int] = {}
+        budget_by_country_by_currency: Dict[str, Dict[str, int]] = {}
+        vote_types: Dict[str, int] = {}
+        votes_by_city: Dict[str, int] = {}
 
-    by_year: Dict[str, int] = {}
-    votes_by_country: Dict[str, int] = {}
-    budget_by_country: Dict[str, int] = {}
-    budget_by_country_by_currency: Dict[str, Dict[str, int]] = {}
-    vote_types: Dict[str, int] = {}
-    votes_by_city: Dict[str, int] = {}
+        for r in pb_files:
+            country = r.country or ""
+            city = r.unit or ""
+            year = r.year
+            num_projects = int(r.num_projects or 0)
+            num_votes = int(r.num_votes or 0)
+            budget = r.budget
+            currency = (r.currency or "").strip() or "—"
+            vtype = (r.vote_type or "").strip().lower() or "unknown"
 
-    for r in rows:
-        country = r.country or ""
-        city = r.unit or ""
-        year = r.year
-        num_projects = int(r.num_projects or 0)
-        num_votes = int(r.num_votes or 0)
-        budget = r.budget
-        currency = (r.currency or "").strip() or "—"
-        vtype = (r.vote_type or "").strip().lower() or "unknown"
+            if country:
+                countries.add(country)
+            if country or city:
+                cities.add((country, city))
 
-        if country:
-            countries.add(country)
-        if country or city:
-            cities.add((country, city))
-
-        sum_projects += num_projects
-        sum_votes += num_votes
-        if isinstance(budget, int):
-            sum_budget += budget
-            budget_by_currency_total[currency] = (
-                budget_by_currency_total.get(currency, 0) + budget
-            )
-
-        if year is not None:
-            by_year[str(year)] = by_year.get(str(year), 0) + 1
-        if country:
-            votes_by_country[country] = votes_by_country.get(country, 0) + num_votes
+            sum_projects += num_projects
+            sum_votes += num_votes
             if isinstance(budget, int):
-                budget_by_country[country] = budget_by_country.get(country, 0) + budget
-                by_cur = budget_by_country_by_currency.setdefault(currency, {})
-                by_cur[country] = by_cur.get(country, 0) + budget
-        vote_types[vtype] = vote_types.get(vtype, 0) + 1
+                sum_budget += budget
+                budget_by_currency_total[currency] = (
+                    budget_by_currency_total.get(currency, 0) + budget
+                )
 
-        label = f"{country} – {city}".strip(" –")
-        votes_by_city[label] = votes_by_city.get(label, 0) + num_votes
+            if year is not None:
+                by_year[str(year)] = by_year.get(str(year), 0) + 1
+            if country:
+                votes_by_country[country] = votes_by_country.get(country, 0) + num_votes
+                if isinstance(budget, int):
+                    budget_by_country[country] = budget_by_country.get(country, 0) + budget
+                    by_cur = budget_by_country_by_currency.setdefault(currency, {})
+                    by_cur[country] = by_cur.get(country, 0) + budget
+            vote_types[vtype] = vote_types.get(vtype, 0) + 1
 
+            label = f"{country} – {city}".strip(" –")
+            votes_by_city[label] = votes_by_city.get(label, 0) + num_votes
+
+    # Process results after session closes
     totals: Dict[str, Any] = {
         "total_files": total_files,
         "total_countries": len(countries),
@@ -448,9 +450,10 @@ def get_current_file_path(filename: str) -> Optional[Path]:
                 )  # noqa: E712
                 .one_or_none()
             )
-            if r and getattr(r, "path", None):
-                p = Path(r.path)
-                return p
+            if r and r.path:
+                # Access the path attribute while still within the session
+                path_str = r.path
+                return Path(path_str)
     except Exception:
         return None
     return None
