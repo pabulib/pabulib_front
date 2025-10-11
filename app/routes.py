@@ -237,6 +237,8 @@ def preview_file(filename: str):
         r.update(row)
         vote_rows.append(r)
         vote_keys_set.update(r.keys())
+    # The 'vote' field is included in preferred_vote_cols and vote_columns,
+    # and will be shown in the preview table. It is a list of project IDs if present.
     preferred_vote_cols = [
         "voter_id",
         "vote",
@@ -314,14 +316,13 @@ def visualize_file(filename: str):
 
     # Process all votes to extract vote data
     for vote_id, vote_data in votes.items():
-        # Look for the vote column - try different possible names
+        # Look for the vote column - now only "vote"
         vote_list = None
-        for possible_vote_key in ["vote", "votes", "projects", "selected_projects"]:
+        for possible_vote_key in ["vote"]:
             if possible_vote_key in vote_data:
                 vote_list = vote_data[possible_vote_key]
                 break
-        
-        # If no vote column found, skip this vote
+        # The 'vote' field is referenced here. It is a list of project IDs if present.
         if vote_list is None:
             continue
 
@@ -340,7 +341,7 @@ def visualize_file(filename: str):
                 if single_project and single_project != "":
                     voted_projects = [single_project]
         elif isinstance(vote_list, list) and vote_list:
-            # Handle case where vote is already a list
+            # Handle case where vote is already a list (from load_pb_file.py)
             voted_projects = [str(pid).strip() for pid in vote_list if pid and str(pid).strip()]
         
         # Only process if we have valid projects
@@ -386,6 +387,7 @@ def visualize_file(filename: str):
     for length in vote_lengths:
         vote_length_counts[length] = vote_length_counts.get(length, 0) + 1
     
+    vote_length_counts = dict(sorted(vote_length_counts.items()))
     # Debug: Log the vote length distribution we found
     if vote_length_counts:
         print(f"DEBUG: Vote length distribution: {dict(sorted(vote_length_counts.items()))}")

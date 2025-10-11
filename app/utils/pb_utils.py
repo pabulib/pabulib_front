@@ -109,10 +109,16 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
     try:
         lengths: List[int] = []
         for v in votes.values():
-            sel = str(v.get("vote", "")).strip()
-            if not sel:
-                continue
-            lengths.append(len([s for s in sel.split(",") if s]))
+            # Only the 'vote' field is used for vote length calculation.
+            # Other columns (e.g., 'age', 'sex', etc.) do not affect this value.
+            sel = v.get("vote", "")
+            if isinstance(sel, list):
+                lengths.append(len([s for s in sel if s]))
+            elif isinstance(sel, str):
+                sel = sel.strip()
+                if not sel:
+                    continue
+                lengths.append(len([s for s in sel.split(",") if s]))
         if lengths:
             vote_length_float = sum(lengths) / len(lengths)
     except Exception:

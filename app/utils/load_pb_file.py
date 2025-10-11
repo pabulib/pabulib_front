@@ -67,13 +67,16 @@ def parse_pb_lines(lines: List[str]) -> Tuple[Dict, Dict, Dict, bool, bool]:
             if votes.get(vid):
                 raise RuntimeError(f"Duplicated Voter ID!! {vid}")
             votes[vid] = {"voter_id": vid}
+            # Debug: print header and row for inspection
+            # print("VOTES header:", header)
+            # print("VOTES row:", row)
             for it, key in enumerate(header[1:]):
                 if it + 1 < len(row):
                     value = row[it + 1].strip()
-                    # If the key is 'vote', split by comma into a list
                     if key.strip().lower() == "vote":
                         votes[vid][key.strip()] = [v.strip() for v in value.split(",") if v.strip()]
                     else:
                         votes[vid][key.strip()] = value
+            # print("Parsed vote:", votes[vid])
 
     return meta, projects, votes, votes_in_projects, scores_in_projects
