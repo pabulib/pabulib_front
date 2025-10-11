@@ -52,14 +52,28 @@ def publications_page():
         with open(bib_path, "r", encoding="utf-8") as bibfile:
             bib_database = bibtexparser.load(bibfile)
             for entry in bib_database.entries:
-                authors = entry.get("author", "")
+                authors_raw = entry.get("author", "")
                 year = entry.get("year", "")
                 title = entry.get("title", "")
                 url = entry.get("url", "")
-                # Clean up authors formatting if needed
-                authors = authors.replace("\n", " ").replace(" and ", ", ")
+                # Split authors only by " and "
+                authors_list = [a for a in authors_raw.replace("\n", " ").split(" and ") if a.strip()]
+                authors = []
+                for author in authors_list:
+                    print("author", author)
+                    parts = author.split()
+                    if len(parts) > 1:
+                        firstname = parts[-1]
+                        firstname = firstname.replace(",", " ")
+                        surname = parts[0]
+                        surname = surname.replace(",", " ")
+                        authors.append(f"{firstname[0]}. {surname}")
+                    elif parts:
+                        authors.append(parts[0])
+                print("->", authors)
+                authors_str = ", ".join(authors)
                 publications.append({
-                    "authors": authors,
+                    "authors": authors_str,
                     "year": year,
                     "title": title,
                     "url": url
