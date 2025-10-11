@@ -43,7 +43,28 @@ def tools_page():
 
 @bp.route("/publications")
 def publications_page():
-    return render_template("publications.html")
+    # Parse bib.bib and pass publications to the template
+    import bibtexparser
+
+    bib_path = Path(__file__).parent.parent / "bib.bib"
+    publications = []
+    if bib_path.exists():
+        with open(bib_path, "r", encoding="utf-8") as bibfile:
+            bib_database = bibtexparser.load(bibfile)
+            for entry in bib_database.entries:
+                authors = entry.get("author", "")
+                year = entry.get("year", "")
+                title = entry.get("title", "")
+                url = entry.get("url", "")
+                # Clean up authors formatting if needed
+                authors = authors.replace("\n", " ").replace(" and ", ", ")
+                publications.append({
+                    "authors": authors,
+                    "year": year,
+                    "title": title,
+                    "url": url
+                })
+    return render_template("publications.html", publications=publications)
 
 
 @bp.route("/about")
