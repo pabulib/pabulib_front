@@ -40,6 +40,7 @@ def admin_dashboard():
                 "file_mtime": r.file_mtime,
                 "ingested_at": r.ingested_at,
                 "webpage_name": r.webpage_name,
+                "vote_type": r.vote_type,
             }
             for r in rows
         ]

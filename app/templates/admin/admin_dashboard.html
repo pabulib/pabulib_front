@@ -4,8 +4,50 @@
 {% block title %}Admin Dashboard{% endblock %}
 
 {% block body %}
-<section class="max-w-5xl mx-auto px-4">
-  <div class="flex justify-center">
+<section class="max-w-7xl mx-auto px-4">
+  <div class="flex gap-6 justify-center">
+    <!-- Sidebar filters (left) -->
+    <aside class="hidden md:block w-64 shrink-0 mt-8">
+      <div class="bg-white rounded-lg shadow-lg p-5 sticky top-24">
+        <h2 class="text-lg font-semibold text-slate-800 mb-4">Filters</h2>
+
+        <div class="mb-4">
+          <label for="filterYear" class="block text-sm font-medium text-slate-700 mb-1">Year</label>
+          <select id="filterYear" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
+            <option value="">All years</option>
+          </select>
+        </div>
+
+        <div class="mb-4">
+          <label for="filterCountry" class="block text-sm font-medium text-slate-700 mb-1">Country</label>
+          <select id="filterCountry" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
+            <option value="">All countries</option>
+          </select>
+        </div>
+
+        <div class="mb-4">
+          <label for="filterCity" class="block text-sm font-medium text-slate-700 mb-1">City</label>
+          <select id="filterCity" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
+            <option value="">All cities</option>
+          </select>
+        </div>
+
+        <div class="mb-2">
+          <label for="filterType" class="block text-sm font-medium text-slate-700 mb-1">Vote type</label>
+          <select id="filterType" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
+            <option value="">Any type</option>
+            <option value="approval">Approval</option>
+            <option value="cumulative">Cumulative</option>
+            <option value="ranked">Ranked</option>
+            <option value="k-approval">K-approval</option>
+            <option value="unknown">Unknown</option>
+          </select>
+        </div>
+
+        <button id="filtersClear" type="button" class="mt-4 w-full px-3 py-2 text-sm rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50">Clear filters</button>
+      </div>
+    </aside>
+
     <div class="w-full bg-white rounded-lg shadow-lg p-8 mt-8">
       <div class="flex items-baseline justify-between mb-6">
         <h1 class="text-3xl font-bold text-slate-800">Admin – Active Files</h1>
@@ -38,7 +80,14 @@
           </thead>
           <tbody class="divide-y divide-gray-200">
             {% for f in files %}
-            <tr class="hover:bg-gray-50 admin-row" data-file="{{ f.file_name|e }}" data-mtime="{{ f.file_mtime.strftime('%Y-%m-%d %H:%M:%S') if f.file_mtime else '' }}" data-ingested="{{ f.ingested_at.strftime('%Y-%m-%d %H:%M:%S') if f.ingested_at else '' }}">
+            <tr class="hover:bg-gray-50 admin-row"
+                data-file="{{ f.file_name|e }}"
+                data-year="{{ f.year if f.year is not none else '' }}"
+                data-country="{{ f.country|e if f.country else '' }}"
+                data-city="{{ f.unit|e if f.unit else '' }}"
+                data-type="{{ (f.vote_type|lower) if f.vote_type else 'unknown' }}"
+                data-mtime="{{ f.file_mtime.strftime('%Y-%m-%d %H:%M:%S') if f.file_mtime else '' }}"
+                data-ingested="{{ f.ingested_at.strftime('%Y-%m-%d %H:%M:%S') if f.ingested_at else '' }}">
               <td class="px-6 py-3 text-sm font-mono text-slate-800">
                 <span class="inline-block truncate max-w-[420px] align-middle" title="{{ f.file_name }}">{{ f.file_name }}</span>
               </td>
@@ -71,19 +120,39 @@
   const countEl = document.getElementById('adminCount');
   const total = rows.length;
 
+  // Filter controls
+  const selYear = document.getElementById('filterYear');
+  const selCountry = document.getElementById('filterCountry');
+  const selCity = document.getElementById('filterCity');
+  const selType = document.getElementById('filterType');
+  const btnClear = document.getElementById('filtersClear');
+
   function updateCount(visible){
     if(countEl){ countEl.textContent = `${visible} / ${total}`; }
   }
 
   function filter(q){
     const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+    const fy = (selYear && selYear.value)||'';
+    const fc = ((selCountry && selCountry.value)||'').toLowerCase();
+    const fcity = ((selCity && selCity.value)||'').toLowerCase();
+    const ft = ((selType && selType.value)||'').toLowerCase();
     let visible = 0;
     rows.forEach(tr => {
       const file = (tr.dataset.file || '').toLowerCase();
       const mtime = (tr.dataset.mtime || '').toLowerCase();
       const ing = (tr.dataset.ingested || '').toLowerCase();
+      const year = (tr.dataset.year || '');
+      const country = (tr.dataset.country || '').toLowerCase();
+      const city = (tr.dataset.city || '').toLowerCase();
+      const type = (tr.dataset.type || '').toLowerCase();
       const hay = `${file} ${mtime} ${ing}`;
-      const matches = terms.every(t => hay.includes(t));
+      const matchesText = terms.every(t => hay.includes(t));
+      const matchesYear = !fy || year === fy;
+      const matchesCountry = !fc || country === fc;
+      const matchesCity = !fcity || city === fcity;
+      const matchesType = !ft || type === ft;
+      const matches = matchesText && matchesYear && matchesCountry && matchesCity && matchesType;
       tr.style.display = matches ? '' : 'none';
       if(matches) visible++;
     });
@@ -108,6 +177,44 @@
     tid = requestAnimationFrame(() => onInput.call(self));
   });
   clearBtn.addEventListener('click', () => { input.value = ''; onInput(); input.focus(); });
+
+  function populateSelect(selectEl, values, labeler){
+    if(!selectEl) return;
+    const unique = Array.from(new Set(values.filter(v => v !== '' && v !== null && v !== undefined)));
+    // Sort numerically for years, otherwise alphabetically
+    if(selectEl.id === 'filterYear'){
+      unique.sort((a,b)=>parseInt(b,10)-parseInt(a,10));
+    } else {
+      unique.sort((a,b)=>String(a).localeCompare(String(b)));
+    }
+    unique.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = String(v);
+      opt.textContent = labeler ? labeler(v) : String(v);
+      selectEl.appendChild(opt);
+    });
+  }
+
+  // Gather values from rows
+  populateSelect(selYear, rows.map(tr => tr.dataset.year), v=>v);
+  populateSelect(selCountry, rows.map(tr => tr.dataset.country));
+  populateSelect(selCity, rows.map(tr => tr.dataset.city));
+
+  // React to filter changes
+  [selYear, selCountry, selCity, selType].forEach(el => {
+    if(!el) return;
+    el.addEventListener('change', () => filter(input.value||''));
+  });
+
+  if(btnClear){
+    btnClear.addEventListener('click', () => {
+      if(selYear) selYear.value = '';
+      if(selCountry) selCountry.value = '';
+      if(selCity) selCity.value = '';
+      if(selType) selType.value = '';
+      filter(input.value||'');
+    });
+  }
 })();
 </script>
 {% endblock %}
