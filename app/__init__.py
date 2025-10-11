@@ -8,7 +8,11 @@ def create_app():
     app.config.setdefault("SECRET_KEY", "change-me")
 
     # In debug mode, auto-reload templates and avoid static caching
-    debug_env = os.environ.get("FLASK_DEBUG", "0").strip() not in {"0", "false", "False"}
+    debug_env = os.environ.get("FLASK_DEBUG", "0").strip() not in {
+        "0",
+        "false",
+        "False",
+    }
     if debug_env:
         app.config["TEMPLATES_AUTO_RELOAD"] = True
         app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # disable static cache in dev
