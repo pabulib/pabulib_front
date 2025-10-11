@@ -4,6 +4,10 @@ from typing import Dict, List, Tuple
 
 
 def parse_pb_lines(lines: List[str]) -> Tuple[Dict, Dict, Dict, bool, bool]:
+    """
+    Parses PB file lines where columns are divided by semicolon (';').
+    Returns meta, projects, votes, votes_in_projects, scores_in_projects.
+    """
     meta: Dict = {}
     projects: Dict = {}
     votes: Dict = {}
@@ -13,6 +17,7 @@ def parse_pb_lines(lines: List[str]) -> Tuple[Dict, Dict, Dict, bool, bool]:
     scores_in_projects = False
 
     # Use StringIO to simulate file-like behavior for csv.reader
+    # Columns are divided by semicolon (';')
     reader = csv.reader(StringIO("\n".join(lines)), delimiter=";")
 
     for row in reader:
@@ -61,9 +66,14 @@ def parse_pb_lines(lines: List[str]) -> Tuple[Dict, Dict, Dict, bool, bool]:
             vid = row[0]
             if votes.get(vid):
                 raise RuntimeError(f"Duplicated Voter ID!! {vid}")
-            votes[vid] = {}
+            votes[vid] = {"voter_id": vid}
             for it, key in enumerate(header[1:]):
                 if it + 1 < len(row):
-                    votes[vid][key.strip()] = row[it + 1].strip()
+                    value = row[it + 1].strip()
+                    # If the key is 'vote', split by comma into a list
+                    if key.strip().lower() == "vote":
+                        votes[vid][key.strip()] = [v.strip() for v in value.split(",") if v.strip()]
+                    else:
+                        votes[vid][key.strip()] = value
 
     return meta, projects, votes, votes_in_projects, scores_in_projects

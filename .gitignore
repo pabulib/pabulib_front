@@ -75,6 +75,7 @@ data/
 
 # PB dataset files (keep directory, ignore datasets)
 pb_files/*
+pb_files_all/*
 !pb_files/README.md
 !pb_files/.gitkeep
 
