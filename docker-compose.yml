@@ -1,0 +1,63 @@
+version: "3.9"
+
+services:
+  db:
+    image: mysql:8.0
+    env_file:
+      - .env
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  adminer:
+    image: adminer:4
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+    ports:
+      - "${ADMINER_PORT:-8080}:8080"
+
+  web:
+    build: .
+    env_file:
+      - .env
+    environment:
+      FLASK_PORT: ${FLASK_PORT:-5050}
+      REFRESH_FULL: ${REFRESH_FULL:-0}
+      MYSQL_HOST: db
+      # Use the container-internal MySQL port for inter-container networking
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      FLASK_DEBUG: ${FLASK_DEBUG:-0}
+      # DB wait tuning for entrypoint + refresh
+      WAIT_FOR_DB_MAX_TRIES: ${WAIT_FOR_DB_MAX_TRIES:-120}
+      WAIT_FOR_DB_SLEEP: ${WAIT_FOR_DB_SLEEP:-3}
+      WAIT_FOR_DB_GRACE: ${WAIT_FOR_DB_GRACE:-2}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${FLASK_PORT:-5050}:${FLASK_PORT:-5050}"
+    volumes:
+      # Host path for PB files -> container path used by the app
+      # Set PB_FILES_DIR in .env to point to your local folder; defaults to ./pb_files
+      - ${PB_FILES_DIR:-./pb_files}:/app/pb_files:ro
+    entrypoint: ["scripts/entrypoint.sh"]
+
+volumes:
+  db_data:

@@ -70,7 +70,13 @@ coverage.xml
 instance/
 *.log
 
+# Local data (legacy SQLite DBs, scratch files)
+data/
+
 # PB dataset files (keep directory, ignore datasets)
 pb_files/*
 !pb_files/README.md
 !pb_files/.gitkeep
+
+# Local environment overrides
+.env
