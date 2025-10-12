@@ -35,14 +35,14 @@
     <nav class="bg-slate-900 text-white px-4 py-4 relative flex items-center">
       <div class="flex-none w-0"></div>
       <div class="flex space-x-6 mx-auto relative z-10">
-        <a href="{{ url_for('main.home') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.home') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Search</a>
-        <a href="{{ url_for('main.format_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.format_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Data format</a>
-        <a href="{{ url_for('main.statistics_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.statistics_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Statistics</a>
-        <a href="{{ url_for('main.comments_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.comments_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Comments</a>
-        <a href="{{ url_for('main.tools_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.tools_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Tools</a>
-        <a href="{{ url_for('main.publications_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.publications_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Publications</a>
-        <a href="{{ url_for('main.about_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.about_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">About</a>
-        <a href="{{ url_for('main.contact_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.contact_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Contact</a>
+        <a href="{{ url_for('main.home') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-slate-700 text-white' if request.path == url_for('main.home') else 'text-slate-300 hover:bg-slate-600 hover:text-white' }}">Search</a>
+        <a href="{{ url_for('main.format_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-slate-700 text-white' if request.path == url_for('main.format_page') else 'text-slate-300 hover:bg-slate-600 hover:text-white' }}">Data format</a>
+        <a href="{{ url_for('main.statistics_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-slate-700 text-white' if request.path == url_for('main.statistics_page') else 'text-slate-300 hover:bg-slate-600 hover:text-white' }}">Statistics</a>
+        <a href="{{ url_for('main.comments_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-slate-700 text-white' if request.path == url_for('main.comments_page') else 'text-slate-300 hover:bg-slate-600 hover:text-white' }}">Comments</a>
+        <a href="{{ url_for('main.tools_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-slate-700 text-white' if request.path == url_for('main.tools_page') else 'text-slate-300 hover:bg-slate-600 hover:text-white' }}">Tools</a>
+        <a href="{{ url_for('main.publications_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-slate-700 text-white' if request.path == url_for('main.publications_page') else 'text-slate-300 hover:bg-slate-600 hover:text-white' }}">Publications</a>
+        <a href="{{ url_for('main.about_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-slate-700 text-white' if request.path == url_for('main.about_page') else 'text-slate-300 hover:bg-slate-600 hover:text-white' }}">About</a>
+        <a href="{{ url_for('main.contact_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-slate-700 text-white' if request.path == url_for('main.contact_page') else 'text-slate-300 hover:bg-slate-600 hover:text-white' }}">Contact</a>
       </div>
     </nav>
     <div class="pt-0"></div>
