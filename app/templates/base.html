@@ -32,55 +32,20 @@
     {% block head %}{% endblock %}
   </head>
   <body class="{% block bodyClass %} bg-slate-50{% endblock %}">
-    <nav class="bg-slate-900 text-white fixed top-0 w-full z-50 shadow-xl">
-      <div class="max-w-7xl mx-auto px-8">
-        <div class="flex items-center h-20 relative">
-          <!-- Left nav links -->
-          <div class="flex items-center flex-1 justify-end pr-24">
-            <div class="hidden lg:flex lg:items-center lg:space-x-1">
-              <a href="{{ url_for('main.home') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.home') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Search</a>
-              <a href="{{ url_for('main.format_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.format_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Data format</a>
-              <a href="{{ url_for('main.statistics_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.statistics_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Statistics</a>
-              <a href="{{ url_for('main.comments_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.comments_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Comments</a>
-            </div>
-          </div>
-          <!-- Center: Pabulib logo -->
-          <div class="flex-shrink-0 flex items-center justify-center h-full">
-            <a href="{{ url_for('main.home') }}">
-              <span class="font-bold text-3xl"
-                    style="font-family: 'Dancing Script', cursive; font-size: 3rem; color: #3b82f6; letter-spacing: 0.05em;">
-                Pabulib
-              </span>
-            </a>
-          </div>
-          <!-- Right nav links -->
-          <div class="flex items-center flex-1 justify-start pl-24">
-            <div class="hidden lg:flex lg:items-center lg:space-x-1">
-              <a href="{{ url_for('main.tools_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.tools_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Tools</a>
-              <a href="{{ url_for('main.publications_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.publications_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Publications</a>
-              <a href="{{ url_for('main.about_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.about_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">About</a>
-              <a href="{{ url_for('main.contact_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.contact_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Contact</a>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Mobile navigation menu -->
-                  <!-- Mobile navigation menu (hidden by default) -->
-          <div id="mobile-menu" class="lg:hidden absolute top-full left-0 right-0 bg-slate-900 shadow-lg hidden">
-            <div class="px-4 py-3 space-y-1">
-              <a href="{{ url_for('main.home') }}" class="block px-3 py-2 rounded-md text-base font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.home') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Search</a>
-              <a href="{{ url_for('main.format_page') }}" class="block px-3 py-2 rounded-md text-base font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.format_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Data format</a>
-              <a href="{{ url_for('main.statistics_page') }}" class="block px-3 py-2 rounded-md text-base font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.statistics_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Statistics</a>
-              <a href="{{ url_for('main.comments_page') }}" class="block px-3 py-2 rounded-md text-base font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.comments_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Comments</a>
-              <a href="{{ url_for('main.tools_page') }}" class="block px-3 py-2 rounded-md text-base font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.tools_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Tools</a>
-              <a href="{{ url_for('main.publications_page') }}" class="block px-3 py-2 rounded-md text-base font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.publications_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Publications</a>
-              <a href="{{ url_for('main.about_page') }}" class="block px-3 py-2 rounded-md text-base font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.about_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">About</a>
-              <a href="{{ url_for('main.contact_page') }}" class="block px-3 py-2 rounded-md text-base font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.contact_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Contact</a>
-            </div>
-          </div>
+    <nav class="bg-slate-900 text-white px-4 py-4 relative flex items-center">
+      <div class="flex-none w-0"></div>
+      <div class="flex space-x-6 mx-auto relative z-10">
+        <a href="{{ url_for('main.home') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.home') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Search</a>
+        <a href="{{ url_for('main.format_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.format_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Data format</a>
+        <a href="{{ url_for('main.statistics_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.statistics_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Statistics</a>
+        <a href="{{ url_for('main.comments_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.comments_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Comments</a>
+        <a href="{{ url_for('main.tools_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.tools_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Tools</a>
+        <a href="{{ url_for('main.publications_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.publications_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Publications</a>
+        <a href="{{ url_for('main.about_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.about_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">About</a>
+        <a href="{{ url_for('main.contact_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-600 text-white' if request.path == url_for('main.contact_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Contact</a>
       </div>
     </nav>
-    <div class="pt-24"></div>
+    <div class="pt-4"></div>
     {% block body %}{% endblock %}
 
     <script>
