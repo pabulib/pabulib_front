@@ -92,30 +92,33 @@
     </style>
     <section class="max-w-4xl mx-auto px-4">
         <div class="flex justify-center">
-            <div class="w-full max-w-3xl bg-white rounded-lg shadow-lg p-8 mt-8 mb-32">
+            <div class="w-full max-w-4xl bg-white rounded-lg shadow-lg p-8 mt-8 mb-32">
                 <h1 class="text-3xl font-bold text-slate-800 mb-6">The <kbd>.pb</kbd> File Format</h1>
-                <p>The data concerning one instance of participatory budgeting is to be stored in a single UTF-8 text
-                    file with the extension&nbsp;<kbd>.pb</kbd>. The content of the file is to be divided into three
-                    sections:</p>
                 <ul>
-                    <li><strong>META</strong> section with general metadata like the country, budget, number of votes.
-                    </li>
-                    <li><strong>PROJECTS</strong> section with projects costs and possibly some other metadata regarding
-                        projects like category, target etc.
-                    </li>
-                    <li><strong>VOTES</strong> section with votes, that can be in one of the four types: approval,
-                        ordinal,
-                        cumulative, scoring; and optionally with metadata regarding voters like age, sex etc.
+                    <li>
+                        <p>The data concerning one instance of participatory budgeting is to be stored in a single UTF-8 text
+                        file with the extension&nbsp;<kbd>.pb</kbd>. The content of the file is to be divided into three
+                        sections:</p>
                     </li>
                 </ul>
-
-                <p align="justify">
-                Each section starts with a title line (one of <kbd>META</kbd>, <kbd>PROJECTS</kbd>, <kbd>VOTES</kbd>), 
-                followed by a column header line which is a semicolon-separated list of the names of the columns used 
-                in the section (for the META section this must be <kbd>key;value</kbd>, for the other sections it 
-                depends on which information is available), followed by several lines encoding the data.
-                </p>
-
+                <ul>
+                    <li><strong>META</strong> section with general metadata like the country, budget, number of votes.</li>
+                    <li><strong>PROJECTS</strong> section with projects costs and possibly some other metadata regarding
+                        projects like category, target etc.</li>
+                    <li><strong>VOTES</strong> section with votes, that can be in one of the four types: approval,
+                        ordinal,
+                        cumulative, scoring; and optionally with metadata regarding voters like age, sex etc.</li>
+                </ul>
+                <ul>
+                    <li>
+                        <p align="justify">
+                        Each section starts with a title line (one of <kbd>META</kbd>, <kbd>PROJECTS</kbd>, <kbd>VOTES</kbd>), 
+                        followed by a column header line which is a semicolon-separated list of the names of the columns used 
+                        in the section (for the META section this must be <kbd>key;value</kbd>, for the other sections it 
+                        depends on which information is available), followed by several lines encoding the data.
+                        </p>
+                    </li>
+                </ul>
 
 
                 <div class="space-y-4">
@@ -167,26 +170,27 @@ voter_id; age; sex; vote
                     </div>
                 </div>
 <br>
-                <p align="justify">
-                    Although this is not a single standard CSV file, the format behaves similarly. Each <kbd>.pb</kbd> 
-                    file consists of three sections (meta, projects, and votes), each structured like a separate CSV 
-                    table — with different numbers of columns per section. Because of this structure, the format follows 
-                    standard CSV conventions, meaning that special characters are properly escaped using double quotes.
-                    <br><br>
-                    Values are separated by a semicolon (<kbd>;</kbd>). If a field contains a semicolon, it is enclosed 
-                    in double quotes (<kbd>"</kbd>). Double quotes inside a field are escaped by doubling them (<kbd>""</kbd>). 
-                    Fields that do not contain special characters (like <kbd>;</kbd> or <kbd>"</kbd>) are left unquoted.
-
-                    <br><br>For example, in the <kbd>poland_wroclaw_2017_.pb</kbd> file:
-                    <br>
-
-                    <code>
-                        <br><span class="code-num">18</span>;<span class="code-num">1000000</span>;<span class="code-num">8640</span>;<span class="code-string"><strong>Rowerowy Wrocław 2017</strong></span>;<span class="code-num">category</span>
-                        <br><span class="code-num">50</span>;<span class="code-num">1000000</span>;<span class="code-num">10796</span>;<span class="code-string"><strong>"Zielona rowerowo-piesza obwodnica Wrocławia; ETAP II"</strong></span>;<span class="code-num">category</span>
-                        <br><span class="code-num">499</span>;<span class="code-num">1000000</span>;<span class="code-num">3949</span>;<span class="code-string"><strong>"""Konikowo"" - Budowa autorskiego placu zabaw"</strong></span>;<span class="code-num">category</span>
-                    </code>
-
-                </p>
+                <ul>
+                    <li>
+                        <p align="justify">
+                            Although this is not a single standard CSV file, the format behaves similarly. Each <kbd>.pb</kbd> 
+                            file consists of three sections (meta, projects, and votes), each structured like a separate CSV 
+                            table — with different numbers of columns per section. Because of this structure, the format follows 
+                            standard CSV conventions, meaning that special characters are properly escaped using double quotes.
+                            <br><br>
+                            Values are separated by a semicolon (<kbd>;</kbd>). If a field contains a semicolon, it is enclosed 
+                            in double quotes (<kbd>"</kbd>). Double quotes inside a field are escaped by doubling them (<kbd>""</kbd>). 
+                            Fields that do not contain special characters (like <kbd>;</kbd> or <kbd>"</kbd>) are left unquoted.
+                            <br><br>For example, in the <kbd>poland_wroclaw_2017_.pb</kbd> file:
+                            <br>
+                            <code>
+                                <br><span class="code-num">18</span>;<span class="code-num">1000000</span>;<span class="code-num">8640</span>;<span class="code-string"><strong>Rowerowy Wrocław 2017</strong></span>;<span class="code-num">category</span>
+                                <br><span class="code-num">50</span>;<span class="code-num">1000000</span>;<span class="code-num">10796</span>;<span class="code-string"><strong>"Zielona rowerowo-piesza obwodnica Wrocławia; ETAP II"</strong></span>;<span class="code-num">category</span>
+                                <br><span class="code-num">499</span>;<span class="code-num">1000000</span>;<span class="code-num">3949</span>;<span class="code-string"><strong>"""Konikowo"" - Budowa autorskiego placu zabaw"</strong></span>;<span class="code-num">category</span>
+                            </code>
+                        </p>
+                    </li>
+                </ul>
 
                 <h2 class="text-2xl font-bold text-slate-800 mb-3 mt-8">Detailed Description</h2>
 
@@ -194,8 +198,11 @@ voter_id; age; sex; vote
 
 
 <section>
-    <p class="my-3">The <code class="required header">red</code> part is obligatory.</p>
-
+    <ul>
+        <li>
+            <p class="my-3">The <code class="required header">red</code> part is obligatory.</p>
+        </li>
+    </ul>
     <div class="space-y-4">
         <div class="border border-gray-200 rounded-lg overflow-hidden">
             <h2>
@@ -238,13 +245,17 @@ voter_id; age; sex; vote
         </div>
 
         <div class="mt-8 p-4 bg-gray-50 rounded-lg border-l-4 border-blue-500">
-            <p class="text-sm text-gray-700 italic">
-                <strong>Note:</strong> We use integers instead of booleans for flag values (such as 1 and 0) 
-                as this approach provides more flexibility. For example, a project can be either selected (1) 
-                or not (0). But there are cases where a project is selected for another reason, such as 
-                an error made by the company conducting the voting process. 
-                In such cases, we can assign a special value, like 2, and explain it in a comment.
-            </p>
+            <ul>
+                <li>
+                    <p class="text-sm text-gray-700 italic">
+                        <strong>Note:</strong> We use integers instead of booleans for flag values (such as 1 and 0) 
+                        as this approach provides more flexibility. For example, a project can be either selected (1) 
+                        or not (0). But there are cases where a project is selected for another reason, such as 
+                        an error made by the company conducting the voting process. 
+                        In such cases, we can assign a special value, like 2, and explain it in a comment.
+                    </p>
+                </li>
+            </ul>
         </div>
 
                 <!-- Close the main containers -->
@@ -748,23 +759,44 @@ voter_id; age; sex; vote
         }
     ];
 
-   const renderFields = (fields, containerId) => {
+    // Helper to determine if an option should be indented
+    function shouldIndentOption(field, idx, option) {
+        // Indent all options for conditional sections
+        if (field.field_name.startsWith('if ')) return true;
+        // Indent all except the first for "other, non-standard fields:"
+        if (field.field_name === "other, non-standard fields:" && idx > 0) return true;
+        // Indent topic_preference_transport and min_project_cost for "other, non-standard fields:"
+        if (field.field_name === "other, non-standard fields:" && 
+            (option.value === "topic_preference_transport" || option.value === "min_project_cost")) return true;
+        return false;
+    }
+
+    // Helper to determine option color class
+    function getOptionClass(field, option) {
+        // For conditional sections, color vote_type and max_sum_points as required (red)
+        if (field.field_name.startsWith('if ') && option.value.includes('vote_type')) return 'required header';
+        if (field.field_name.startsWith('if ') && option.value.replace(/<[^>]+>/g, '') === 'max_sum_points') return 'required header';
+        // Otherwise, use optional (green)
+        return 'optional header';
+    }
+
+    const renderFields = (fields, containerId) => {
         const container = document.getElementById(containerId);
         fields.forEach(field => {
             const fieldItem = document.createElement('li');
+            // Special case: force 'vote_type' to use 'required header' (red)
+            let fieldClass = field.if_obligatory ? 'required header' : 'optional header';
+            if (field.field_name === 'vote_type') fieldClass = 'required header';
             fieldItem.innerHTML = `
-                <code class="${field.if_obligatory ? 'required header' : 'optional header'}">${field.field_name}</code>
-                
+                <code class="${fieldClass}">${field.field_name}</code>
                 ${field.datatype ? `<em>(${field.datatype})</em>` : ''}${field.description ? ` &ndash; ${field.description}` : ''}
-
                 <ul>
-
-                    ${field.options ? `<ul>${field.options.map(option => 
-                        `<li><code class='optional header'>${option.value}</code>${option.description ? ` &ndash; ${option.description}` : ''}</li>`
-                    ).join('')}</ul>` : ''}
-
+                    ${field.options ? `<ul>${field.options.map((option, idx) => {
+                        const indent = shouldIndentOption(field, idx, option) ? " style='margin-left:2em;'" : "";
+                        const optionClass = getOptionClass(field, option);
+                        return `<li${indent}><code class='${optionClass}'>${option.value}</code>${option.description ? ` &ndash; ${option.description}` : ''}</li>`;
+                    }).join('')}</ul>` : ''}
                     ${field.additional_info ? `<div style="margin-left: 1em;"><ul>${field.additional_info.map(info => `<li>${info}</li>`).join('')}</ul></div>` : ''}
-                    
                     ${Array.isArray(field.example) 
                     ? `<div style="margin-left: 1em;"><em>e.g.:</em> ${field.example.map((example, index) => 
                         `<kbd>${example}</kbd>${index < field.example.length - 1 ? ' or ' : ''}`
