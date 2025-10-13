@@ -17,6 +17,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Create pb_files directories that will be mounted from host
+RUN mkdir -p /app/pb_files /app/pb_files_depreciated && \
+    chmod 755 /app/pb_files /app/pb_files_depreciated
+
 EXPOSE 5050
 
 RUN chmod +x scripts/entrypoint.sh

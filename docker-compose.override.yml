@@ -1,5 +1,3 @@
-version: "3.9"
-
 # This override is used automatically by `docker compose up` for local development.
 # It bind-mounts source code so changes are reflected immediately without rebuilds
 # and enables Flask debug/reloader.

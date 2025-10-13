@@ -13,6 +13,13 @@ LOG_DIR="/home/pabulib/logs"
 BACKUP_DIR="/home/pabulib/backups"
 COMPOSE_PROJECT_NAME="pabulib"
 
+# Load environment variables
+if [ -f "$PROJECT_DIR/.env" ]; then
+    set -a  # automatically export all variables
+    source "$PROJECT_DIR/.env"
+    set +a  # disable automatic export
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -42,11 +49,12 @@ setup_directories() {
     log "Setting up directories..."
     mkdir -p "$LOG_DIR"
     mkdir -p "$BACKUP_DIR"
-    mkdir -p "/home/pabulib/pb_files"
-    mkdir -p "/home/pabulib/pb_files_depreciated"
+    mkdir -p "$PROJECT_DIR/pb_files"
+    mkdir -p "$PROJECT_DIR/pb_files_depreciated"
     
     # Set proper permissions
     chmod 755 "$LOG_DIR" "$BACKUP_DIR"
+    chmod 755 "$PROJECT_DIR/pb_files" "$PROJECT_DIR/pb_files_depreciated"
     success "Directories created successfully"
 }
 
@@ -59,7 +67,7 @@ check_prerequisites() {
         exit 1
     fi
     
-    if ! command -v docker-compose &> /dev/null; then
+    if ! command -v sudo docker compose &> /dev/null; then
         error "Docker Compose is not installed or not in PATH"
         exit 1
     fi
@@ -79,13 +87,13 @@ check_prerequisites() {
 
 # Backup current deployment (if exists)
 backup_deployment() {
-    if docker-compose -f "$PROJECT_DIR/docker-compose.yml" -f "$PROJECT_DIR/docker-compose.prod.yml" -p "$COMPOSE_PROJECT_NAME" ps -q &> /dev/null; then
+    if sudo docker compose -f "$PROJECT_DIR/docker-compose.yml" -f "$PROJECT_DIR/docker-compose.prod.yml" -p "$COMPOSE_PROJECT_NAME" ps -q &> /dev/null; then
         log "Creating backup of current deployment..."
         
         BACKUP_FILE="$BACKUP_DIR/deployment_backup_$(date +'%Y%m%d_%H%M%S').tar.gz"
         
-        # Export database
-        docker-compose -f "$PROJECT_DIR/docker-compose.yml" -f "$PROJECT_DIR/docker-compose.prod.yml" -p "$COMPOSE_PROJECT_NAME" exec -T db mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" --all-databases > "$BACKUP_DIR/db_backup_$(date +'%Y%m%d_%H%M%S').sql" 2>/dev/null || warning "Database backup failed"
+        # Export database using application user credentials
+        sudo docker compose -f "$PROJECT_DIR/docker-compose.yml" -f "$PROJECT_DIR/docker-compose.prod.yml" -p "$COMPOSE_PROJECT_NAME" exec -T db sh -c "MYSQL_PWD=\"$MYSQL_PASSWORD\" mysqldump -u \"$MYSQL_USER\" --databases \"$MYSQL_DATABASE\"" > "$BACKUP_DIR/db_backup_$(date +'%Y%m%d_%H%M%S').sql" 2>/dev/null || warning "Database backup failed"
         
         # Backup pb_files
         tar -czf "$BACKUP_FILE" -C "/home/pabulib" pb_files pb_files_depreciated 2>/dev/null || warning "Files backup failed"
@@ -101,7 +109,7 @@ stop_services() {
     cd "$PROJECT_DIR"
     
     # Stop with both compose files to ensure everything stops
-    docker-compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" down --remove-orphans 2>/dev/null || true
+    sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" down --remove-orphans 2>/dev/null || true
     
     success "Services stopped"
 }
@@ -113,10 +121,10 @@ update_images() {
     cd "$PROJECT_DIR"
     
     # Pull latest base images
-    docker-compose -f docker-compose.yml -f docker-compose.prod.yml pull 2>&1 | tee -a "$LOG_DIR/deploy_$(date +'%Y%m%d').log"
+    sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml pull 2>&1 | tee -a "$LOG_DIR/deploy_$(date +'%Y%m%d').log"
     
     # Build application image
-    docker-compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache web 2>&1 | tee -a "$LOG_DIR/deploy_$(date +'%Y%m%d').log"
+    sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache web 2>&1 | tee -a "$LOG_DIR/deploy_$(date +'%Y%m%d').log"
     
     success "Images updated successfully"
 }
@@ -128,19 +136,19 @@ start_services() {
     cd "$PROJECT_DIR"
     
     # Start services in production mode
-    docker-compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" up -d 2>&1 | tee -a "$LOG_DIR/deploy_$(date +'%Y%m%d').log"
+    sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" up -d 2>&1 | tee -a "$LOG_DIR/deploy_$(date +'%Y%m%d').log"
     
     # Wait for services to be ready
     log "Waiting for services to be ready..."
     sleep 10
     
     # Check if services are running
-    if docker-compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" ps | grep -q "Up"; then
+    if sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" ps | grep -q "Up"; then
         success "Services started successfully"
         
         # Show running services
         log "Running services:"
-        docker-compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" ps
+        sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" ps
         
         # Test HTTP redirect
         log "Testing HTTP to HTTPS redirect..."
@@ -152,7 +160,7 @@ start_services() {
         
     else
         error "Some services failed to start"
-        docker-compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" ps
+        sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" ps
         exit 1
     fi
 }
@@ -161,14 +169,14 @@ start_services() {
 show_logs() {
     log "Showing recent logs..."
     cd "$PROJECT_DIR"
-    docker-compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" logs --tail=50
+    sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" logs --tail=50
 }
 
 # Monitor function
 monitor() {
     log "Monitoring services (Ctrl+C to stop)..."
     cd "$PROJECT_DIR"
-    docker-compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" logs -f
+    sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" logs -f
 }
 
 # Cleanup old logs and backups
@@ -218,7 +226,7 @@ deploy() {
 status() {
     log "📊 Service Status:"
     cd "$PROJECT_DIR"
-    docker-compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" ps
+    sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" ps
     
     log ""
     log "🌐 Port Status:"

@@ -55,6 +55,12 @@ if [ "$GRACE" -gt 0 ]; then
 fi
 
 echo "Running database refresh..."
+echo "[DEBUG] PB files directory check:"
+ls -la /app/pb_files/ 2>/dev/null || echo "[DEBUG] /app/pb_files/ not accessible"
+echo "[DEBUG] Current working directory: $(pwd)"
+echo "[DEBUG] Python path check:"
+python -c "from app.utils.pb_utils import pb_folder; print(f'pb_folder() returns: {pb_folder()}')" 2>/dev/null || echo "[DEBUG] pb_folder() check failed"
+
 if [ "${REFRESH_FULL:-0}" = "1" ]; then
   echo "[REFRESH] Mode: full (--full)"
   python -m scripts.db_refresh --full || echo "Refresh failed (continuing to start app)"

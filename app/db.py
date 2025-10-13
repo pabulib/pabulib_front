@@ -19,8 +19,8 @@ def _build_database_url() -> str:
     host = os.environ.get("MYSQL_HOST", "db")
     port = os.environ.get("MYSQL_PORT", "3306")
     dbname = os.environ.get("MYSQL_DATABASE", "pabulib")
-    # Use PyMySQL driver for pure-Python MySQL connectivity
-    return f"mysql+pymysql://{user}:{password}@{host}:{port}/{dbname}"
+    # Use PyMySQL driver for pure-Python MySQL connectivity with UTF-8 charset
+    return f"mysql+pymysql://{user}:{password}@{host}:{port}/{dbname}?charset=utf8mb4"
 
 
 DATABASE_URL = _build_database_url()

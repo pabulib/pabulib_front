@@ -1,5 +1,3 @@
-version: "3.9"
-
 # Production override for docker-compose.yml
 # This file should be used on the server with: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
 
@@ -16,9 +14,9 @@ services:
       # Mount SSL certificates from Let's Encrypt
       - /etc/letsencrypt:/etc/letsencrypt:ro
       # Host path for PB files -> container path used by the app
-      - ${PB_FILES_DIR:-/home/pabulib/pb_files}:/app/pb_files
+      - ${PB_FILES_DIR:-./pb_files}:/app/pb_files
       # Archive (depreciated) files folder
-      - ${PB_FILES_DEPRECIATED_DIR:-/home/pabulib/pb_files_depreciated}:/app/pb_files_depreciated
+      - ${PB_FILES_DEPRECIATED_DIR:-./pb_files_depreciated}:/app/pb_files_depreciated
     restart: unless-stopped
     
   db:
