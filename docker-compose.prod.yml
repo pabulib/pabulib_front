@@ -1,0 +1,34 @@
+version: "3.9"
+
+# Production override for docker-compose.yml
+# This file should be used on the server with: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
+
+services:
+  web:
+    environment:
+      ENVIRONMENT: production
+      FLASK_DEBUG: 0
+    ports:
+      # Map both HTTP and HTTPS ports for production
+      - "80:80"     # HTTP redirect server
+      - "443:443"   # HTTPS main server
+    volumes:
+      # Mount SSL certificates from Let's Encrypt
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Host path for PB files -> container path used by the app
+      - ${PB_FILES_DIR:-/home/pabulib/pb_files}:/app/pb_files
+      # Archive (depreciated) files folder
+      - ${PB_FILES_DEPRECIATED_DIR:-/home/pabulib/pb_files_depreciated}:/app/pb_files_depreciated
+    restart: unless-stopped
+    
+  db:
+    restart: unless-stopped
+    volumes:
+      - db_data:/var/lib/mysql
+      # Optional: backup location
+      # - /home/pabulib/mysql_backups:/backups
+
+  # Remove adminer in production for security
+  adminer:
+    profiles:
+      - debug  # Only start with --profile debug

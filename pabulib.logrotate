@@ -1,0 +1,18 @@
+# Logrotate configuration for Pabulib
+# Place this file at: /etc/logrotate.d/pabulib
+
+/home/pabulib/logs/*.log {
+    daily
+    missingok
+    rotate 30
+    compress
+    delaycompress
+    notifempty
+    create 644 pabulib pabulib
+    copytruncate
+    
+    postrotate
+        # Restart Docker Compose to refresh log files
+        /bin/systemctl reload-or-restart pabulib.service > /dev/null 2>&1 || true
+    endscript
+}

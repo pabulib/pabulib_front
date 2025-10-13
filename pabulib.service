@@ -1,0 +1,43 @@
+[Unit]
+Description=Pabulib Flask Application
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=pabulib
+Group=pabulib
+WorkingDirectory=/home/pabulib/flask_app
+
+# Environment
+Environment=COMPOSE_PROJECT_NAME=pabulib
+
+# Start command
+ExecStart=/home/pabulib/deploy.sh deploy
+
+# Stop command
+ExecStop=/bin/bash -c 'cd /home/pabulib/flask_app && docker-compose -f docker-compose.yml -f docker-compose.prod.yml -p pabulib down'
+
+# Reload command (for log rotation)
+ExecReload=/bin/bash -c 'cd /home/pabulib/flask_app && docker-compose -f docker-compose.yml -f docker-compose.prod.yml -p pabulib restart'
+
+# Restart policy
+Restart=on-failure
+RestartSec=10s
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pabulib
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pabulib
+
+[Install]
+WantedBy=multi-user.target
