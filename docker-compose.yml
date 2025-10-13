@@ -1,6 +1,7 @@
 services:
   db:
-    image: mysql:5.7
+    image: mysql:8.0
+    platform: linux/amd64  # Force x86_64 for consistent behavior across environments
     env_file:
       - .env
     environment:
@@ -21,6 +22,7 @@ services:
 
   adminer:
     image: adminer:4
+    platform: linux/amd64  # Force x86_64 for consistent behavior
     depends_on:
       db:
         condition: service_healthy
