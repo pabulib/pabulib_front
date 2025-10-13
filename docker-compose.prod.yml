@@ -13,6 +13,11 @@ services:
     volumes:
       # Mount SSL certificates from Let's Encrypt
       - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Mount application code for live updates
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+      - ./requirements.txt:/app/requirements.txt
+      - ./run.py:/app/run.py
       # Host path for PB files -> container path used by the app
       - ${PB_FILES_DIR:-./pb_files}:/app/pb_files
       # Archive (depreciated) files folder
