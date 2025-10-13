@@ -2,6 +2,16 @@
 # It bind-mounts source code so changes are reflected immediately without rebuilds
 # and enables Flask debug/reloader.
 services:
+  # Use MySQL 8.0 for local development (ARM64 compatible)
+  # while keeping MySQL 5.7 in the main compose for server compatibility
+  db:
+    image: mysql:8.0
+    platform: linux/arm64  # Use native ARM64 on Apple Silicon
+    
+  # Use ARM64 version of Adminer for local development
+  adminer:
+    platform: linux/arm64
+    
   web:
     environment:
       FLASK_DEBUG: 1
