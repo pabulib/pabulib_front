@@ -161,17 +161,32 @@
     return $$('.tile').filter(t => !t.hidden && t.style.display !== 'none').map(t => t.querySelector('.row-check'));
   }
 
+  function allFilteredRowChecks(){
+    return $$('.tile').filter(t => !t.hidden).map(t => t.querySelector('.row-check'));
+  }
+
   function updateChecks(){
-    const checks = visibleRowChecks();
-    const anyChecked = checks.some(ch => ch.checked);
-    const allChecked = checks.length > 0 && checks.every(ch => ch.checked);
+    const visibleChecks = visibleRowChecks();
+    const allFilteredChecks = allFilteredRowChecks();
+    const anyChecked = allFilteredChecks.some(ch => ch.checked);
+    const allChecked = allFilteredChecks.length > 0 && allFilteredChecks.every(ch => ch.checked);
+    const selectedCount = allFilteredChecks.filter(ch => ch.checked).length;
+    
+    // Update download button text to show number of selected files
+    if (selectedCount === 0) {
+      downloadBtn.textContent = 'Download selected';
+    } else {
+      downloadBtn.textContent = `Download ${selectedCount} selected file${selectedCount === 1 ? '' : 's'}`;
+    }
+    
     downloadBtn.disabled = !anyChecked;
+    selectAll.checked = allChecked;
     selectAll.indeterminate = anyChecked && !allChecked;
-    if(checks.length){ selectAll.disabled = false; } else { selectAll.disabled = true; selectAll.checked = false; selectAll.indeterminate = false; }
+    if(allFilteredChecks.length){ selectAll.disabled = false; } else { selectAll.disabled = true; selectAll.checked = false; selectAll.indeterminate = false; }
   }
 
   selectAll.addEventListener('change', () => {
-    const checks = visibleRowChecks();
+    const checks = allFilteredRowChecks();
     checks.forEach(ch => ch.checked = selectAll.checked);
     updateChecks();
   });
@@ -187,6 +202,21 @@
     prev.forEach(p => p.remove());
     const selected = $$('.row-check:checked');
     if(!selected.length){ e.preventDefault(); return; }
+    
+    // Check if this is a "select all" scenario
+    const allFilteredChecks = allFilteredRowChecks();
+    const allFilteredSelected = allFilteredChecks.length > 0 && allFilteredChecks.every(ch => ch.checked);
+    const selectAllChecked = selectAll.checked;
+    
+    // If select all is checked and all filtered are selected, it's a select all scenario
+    if (selectAllChecked && allFilteredSelected) {
+      const selectAllInput = document.createElement('input');
+      selectAllInput.type = 'hidden';
+      selectAllInput.name = 'select_all';
+      selectAllInput.value = 'true';
+      form.appendChild(selectAllInput);
+    }
+    
     selected.forEach(ch => {
       const inp = document.createElement('input');
       inp.type = 'hidden';

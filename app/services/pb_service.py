@@ -295,7 +295,7 @@ def aggregate_statistics_cached() -> Tuple[Dict[str, Any], Dict[str, Any]]:
                 )
             )
         pb_files: List[PBFile] = q.filter(PBFile.is_current == True).all()  # noqa: E712
-        
+
         # Process data while still within the session context
         total_files = len(pb_files)
         countries = set()
@@ -341,7 +341,9 @@ def aggregate_statistics_cached() -> Tuple[Dict[str, Any], Dict[str, Any]]:
             if country:
                 votes_by_country[country] = votes_by_country.get(country, 0) + num_votes
                 if isinstance(budget, int):
-                    budget_by_country[country] = budget_by_country.get(country, 0) + budget
+                    budget_by_country[country] = (
+                        budget_by_country.get(country, 0) + budget
+                    )
                     by_cur = budget_by_country_by_currency.setdefault(currency, {})
                     by_cur[country] = by_cur.get(country, 0) + budget
             vote_types[vtype] = vote_types.get(vtype, 0) + 1
@@ -435,6 +437,30 @@ def debug_db_overview() -> Dict[str, Any]:
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+def get_all_current_file_paths() -> List[Tuple[str, Path]]:
+    """Return a list of (filename, path) tuples for all current PB files.
+    Only includes files where is_current=True and the path exists on disk.
+    """
+    try:
+        with get_session() as s:
+            rows = (
+                s.query(PBFile.file_name, PBFile.path)
+                .filter(PBFile.is_current == True)  # noqa: E712
+                .order_by(PBFile.file_name)
+                .all()
+            )
+
+            result = []
+            for file_name, path_str in rows:
+                if path_str:
+                    path = Path(path_str)
+                    if path.exists() and path.is_file():
+                        result.append((file_name, path))
+            return result
+    except Exception:
+        return []
 
 
 def get_current_file_path(filename: str) -> Optional[Path]:

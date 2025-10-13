@@ -1,0 +1,2 @@
+# This file ensures the cache directory is tracked by git
+# The cache directory is used to store generated zip files for faster downloads

@@ -6,11 +6,13 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from flask import Blueprint, Response, abort, render_template, request, send_file
 
+from .db import get_session
+from .models import PBFile
 from .services.pb_service import aggregate_comments_cached as _aggregate_comments_cached
 from .services.pb_service import (
     aggregate_statistics_cached as _aggregate_statistics_cached,
 )
-from .services.pb_service import get_current_file_path
+from .services.pb_service import get_all_current_file_paths, get_current_file_path
 from .services.pb_service import get_tiles_cached as _get_tiles_cached
 from .utils.file_helpers import is_safe_filename as _is_safe_filename
 from .utils.formatting import format_int as _format_int
@@ -57,7 +59,11 @@ def publications_page():
                 title = entry.get("title", "")
                 url = entry.get("url", "")
                 # Split authors only by " and "
-                authors_list = [a for a in authors_raw.replace("\n", " ").split(" and ") if a.strip()]
+                authors_list = [
+                    a
+                    for a in authors_raw.replace("\n", " ").split(" and ")
+                    if a.strip()
+                ]
                 authors = []
                 for author in authors_list:
                     print("author", author)
@@ -72,12 +78,9 @@ def publications_page():
                         authors.append(parts[0])
                 print("->", authors)
                 authors_str = ", ".join(authors)
-                publications.append({
-                    "authors": authors_str,
-                    "year": year,
-                    "title": title,
-                    "url": url
-                })
+                publications.append(
+                    {"authors": authors_str, "year": year, "title": title, "url": url}
+                )
     return render_template("publications.html", publications=publications)
 
 
@@ -151,8 +154,54 @@ def download(filename: str):
 @bp.post("/download-selected")
 def download_selected():
     names = request.form.getlist("files")
+    select_all = request.form.get("select_all") == "true"
+
     if not names:
         abort(400, description="No files selected")
+
+    # Get total count of current files to compare with selected count
+    with get_session() as s:
+        total_current_files = s.query(PBFile).filter(PBFile.is_current == True).count()
+
+    # Check if user selected ALL current files (not just clicked select all after filtering)
+    selected_all_current = len(names) == total_current_files and select_all
+
+    if selected_all_current:
+        # User selected ALL current files - try to use cached all_pb_files.zip
+        cache_dir = Path(__file__).parent.parent / "cache"
+        cache_dir.mkdir(exist_ok=True)  # Create cache directory if it doesn't exist
+        cache_path = cache_dir / "all_pb_files.zip"
+
+        all_file_pairs = get_all_current_file_paths()
+        if not all_file_pairs:
+            abort(404, description="No current files found")
+
+        # Check if cache is valid (exists and is newer than all source files)
+        cache_valid = False
+        if cache_path.exists() and cache_path.is_file():
+            cache_mtime = cache_path.stat().st_mtime
+            cache_valid = all(
+                cache_mtime >= path.stat().st_mtime for _, path in all_file_pairs
+            )
+
+        if cache_valid:
+            # Return the cached zip file
+            return send_file(
+                cache_path, as_attachment=True, download_name="all_pb_files.zip"
+            )
+        else:
+            # Create new zip file
+            with zipfile.ZipFile(
+                cache_path, mode="w", compression=zipfile.ZIP_DEFLATED
+            ) as zf:
+                for file_name, file_path in all_file_pairs:
+                    zf.write(file_path, arcname=file_name)
+
+            return send_file(
+                cache_path, as_attachment=True, download_name="all_pb_files.zip"
+            )
+
+    # Original logic for individual file selection
     files = []
     for name in names:
         # basic safety: no directory traversal and must be .pb
@@ -368,7 +417,9 @@ def visualize_file(filename: str):
             if "," in vote_list:
                 # Multiple projects separated by commas
                 voted_projects = [
-                    pid.strip() for pid in vote_list.split(",") if pid.strip() and pid.strip() != ""
+                    pid.strip()
+                    for pid in vote_list.split(",")
+                    if pid.strip() and pid.strip() != ""
                 ]
             else:
                 # Single project ID (no comma) - could be a number or string
@@ -377,13 +428,15 @@ def visualize_file(filename: str):
                     voted_projects = [single_project]
         elif isinstance(vote_list, list) and vote_list:
             # Handle case where vote is already a list (from load_pb_file.py)
-            voted_projects = [str(pid).strip() for pid in vote_list if pid and str(pid).strip()]
-        
+            voted_projects = [
+                str(pid).strip() for pid in vote_list if pid and str(pid).strip()
+            ]
+
         # Only process if we have valid projects
         if voted_projects:
             vote_length = len(voted_projects)
             vote_lengths.append(vote_length)
-            
+
             for pid in voted_projects:
                 pid_str = str(pid).strip()
                 if pid_str:  # Ensure we have a non-empty project ID
@@ -392,8 +445,12 @@ def visualize_file(filename: str):
                     )
         else:
             # Debug: Log when we can't extract voted projects from a vote
-            if vote_list is not None:  # Only log if we found a vote column but couldn't parse it
-                print(f"DEBUG: Could not parse voted projects from vote {vote_id}: '{vote_list}' (type: {type(vote_list)})")
+            if (
+                vote_list is not None
+            ):  # Only log if we found a vote column but couldn't parse it
+                print(
+                    f"DEBUG: Could not parse voted projects from vote {vote_id}: '{vote_list}' (type: {type(vote_list)})"
+                )
 
     # removed debug prints
 
@@ -421,14 +478,18 @@ def visualize_file(filename: str):
     vote_length_counts = {}
     for length in vote_lengths:
         vote_length_counts[length] = vote_length_counts.get(length, 0) + 1
-    
+
     vote_length_counts = dict(sorted(vote_length_counts.items()))
     # Debug: Log the vote length distribution we found
     if vote_length_counts:
-        print(f"DEBUG: Vote length distribution: {dict(sorted(vote_length_counts.items()))}")
+        print(
+            f"DEBUG: Vote length distribution: {dict(sorted(vote_length_counts.items()))}"
+        )
         single_votes = vote_length_counts.get(1, 0)
         total_votes = sum(vote_length_counts.values())
-        print(f"DEBUG: Single-project votes: {single_votes}/{total_votes} ({single_votes/total_votes*100:.1f}%)")
+        print(
+            f"DEBUG: Single-project votes: {single_votes}/{total_votes} ({single_votes/total_votes*100:.1f}%)"
+        )
 
     vote_length_data = None
     if vote_length_counts:
@@ -439,18 +500,27 @@ def visualize_file(filename: str):
         }
     else:
         # Add debugging information when no vote length data is available
-        print(f"DEBUG: No vote length data - total votes: {len(votes)}, vote_lengths: {len(vote_lengths)}")
+        print(
+            f"DEBUG: No vote length data - total votes: {len(votes)}, vote_lengths: {len(vote_lengths)}"
+        )
         # Check a few sample votes for debugging
         if votes:
             sample_votes = list(votes.items())[:3]
             for vote_id, vote_data in sample_votes:
                 print(f"DEBUG: Sample vote {vote_id}: {vote_data}")
                 # Check all possible vote columns
-                for possible_vote_key in ["vote", "votes", "projects", "selected_projects"]:
+                for possible_vote_key in [
+                    "vote",
+                    "votes",
+                    "projects",
+                    "selected_projects",
+                ]:
                     if possible_vote_key in vote_data:
                         vote_value = vote_data[possible_vote_key]
-                        print(f"DEBUG: Found {possible_vote_key}: '{vote_value}' (type: {type(vote_value)})")
-            
+                        print(
+                            f"DEBUG: Found {possible_vote_key}: '{vote_value}' (type: {type(vote_value)})"
+                        )
+
             # Also check what columns are available in votes
             if votes:
                 first_vote = next(iter(votes.values()))
