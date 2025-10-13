@@ -35,26 +35,26 @@ mkdir -p /home/pabulib/{logs,backups,pb_files,pb_files_depreciated}
 log "Setting up deployment files..."
 
 # Make deploy script executable
-chmod +x /home/pabulib/flask_app/deploy.sh
+chmod +x /home/pabulib/pabulib_front/deploy.sh
 
 # Create symlink for easy access
-ln -sf /home/pabulib/flask_app/deploy.sh /home/pabulib/deploy.sh
+ln -sf /home/pabulib/pabulib_front/deploy.sh /home/pabulib/deploy.sh
 
 # Setup environment file
-if [ ! -f /home/pabulib/flask_app/.env ]; then
+if [ ! -f /home/pabulib/pabulib_front/.env ]; then
     log "Creating .env file from template..."
-    cp /home/pabulib/flask_app/.env.production.example /home/pabulib/flask_app/.env
+    cp /home/pabulib/pabulib_front/.env.production.example /home/pabulib/pabulib_front/.env
     
     echo -e "${YELLOW}"
     cat << 'EOF'
-⚠️  IMPORTANT: Please edit /home/pabulib/flask_app/.env file with your production values:
+⚠️  IMPORTANT: Please edit /home/pabulib/pabulib_front/.env file with your production values:
 
    • SECRET_KEY=your-production-secret-key
    • ADMIN_PASSWORD=your-secure-password
    • MYSQL_ROOT_PASSWORD=your-root-password
    • MYSQL_PASSWORD=your-db-password
 
-Run: nano /home/pabulib/flask_app/.env
+Run: nano /home/pabulib/pabulib_front/.env
 EOF
     echo -e "${NC}"
 fi
@@ -63,13 +63,13 @@ fi
 log "Setting up systemd service..."
 echo "You may be prompted for sudo password to install systemd service:"
 
-sudo cp /home/pabulib/flask_app/pabulib.service /etc/systemd/system/
+sudo cp /home/pabulib/pabulib_front/pabulib.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable pabulib.service
 
 # Setup log rotation (requires sudo)
 log "Setting up log rotation..."
-sudo cp /home/pabulib/flask_app/pabulib.logrotate /etc/logrotate.d/pabulib
+sudo cp /home/pabulib/pabulib_front/pabulib.logrotate /etc/logrotate.d/pabulib
 
 # Set proper permissions
 sudo chown -R pabulib:pabulib /home/pabulib/
@@ -80,7 +80,7 @@ success "🎉 Setup completed successfully!"
 log ""
 log "📋 Next Steps:"
 log "1. Edit .env file with your production values:"
-log "   nano /home/pabulib/flask_app/.env"
+log "   nano /home/pabulib/pabulib_front/.env"
 log ""
 log "2. Deploy the application:"
 log "   /home/pabulib/deploy.sh"

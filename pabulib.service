@@ -9,19 +9,19 @@ Type=oneshot
 RemainAfterExit=yes
 User=pabulib
 Group=pabulib
-WorkingDirectory=/home/pabulib/flask_app
+WorkingDirectory=/home/pabulib/pabulib_front
 
 # Environment
 Environment=COMPOSE_PROJECT_NAME=pabulib
 
 # Start command
-ExecStart=/home/pabulib/deploy.sh deploy
+ExecStart=/home/pabulib/pabulib_front/deploy.sh deploy
 
 # Stop command
-ExecStop=/bin/bash -c 'cd /home/pabulib/flask_app && docker-compose -f docker-compose.yml -f docker-compose.prod.yml -p pabulib down'
+ExecStop=/bin/bash -c 'cd /home/pabulib/pabulib_front && docker-compose -f docker-compose.yml -f docker-compose.prod.yml -p pabulib down'
 
 # Reload command (for log rotation)
-ExecReload=/bin/bash -c 'cd /home/pabulib/flask_app && docker-compose -f docker-compose.yml -f docker-compose.prod.yml -p pabulib restart'
+ExecReload=/bin/bash -c 'cd /home/pabulib/pabulib_front && docker-compose -f docker-compose.yml -f docker-compose.prod.yml -p pabulib restart'
 
 # Restart policy
 Restart=on-failure

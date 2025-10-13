@@ -2,13 +2,13 @@
 
 ###########################################
 # Pabulib Production Deployment Script   #
-# Location: /home/pabulib/deploy.sh      #
+# Location: /home/pabulib/pabulib_front/ #
 ###########################################
 
 set -euo pipefail  # Exit on error, undefined vars, pipe failures
 
 # Configuration
-PROJECT_DIR="/home/pabulib/flask_app"
+PROJECT_DIR="/home/pabulib/pabulib_front"
 LOG_DIR="/home/pabulib/logs"
 BACKUP_DIR="/home/pabulib/backups"
 COMPOSE_PROJECT_NAME="pabulib"

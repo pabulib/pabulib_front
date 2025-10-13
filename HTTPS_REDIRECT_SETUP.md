@@ -107,6 +107,34 @@ docker-compose.prod.yml     # Production override
 🔐 Starting HTTPS server on port 443...
 ```
 
+## Server Deployment
+
+### Directory Structure
+```
+/home/pabulib/
+├── pabulib_front/          # Main application directory (git repository)
+│   ├── app/
+│   ├── deploy.sh           # Deployment script
+│   ├── setup-server.sh     # One-time setup script
+│   ├── docker-compose.yml
+│   ├── docker-compose.prod.yml
+│   ├── .env                # Production environment (not in git)
+│   └── ...
+├── logs/                   # Application logs
+├── backups/               # Database backups
+├── pb_files/              # PB data files
+└── pb_files_depreciated/  # Archive folder
+```
+
+### Deployment Commands
+```bash
+cd /home/pabulib/pabulib_front
+./deploy.sh                # Full deployment
+./deploy.sh status         # Check status
+./deploy.sh logs          # View logs
+./deploy.sh monitor       # Monitor real-time
+```
+
 ## Implementation Details
 
 ### server_config.py
