@@ -103,7 +103,7 @@
         data-fully="{{ '1' if t.fully_funded else '0' }}"
         data-experimental="{{ '1' if t.experimental else '0' }}"
         data-quality="{{ '%.6f' % t.quality }}"
-         {% if t.has_selected_col %}data-selected="{{ t.num_selected_projects_raw if t.num_selected_projects_raw is not none else '' }}"{% endif %}
+         {% if t.num_selected_projects_raw is not none %}data-selected="{{ t.num_selected_projects_raw }}"{% endif %}
          data-rule="{{ t.rule_raw }}"
          data-edition="{{ t.edition }}"
          data-language="{{ t.language }}"

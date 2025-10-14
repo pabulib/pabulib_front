@@ -151,6 +151,10 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
         fully_funded = False
         selected_count = 0
 
+    # If there's no selected column, set selected_count to None
+    if not has_selected_col:
+        selected_count = None
+
     # Detect year
     year_int: Optional[int] = None
     try:

@@ -67,6 +67,7 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 PBFile.currency,
                 PBFile.num_votes,
                 PBFile.num_projects,
+                PBFile.num_selected_projects,
                 PBFile.budget,
                 PBFile.vote_type,
                 PBFile.vote_length,
@@ -74,7 +75,6 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 PBFile.unit,
                 PBFile.year,
                 PBFile.fully_funded,
-                PBFile.has_selected_col,
                 PBFile.experimental,
                 PBFile.quality,
                 PBFile.rule_raw,
@@ -103,6 +103,7 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
             currency,
             num_votes,
             num_projects,
+            num_selected_projects,
             budget,
             vote_type,
             vote_length,
@@ -110,7 +111,6 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
             unit,
             year,
             fully_funded,
-            has_selected_col,
             experimental,
             quality,
             rule_raw,
@@ -130,8 +130,8 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 "num_votes_raw": int(num_votes or 0),
                 "num_projects": format_int(int(num_projects or 0)),
                 "num_projects_raw": int(num_projects or 0),
-                "num_selected_projects": format_int(0),
-                "num_selected_projects_raw": 0,
+                "num_selected_projects": format_int(int(num_selected_projects or 0)),
+                "num_selected_projects_raw": int(num_selected_projects or 0),
                 "budget": (
                     format_budget(currency or "", int(budget or 0))
                     if budget is not None
@@ -146,7 +146,6 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 "year": str(year) if year is not None else "",
                 "year_raw": year,
                 "fully_funded": bool(fully_funded),
-                "has_selected_col": bool(has_selected_col),
                 "experimental": bool(experimental),
                 "quality": quality or 0.0,
                 "quality_short": format_short_number(quality or 0.0),
@@ -289,6 +288,7 @@ def aggregate_statistics_cached() -> Tuple[Dict[str, Any], Dict[str, Any]]:
                     PBFile.year,
                     PBFile.num_projects,
                     PBFile.num_votes,
+                    PBFile.num_selected_projects,
                     PBFile.budget,
                     PBFile.currency,
                     PBFile.vote_type,
@@ -319,6 +319,7 @@ def aggregate_statistics_cached() -> Tuple[Dict[str, Any], Dict[str, Any]]:
             year = r.year
             num_projects = int(r.num_projects or 0)
             num_votes = int(r.num_votes or 0)
+            num_selected = int(r.num_selected_projects or 0)
             budget = r.budget
             currency = (r.currency or "").strip() or "—"
             vtype = (r.vote_type or "").strip().lower() or "unknown"
@@ -330,6 +331,7 @@ def aggregate_statistics_cached() -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
             sum_projects += num_projects
             sum_votes += num_votes
+            sum_selected += num_selected
             if isinstance(budget, int):
                 sum_budget += budget
                 budget_by_currency_total[currency] = (
@@ -358,7 +360,7 @@ def aggregate_statistics_cached() -> Tuple[Dict[str, Any], Dict[str, Any]]:
         "total_cities": len(cities),
         "total_projects": sum_projects,
         "total_votes": sum_votes,
-        "total_funded_projects": sum_selected,
+        "total_selected_projects": sum_selected,
         "total_budget": sum_budget,
         "budget_by_currency": budget_by_currency_total,
     }

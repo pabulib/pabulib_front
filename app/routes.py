@@ -123,7 +123,7 @@ def statistics_page():
         "cities": _format_int(totals.get("total_cities", 0)),
         "projects": _format_int(totals.get("total_projects", 0)),
         "votes": _format_int(totals.get("total_votes", 0)),
-        "funded": _format_int(totals.get("total_funded_projects", 0)),
+        "selected": _format_int(totals.get("total_selected_projects", 0)),
     }
     # Build per-currency budget list for display
     budgets_map: Dict[str, int] = totals.get("budget_by_currency", {}) or {}
