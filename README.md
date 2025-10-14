@@ -40,6 +40,6 @@ To deploy changes to the server:
 
 1. Push your changes to the `main` branch
 2. SSH into the server and navigate to `/home/pabulib/pabulib_front` directory
-3. Run `./pull_and_change_permissions.sh` to fetch the latest changes
+3. `git pull` to fetch the latest changes
 4. Run `./deploy.sh restart` to restart the application
 5. Optionally, run `./deploy.sh monitor` to view logs and monitor the deployment

@@ -52,9 +52,14 @@ setup_directories() {
     mkdir -p "$PROJECT_DIR/pb_files"
     mkdir -p "$PROJECT_DIR/pb_files_depreciated"
     
-    # Set proper permissions
+    # Set proper permissions and ownership
     chmod 755 "$LOG_DIR" "$BACKUP_DIR"
     chmod 755 "$PROJECT_DIR/pb_files" "$PROJECT_DIR/pb_files_depreciated"
+    
+    # Ensure current user owns the directories (fixes tee permission issues)
+    sudo chown -R $(whoami):$(whoami) "$LOG_DIR" "$BACKUP_DIR"
+    chown -R $(whoami):$(whoami) "$PROJECT_DIR/pb_files" "$PROJECT_DIR/pb_files_depreciated" 2>/dev/null || true
+    
     success "Directories created successfully"
 }
 
