@@ -346,7 +346,7 @@
   if(tile.dataset.rule) row('Rule', tile.dataset.rule); // keep leading capital for consistency in grid
   if(tile.dataset.edition) row('Edition', tile.dataset.edition);
   if(tile.dataset.language) row('Language', tile.dataset.language);
-  if(tile.dataset.selected) row('# selected projects', tile.dataset.selected);
+  if(tile.dataset.selected && tile.dataset.selected !== '0') row('# selected projects', tile.dataset.selected);
     if(tile.dataset.fully === '1') row('Funding status', 'Fully funded');
     if(tile.dataset.experimental === '1') row('Flag', 'Experimental');
     // Keep a short description only if tile's description is empty (fallback)
