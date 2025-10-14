@@ -18,6 +18,8 @@ services:
       - ./scripts:/app/scripts
       - ./requirements.txt:/app/requirements.txt
       - ./run.py:/app/run.py
+      - ./wsgi.py:/app/wsgi.py
+      - ./gunicorn_config.py:/app/gunicorn_config.py
       # Host path for PB files -> container path used by the app
       - ${PB_FILES_DIR:-./pb_files}:/app/pb_files
       # Archive (depreciated) files folder
