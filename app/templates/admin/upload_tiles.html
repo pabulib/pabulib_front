@@ -32,6 +32,20 @@
 
         <button id="filtersClear" type="button" class="mt-4 w-full px-3 py-2 text-sm rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50">Clear filters</button>
       </div>
+
+      <div class="bg-white rounded-lg shadow-lg p-5 sticky top-24 mt-6">
+        <h2 class="text-lg font-semibold text-slate-800 mb-4">Upload settings</h2>
+        <div class="mb-3">
+          <label for="maxFileMb" class="block text-sm font-medium text-slate-700 mb-1">Max MB per file</label>
+          <input id="maxFileMb" type="number" min="1" max="1024" step="1" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm text-slate-800" value="{{ (upload_settings.max_file_mb if upload_settings else 10) | int }}" />
+        </div>
+        <div class="mb-3">
+          <label for="maxBatch" class="block text-sm font-medium text-slate-700 mb-1">Max files per upload</label>
+          <input id="maxBatch" type="number" min="1" max="10000" step="1" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm text-slate-800" value="{{ (upload_settings.max_batch if upload_settings else 100) | int }}" />
+        </div>
+        <button id="saveUploadSettings" type="button" class="mt-2 w-full px-3 py-2 text-sm rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50">Save</button>
+        <div id="saveSettingsHint" class="mt-2 text-xs text-slate-500 hidden">Saved.</div>
+      </div>
     </aside>
 
     <div class="w-full max-w-5xl">
@@ -312,6 +326,11 @@
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('files');
   const tiles = Array.from(document.querySelectorAll('.tile-preview'));
+  // Settings injected from backend
+  let SETTINGS = {
+    max_file_mb: parseInt('{{ (upload_settings.max_file_mb if upload_settings else 10) | int }}', 10) || 10,
+    max_batch: parseInt('{{ (upload_settings.max_batch if upload_settings else 100) | int }}', 10) || 100,
+  };
   const countEl = document.getElementById('tmpCount');
   const selectAll = document.getElementById('tmpSelectAll');
   const search = document.getElementById('tmpSearch');
@@ -365,6 +384,35 @@
     });
     updateCount();
   }
+  // Settings save
+  const saveSettingsBtn = document.getElementById('saveUploadSettings');
+  if(saveSettingsBtn){
+    saveSettingsBtn.addEventListener('click', async ()=>{
+      const maxFileMbEl = document.getElementById('maxFileMb');
+      const maxBatchEl = document.getElementById('maxBatch');
+      const payload = {
+        max_file_mb: (maxFileMbEl && maxFileMbEl.value) ? parseInt(maxFileMbEl.value, 10) : SETTINGS.max_file_mb,
+        max_batch: (maxBatchEl && maxBatchEl.value) ? parseInt(maxBatchEl.value, 10) : SETTINGS.max_batch,
+      };
+      try{
+        const resp = await fetch("{{ url_for('admin.upload_settings_post') }}", {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
+          body: JSON.stringify(payload)
+        });
+        if(resp.ok){
+          const data = await resp.json();
+          if(data && data.ok && data.settings){
+            SETTINGS = data.settings;
+            const hint = document.getElementById('saveSettingsHint');
+            if(hint){ hint.textContent = 'Saved.'; hint.classList.remove('hidden'); setTimeout(()=>hint.classList.add('hidden'), 1200); }
+          }
+        } else {
+          alert('Failed to save settings.');
+        }
+      }catch(e){ alert('Error saving settings: '+e.message); }
+    });
+  }
 
   function checkedBoxes(){
     return Array.from(document.querySelectorAll('.row-check')).filter(cb => cb.checked && cb.closest('.tile-preview').style.display !== 'none');
@@ -407,7 +455,17 @@
   });
 
   async function uploadFiles(files){
-    // Show progress bar
+    // Capacity pre-check: if this batch exceeds the remaining capacity, show a popup and do nothing
+    try {
+      const currentCount = tiles.length;
+      const remainingCapacity = Math.max(0, SETTINGS.max_batch - currentCount);
+      if (files.length > remainingCapacity || remainingCapacity === 0) {
+        alert(`You are trying to load more files than the limit (${SETTINGS.max_batch}). Please make a smaller batch.`);
+        return;
+      }
+    } catch(_e) {}
+
+    // Prepare progress refs (will show only if we actually upload something)
     const progressContainer = document.getElementById('uploadProgress');
     const progressBar = document.getElementById('progressBar');
     const progressText = document.getElementById('progressText');
@@ -419,24 +477,11 @@
     const currentFileNum = document.getElementById('currentFileNum');
     const totalFileNum = document.getElementById('totalFileNum');
     
-    if(progressContainer) {
-      progressContainer.classList.remove('hidden');
-      progressBar.style.width = '0%';
-      progressPercent.textContent = '0%';
-      progressText.textContent = `Uploading ${files.length} file${files.length === 1 ? '' : 's'}...`;
-      if(progressPhase) {
-        progressPhase.textContent = 'Upload';
-        progressPhase.className = 'px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700';
-      }
-      if(progressFileCount) progressFileCount.classList.add('hidden');
-      if(progressFileName) progressFileName.classList.add('hidden');
-      if(progressHint) progressHint.textContent = 'After upload completes, files will be validated. Please wait...';
-    }
-    
     // Pre-flight checks: only .pb and <= 10 MB
-    const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
+  const MAX_SIZE = (SETTINGS.max_file_mb || 10) * 1024 * 1024; // MB -> bytes
     const rejected = [];
     const okFiles = [];
+    // (Capacity was pre-checked above; no-op here.)
     for(const f of files){
       const name = f.name || '';
       if(!name.toLowerCase().endsWith('.pb')){
@@ -444,7 +489,7 @@
         continue;
       }
       if(typeof f.size === 'number' && f.size > MAX_SIZE){
-        rejected.push({ name, reason: 'File too large (>10 MB)' });
+        rejected.push({ name, reason: `File too large (> ${SETTINGS.max_file_mb} MB)` });
         continue;
       }
       okFiles.push(f);
@@ -453,8 +498,24 @@
       rejected.forEach(r => preflightRejected.push({ name: r.name, reason: r.reason }));
     }
     if(okFiles.length === 0){
-      if(progressContainer) progressContainer.classList.add('hidden');
+      const failedList = rejected.map(i => `${i.name} — ${i.reason}`);
+      renderBannerSummary({ phase: 'upload', summary: { total: 0, ok: 0, invalid: 0, errored: rejected.length, failedNames: failedList, notLoaded: rejected, errors: [] } });
       return;
+    }
+
+    // Show progress bar now that we have files to upload
+    if(progressContainer) {
+      progressContainer.classList.remove('hidden');
+      progressBar.style.width = '0%';
+      progressPercent.textContent = '0%';
+      progressText.textContent = `Uploading ${okFiles.length} file${okFiles.length === 1 ? '' : 's'}...`;
+      if(progressPhase) {
+        progressPhase.textContent = 'Upload';
+        progressPhase.className = 'px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700';
+      }
+      if(progressFileCount) progressFileCount.classList.add('hidden');
+      if(progressFileName) progressFileName.classList.add('hidden');
+      if(progressHint) progressHint.textContent = 'After upload completes, files will be validated. Please wait...';
     }
 
     // Note: Server will also check for webpage_name duplicates based on META data
@@ -552,6 +613,15 @@
             uploadIssues.push({ name: nm, reason: why, webpage_name: r.webpage_name });
           }
         });
+        // Also capture capacity information to show remaining capacity feedback
+        if(typeof uploadJson.tmp_remaining === 'number' && typeof uploadJson.tmp_limit === 'number'){
+          // If server rejected due to limit, show a simple popup and stop
+          if(uploadJson.tmp_remaining <= 0 || uploadJson.ok === false){
+            if(progressContainer) progressContainer.classList.add('hidden');
+            alert(`You are trying to load more files than the limit (${uploadJson.tmp_limit}). Please make a smaller batch.`);
+            return; // Do not continue or render banners
+          }
+        }
       }
       
       if(hasDuplicateWarning){

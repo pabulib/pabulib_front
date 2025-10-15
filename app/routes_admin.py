@@ -34,6 +34,60 @@ from .utils.pb_utils import pb_depreciated_folder as _pb_depr_folder
 from .utils.pb_utils import pb_folder as _pb_folder
 from .utils.validation import count_issues, format_validation_summary, validate_pb_file
 
+# --- Upload Settings (stored locally in temp folder) -------------------------
+
+SETTINGS_FILENAME = ".upload_settings.json"
+
+
+def _load_upload_settings() -> dict:
+    """Load upload settings from a small JSON file in the temp uploads dir.
+    Defaults: max_file_mb=10, max_batch=100
+    """
+    import json
+
+    tmp = _tmp_upload_dir()
+    p = tmp / SETTINGS_FILENAME
+    defaults = {"max_file_mb": 10, "max_batch": 100}
+    try:
+        if p.exists():
+            with open(p, "r") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    # basic sanitization
+                    max_file_mb = int(data.get("max_file_mb", defaults["max_file_mb"]))
+                    max_batch = int(data.get("max_batch", defaults["max_batch"]))
+                    return {
+                        "max_file_mb": max(1, min(1024, max_file_mb)),
+                        "max_batch": max(1, min(10000, max_batch)),
+                    }
+    except Exception:
+        pass
+    return defaults
+
+
+def _save_upload_settings(new_settings: dict) -> None:
+    import json
+
+    tmp = _tmp_upload_dir()
+    p = tmp / SETTINGS_FILENAME
+    tmp.mkdir(parents=True, exist_ok=True)
+    data = _load_upload_settings()
+    data.update(
+        {
+            "max_file_mb": int(new_settings.get("max_file_mb", data["max_file_mb"])),
+            "max_batch": int(new_settings.get("max_batch", data["max_batch"])),
+        }
+    )
+    # enforce bounds
+    data["max_file_mb"] = max(1, min(1024, data["max_file_mb"]))
+    data["max_batch"] = max(1, min(10000, data["max_batch"]))
+    try:
+        with open(p, "w") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+
 bp = Blueprint(
     "admin",
     __name__,
@@ -44,6 +98,8 @@ bp = Blueprint(
 
 # Max accepted size of a single PB upload (10 MB)
 MAX_PB_FILE_SIZE = 10 * 1024 * 1024
+
+# Note: Frontend enforces a client-side batch size limit with a simple alert.
 
 
 @bp.before_request
@@ -346,6 +402,7 @@ def _format_preview_tile(tile: dict) -> dict:
 @bp.get("/admin/upload")
 def upload_tiles():
     tiles = _list_tmp_tiles()
+    settings = _load_upload_settings()
     # Precompute existence/conflict flags for each tile to adjust UI
     try:
         with get_session() as s:
@@ -383,6 +440,7 @@ def upload_tiles():
         success=success,
         tiles=tiles,
         count=len(tiles),
+        upload_settings=settings,
     )
 
 
@@ -412,6 +470,8 @@ def upload_tiles_post():
     force_replace = request.form.get("force_replace") in {"1", "true", "True"}
 
     tmp_dir = _tmp_upload_dir()
+    settings = _load_upload_settings()
+    max_bytes_per_file = int(settings.get("max_file_mb", 10)) * 1024 * 1024
     saved = 0
     results = []
     overwrites_rejected = (
@@ -464,16 +524,16 @@ def upload_tiles_post():
             temp_save_path = tmp_dir / f"temp_{fname}"
             f.save(str(temp_save_path))
 
-            # Enforce max size per file
+            # Enforce max size per file (dynamic)
             try:
                 size = temp_save_path.stat().st_size
-                if size > MAX_PB_FILE_SIZE:
+                if size > max_bytes_per_file:
                     temp_save_path.unlink(missing_ok=True)
                     results.append(
                         {
                             "ok": False,
                             "name": fname,
-                            "msg": "File too large. Maximum allowed size is 10 MB.",
+                            "msg": f"File too large. Maximum allowed size is {int(settings.get('max_file_mb', 10))} MB.",
                             "validation": None,
                         }
                     )
@@ -608,6 +668,11 @@ def upload_tiles_post():
         msg += f" ⚠ WARNING: {len(overwrites_rejected)} file(s) rejected as duplicates: {', '.join(overwrites_rejected)}"
     # If called via fetch/AJAX, return JSON response for client-side reporting
     if request.headers.get("X-Requested-With") == "fetch" or request.is_json:
+        # Recompute remaining capacity after saves
+        try:
+            new_existing_count = sum(1 for _ in _tmp_upload_dir().glob("*.pb"))
+        except Exception:
+            new_existing_count = len(tiles)
         return jsonify(
             {
                 "ok": saved > 0,
@@ -629,6 +694,29 @@ def upload_tiles_post():
         tiles=tiles,
         count=len(tiles),
     )
+
+
+@bp.get("/admin/upload/settings")
+def upload_settings_get():
+    """Return current upload settings (JSON)."""
+    return jsonify(_load_upload_settings())
+
+
+@bp.post("/admin/upload/settings")
+def upload_settings_post():
+    """Update upload settings. Accepts form or JSON with keys max_file_mb, max_batch."""
+    if request.is_json:
+        payload = request.get_json(silent=True) or {}
+    else:
+        payload = {
+            "max_file_mb": request.form.get("max_file_mb"),
+            "max_batch": request.form.get("max_batch"),
+        }
+    try:
+        _save_upload_settings(payload)
+        return jsonify({"ok": True, "settings": _load_upload_settings()})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @bp.post("/admin/upload/ingest")
