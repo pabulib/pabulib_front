@@ -83,7 +83,7 @@ def validate_pb_file(file_path: Path) -> Dict[str, Any]:
             "valid": False,
             "errors": None,
             "warnings": None,
-            "error_message": f"Validation error: {str(e)}",
+            "error_message": f"Validation error: {str(e)}. This file cannot be checked and is likely corrupted or malformed.",
         }
 
 

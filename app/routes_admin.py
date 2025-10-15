@@ -279,9 +279,9 @@ def _list_tmp_tiles() -> list[dict]:
                         "valid": False,
                         "errors": None,
                         "warnings": None,
-                        "error_message": f"Parse error: {str(e)}",
+                        "error_message": f"Parse error: {str(e)}. This file cannot be checked and is likely corrupted or malformed.",
                     },
-                    "validation_summary": f"⚠ Parse error: {str(e)}",
+                    "validation_summary": f"⚠ Parse error: {str(e)}. File likely corrupted.",
                     "error_count": 0,
                     "warning_count": 0,
                 }
@@ -426,6 +426,9 @@ def upload_tiles_post():
             # Skip files that can't be parsed
             pass
 
+    # Track webpage_names in current upload batch to detect intra-batch duplicates
+    current_batch_webpage_names = {}  # webpage_name -> filename
+
     for f in files:
         fname = secure_filename(f.filename or "").strip()
         if not fname:
@@ -496,30 +499,41 @@ def upload_tiles_post():
                     # User confirmed - remove the old file with the same webpage_name
                     old_file_path = tmp_dir / existing_filename
                     old_file_path.unlink(missing_ok=True)
+                    # Also remove validation cache
+                    validation_cache_path = (
+                        tmp_dir / f".{existing_filename}.validation.json"
+                    )
+                    validation_cache_path.unlink(missing_ok=True)
                     overwrites_replaced.append(uploaded_webpage_name)
+
+            # Also check for duplicates within the current upload batch
+            if (
+                uploaded_webpage_name
+                and uploaded_webpage_name in current_batch_webpage_names
+            ):
+                batch_duplicate_filename = current_batch_webpage_names[
+                    uploaded_webpage_name
+                ]
+                temp_save_path.unlink(missing_ok=True)
+                results.append(
+                    {
+                        "ok": False,
+                        "name": fname,
+                        "msg": f"⚠ Duplicate in upload batch: This file has the same webpage_name '{uploaded_webpage_name}' as another file in this upload ({batch_duplicate_filename}). Only one file per webpage_name can be uploaded.",
+                        "validation": None,
+                    }
+                )
+                continue
 
             # Move temp file to final location
             temp_save_path.rename(target)
 
-            # Update the existing_temp_files map with the new file
+            # Update both maps with the new file
             if uploaded_webpage_name:
                 existing_temp_files[uploaded_webpage_name] = fname
+                current_batch_webpage_names[uploaded_webpage_name] = fname
 
-            # Validate the file after saving
-            try:
-                validation = validate_pb_file(target)
-                validation_summary = format_validation_summary(validation)
-            except Exception as val_err:
-                # Don't fail the upload if validation fails
-                current_app.logger.exception("Validation error for %s", fname)
-                validation = {
-                    "valid": False,
-                    "errors": None,
-                    "warnings": None,
-                    "error_message": f"Validation failed: {str(val_err)}",
-                }
-                validation_summary = f"⚠ Validation failed: {str(val_err)}"
-
+            # Don't validate inline - let the frontend trigger validation with progress
             saved += 1
             upload_msg = "Uploaded to /tmp."
             if existing_filename:
@@ -529,8 +543,7 @@ def upload_tiles_post():
                     "ok": True,
                     "name": fname,
                     "msg": upload_msg,
-                    "validation": validation,
-                    "validation_summary": validation_summary,
+                    "needs_validation": True,
                 }
             )
         except Exception as e:
@@ -833,21 +846,72 @@ def upload_tiles_ingest():
 
 @bp.post("/admin/upload/delete")
 def upload_tiles_delete():
-    name = (request.form.get("name") or "").strip()
-    if not name or "/" in name or ".." in name:
-        abort(400)
+    # Support both single file deletion and batch deletion
+    # Single file: name parameter
+    # Batch: files[] parameter (JSON array or multiple form fields)
+
     tmp_dir = _tmp_upload_dir()
-    p = tmp_dir / name
-    if p.exists() and p.is_file():
-        try:
-            p.unlink()
-            # Also remove the cached validation file if it exists
-            validation_cache_path = tmp_dir / f".{name}.validation.json"
-            if validation_cache_path.exists():
-                validation_cache_path.unlink()
-        except Exception:
-            pass
-    return redirect(url_for("admin.upload_tiles"))
+    files_to_delete = []
+
+    # Check if it's a batch delete request
+    if request.is_json:
+        data = request.get_json()
+        files_to_delete = data.get("files", [])
+    else:
+        # Check for 'files' parameter (could be multiple)
+        files_param = request.form.getlist("files")
+        if files_param:
+            files_to_delete = files_param
+        else:
+            # Fallback to single 'name' parameter
+            name = (request.form.get("name") or "").strip()
+            if name:
+                files_to_delete = [name]
+
+    if not files_to_delete:
+        if request.headers.get("X-Requested-With") == "fetch" or request.is_json:
+            return jsonify({"error": "No files specified"}), 400
+        abort(400)
+
+    deleted_count = 0
+    errors = []
+
+    for name in files_to_delete:
+        name = name.strip()
+        if not name or "/" in name or ".." in name:
+            errors.append(f"Invalid filename: {name}")
+            continue
+
+        p = tmp_dir / name
+        if p.exists() and p.is_file():
+            try:
+                p.unlink()
+                # Also remove the cached validation file if it exists
+                validation_cache_path = tmp_dir / f".{name}.validation.json"
+                if validation_cache_path.exists():
+                    validation_cache_path.unlink()
+                deleted_count += 1
+            except Exception as e:
+                errors.append(f"Failed to delete {name}: {str(e)}")
+        else:
+            errors.append(f"File not found: {name}")
+
+    # If called via fetch/AJAX, return JSON response
+    if request.headers.get("X-Requested-With") == "fetch" or request.is_json:
+        return jsonify(
+            {"ok": deleted_count > 0, "deleted": deleted_count, "errors": errors}
+        )
+
+    # Otherwise redirect with message
+    if deleted_count > 0:
+        message = f"Deleted {deleted_count} file{'s' if deleted_count != 1 else ''}."
+        if errors:
+            message += f" {len(errors)} error(s) occurred."
+        return redirect(url_for("admin.upload_tiles", message=message, success=1))
+    else:
+        return redirect(
+            url_for("admin.upload_tiles", message="Failed to delete files.", success=0)
+        )
 
 
 @bp.get("/admin/upload/download/<path:name>")
@@ -858,6 +922,82 @@ def upload_tiles_download(name: str):
     if not p.exists() or not p.is_file():
         abort(404)
     return send_file(p, as_attachment=True)
+
+
+@bp.post("/admin/upload/validate")
+def upload_tiles_validate():
+    """Validate uploaded files with progress tracking.
+    Expects JSON: { "files": ["file1.pb", "file2.pb", ...] }
+    Returns progress and validation results for each file.
+    """
+    if not request.is_json:
+        return jsonify({"error": "JSON required"}), 400
+
+    data = request.get_json()
+    files_to_validate = data.get("files", [])
+
+    if not files_to_validate:
+        return jsonify({"error": "No files specified"}), 400
+
+    tmp_dir = _tmp_upload_dir()
+    total = len(files_to_validate)
+    results = []
+
+    for idx, fname in enumerate(files_to_validate):
+        fname = fname.strip()
+        if not fname or "/" in fname or ".." in fname or not fname.endswith(".pb"):
+            results.append({"file": fname, "ok": False, "error": "Invalid filename"})
+            continue
+
+        file_path = tmp_dir / fname
+        if not file_path.exists():
+            results.append({"file": fname, "ok": False, "error": "File not found"})
+            continue
+
+        # Check for cached validation first
+        validation_cache_path = tmp_dir / f".{fname}.validation.json"
+        validation = None
+
+        if validation_cache_path.exists():
+            try:
+                if validation_cache_path.stat().st_mtime >= file_path.stat().st_mtime:
+                    import json
+
+                    with open(validation_cache_path, "r") as f:
+                        validation = json.load(f)
+            except Exception:
+                pass
+
+        # If no cached validation, validate now
+        if validation is None:
+            try:
+                validation = validate_pb_file(file_path)
+                # Cache the result
+                try:
+                    import json
+
+                    with open(validation_cache_path, "w") as f:
+                        json.dump(validation, f)
+                except Exception:
+                    pass
+            except Exception as e:
+                validation = {
+                    "valid": False,
+                    "errors": None,
+                    "warnings": None,
+                    "error_message": f"Validation error: {str(e)}. This file cannot be checked and is likely corrupted or malformed.",
+                }
+
+        results.append(
+            {
+                "file": fname,
+                "ok": True,
+                "validation": validation,
+                "progress": {"current": idx + 1, "total": total},
+            }
+        )
+
+    return jsonify({"ok": True, "results": results, "total": total})
 
 
 @bp.get("/admin/upload/check")

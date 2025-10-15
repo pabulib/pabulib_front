@@ -157,6 +157,9 @@
               <span id="progressText">Uploading files...</span>
               <span id="progressPercent" class="font-medium">0%</span>
             </div>
+            <div class="text-xs text-slate-500 text-center mt-1">
+              After upload completes, files will be validated. Please wait...
+            </div>
           </div>
         </div>
 
@@ -216,6 +219,9 @@
                   Valid file
                 {% elif t.validation.error_message %}
                   {{ t.validation.error_message }}
+                  {% if 'corrupted' in t.validation.error_message.lower() or 'parse error' in t.validation.error_message.lower() %}
+                  <div class="mt-1 text-orange-600 font-semibold">⚠️ Note: This file cannot be validated and may be corrupted or malformed.</div>
+                  {% endif %}
                 {% else %}
                   Invalid file
                 {% endif %}
@@ -275,10 +281,7 @@
               <span class="text-[10px] text-orange-600" title="A current dataset exists; ingest will overwrite.">overwrite</span>
             {% endif %}
           </div>
-          <form method="post" action="{{ url_for('admin.upload_tiles_delete') }}" onsubmit="return confirm('Delete this temp file?')">
-            <input type="hidden" name="name" value="{{ t.file_name }}" />
-            <button class="p-2 rounded-md border border-slate-300 hover:bg-slate-50 text-red-700" title="Delete" type="submit">🗑</button>
-          </form>
+          <button class="p-2 rounded-md border border-slate-300 hover:bg-slate-50 text-red-700 delete-one" data-file="{{ t.file_name|e }}" title="Delete" type="button">🗑</button>
         </div>
       </div>
     </section>
@@ -428,11 +431,6 @@
     let resp;
     try {
       resp = await uploadPromise;
-      
-      // Update progress to show processing
-      if(progressText) progressText.textContent = 'Processing files...';
-      if(progressBar) progressBar.style.width = '100%';
-      if(progressPercent) progressPercent.textContent = '100%';
     } catch(error) {
       if(progressContainer) progressContainer.classList.add('hidden');
       alert('Upload failed');
@@ -440,7 +438,7 @@
     }
     
     if(resp.ok){
-      // Check if there were any duplicate webpage_name rejections in the response
+      // Get the HTML response
       const html = await resp.text();
       const hasDuplicateWarning = html.includes('duplicate webpage_name') || html.includes('Duplicate detected');
       
@@ -535,9 +533,12 @@
           
           try {
             resp = await reuploadPromise;
-            if(progressText) progressText.textContent = 'Processing files...';
+            if(progressText) progressText.textContent = 'Validating files...';
             if(progressBar) progressBar.style.width = '100%';
             if(progressPercent) progressPercent.textContent = '100%';
+            
+            // Add a small delay to show the validation message
+            await new Promise(resolve => setTimeout(resolve, 100));
           } catch(error) {
             if(progressContainer) progressContainer.classList.add('hidden');
             alert('Re-upload failed');
@@ -550,11 +551,59 @@
         }
       }
       
+      // After successful upload, validate files with progress
+      await validateUploadedFiles(files.map(f => f.name));
+      
       // Reload to render server-side parsed previews and messages
       window.location.reload();
     } else {
       if(progressContainer) progressContainer.classList.add('hidden');
       alert('Upload failed');
+    }
+  }
+
+  // Validate uploaded files with progress tracking
+  async function validateUploadedFiles(filenames) {
+    const progressContainer = document.getElementById('uploadProgress');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const progressPercent = document.getElementById('progressPercent');
+    
+    if(!filenames || filenames.length === 0) return;
+    
+    try {
+      // Show validation progress
+      if(progressText) progressText.textContent = 'Validating files...';
+      if(progressBar) progressBar.style.width = '0%';
+      if(progressPercent) progressPercent.textContent = '0%';
+      
+      const resp = await fetch("{{ url_for('admin.upload_tiles_validate') }}", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ files: filenames })
+      });
+      
+      if(resp.ok) {
+        const data = await resp.json();
+        if(data.results) {
+          // Update progress as we process results
+          for(let i = 0; i < data.results.length; i++) {
+            const result = data.results[i];
+            const percent = Math.round(((i + 1) / data.total) * 100);
+            if(progressBar) progressBar.style.width = percent + '%';
+            if(progressPercent) progressPercent.textContent = percent + '%';
+            if(progressText) progressText.textContent = `Validating file ${i + 1} of ${data.total}...`;
+            
+            // Small delay to show progress
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+        }
+      }
+    } catch(error) {
+      console.error('Validation error:', error);
+      // Continue anyway - validation errors shouldn't block the upload
     }
   }
 
@@ -612,6 +661,50 @@
       } else {
         alert(`Failed to upload ${name}. See server logs for details.`);
         window.location.reload();
+      }
+    });
+  });
+
+  // Per-row delete button
+  document.querySelectorAll('.delete-one').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const name = btn.dataset.file;
+      if(!confirm(`Delete ${name}?`)) return;
+      
+      try {
+        const resp = await fetch("{{ url_for('admin.upload_tiles_delete') }}", {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'fetch'
+          },
+          body: JSON.stringify({ files: [name] })
+        });
+        
+        if(resp.ok) {
+          const data = await resp.json();
+          if(data.deleted > 0) {
+            // Remove the tile from DOM without full reload for better UX
+            const tile = btn.closest('.tile-preview');
+            if(tile) {
+              tile.style.opacity = '0';
+              tile.style.transition = 'opacity 0.3s';
+              setTimeout(() => {
+                tile.remove();
+                updateCount();
+                // Update tiles array
+                const idx = tiles.indexOf(tile);
+                if(idx > -1) tiles.splice(idx, 1);
+              }, 300);
+            }
+          } else {
+            alert('Failed to delete file.');
+          }
+        } else {
+          alert('Delete request failed.');
+        }
+      } catch(error) {
+        alert('Error deleting file: ' + error.message);
       }
     });
   });
@@ -691,9 +784,39 @@
   }
   deleteSelected.addEventListener('click', async ()=>{
     const boxes = checkedBoxes(); if(!boxes.length){ alert('No files selected'); return; }
-    if(!confirm('Delete selected temp files?')) return;
-  for(const cb of boxes){ const name = cb.dataset.file; await postAction("{{ url_for('admin.upload_tiles_delete') }}", name); }
-    window.location.reload();
+    if(!confirm(`Delete ${boxes.length} selected temp file${boxes.length === 1 ? '' : 's'}?`)) return;
+    
+    // Collect filenames
+    const filenames = boxes.map(cb => cb.dataset.file);
+    
+    // Send batch delete request
+    try {
+      const resp = await fetch("{{ url_for('admin.upload_tiles_delete') }}", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'fetch'
+        },
+        body: JSON.stringify({ files: filenames })
+      });
+      
+      if(resp.ok) {
+        const data = await resp.json();
+        if(data.deleted > 0) {
+          window.location.href = "{{ url_for('admin.upload_tiles') }}?message=" + 
+            encodeURIComponent(`Deleted ${data.deleted} file${data.deleted === 1 ? '' : 's'}.`) + "&success=1";
+        } else {
+          alert('Failed to delete files.');
+          window.location.reload();
+        }
+      } else {
+        alert('Delete request failed.');
+        window.location.reload();
+      }
+    } catch(error) {
+      alert('Error deleting files: ' + error.message);
+      window.location.reload();
+    }
   });
 
   // Replace functionality removed from UI as per requirements.
