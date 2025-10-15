@@ -32,7 +32,7 @@
     {% block head %}{% endblock %}
   </head>
   <body class="{% block bodyClass %} bg-slate-50{% endblock %}">
-    <nav class="bg-slate-900 text-white px-4 py-4 relative flex items-center">
+  <nav id="mainNav" class="bg-slate-900 text-white px-4 sticky top-0 z-50 h-16 flex items-center shadow-sm">
       <div class="flex-none w-0"></div>
       <div class="flex space-x-6 mx-auto relative z-10">
         <a href="{{ url_for('main.home') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.home') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Search</a>
@@ -46,6 +46,18 @@
       </div>
     </nav>
     
+    <!-- Keep admin bar perfectly aligned under the main nav (no overlap) -->
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const mainNav = document.getElementById('mainNav');
+        const adminNav = document.getElementById('adminNav');
+        if (!mainNav || !adminNav) return;
+        const setAdminTop = () => { adminNav.style.top = mainNav.offsetHeight + 'px'; };
+        setAdminTop();
+        window.addEventListener('resize', setAdminTop);
+      });
+    </script>
+
     <!-- Refactoring Notice Popup -->
     <div id="refactoringNotice" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" style="display: none;">
       <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6 relative">
