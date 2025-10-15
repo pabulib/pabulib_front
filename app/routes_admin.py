@@ -32,6 +32,7 @@ from .utils.pb_utils import build_group_key as _build_group_key
 from .utils.pb_utils import parse_pb_to_tile as _parse_pb_to_tile
 from .utils.pb_utils import pb_depreciated_folder as _pb_depr_folder
 from .utils.pb_utils import pb_folder as _pb_folder
+from .utils.validation import count_issues, format_validation_summary, validate_pb_file
 
 bp = Blueprint(
     "admin",
@@ -226,8 +227,18 @@ def _list_tmp_tiles() -> list[dict]:
     for p in sorted(tmp_dir.glob("*.pb")):
         try:
             t = _parse_pb_to_tile(p)
-            tiles.append(_format_preview_tile(t))
-        except Exception:
+            tile_data = _format_preview_tile(t)
+
+            # Add validation
+            validation = validate_pb_file(p)
+            tile_data["validation"] = validation
+            tile_data["validation_summary"] = format_validation_summary(validation)
+            issue_counts = count_issues(validation)
+            tile_data["error_count"] = issue_counts["errors"]
+            tile_data["warning_count"] = issue_counts["warnings"]
+
+            tiles.append(tile_data)
+        except Exception as e:
             # Skip unreadable files, but still show a minimal entry
             tiles.append(
                 {
@@ -239,6 +250,15 @@ def _list_tmp_tiles() -> list[dict]:
                     "budget": "—",
                     "vote_type": "",
                     "vote_length": "—",
+                    "validation": {
+                        "valid": False,
+                        "errors": None,
+                        "warnings": None,
+                        "error_message": f"Parse error: {str(e)}",
+                    },
+                    "validation_summary": f"⚠ Parse error: {str(e)}",
+                    "error_count": 0,
+                    "warning_count": 0,
                 }
             )
     return tiles
@@ -366,11 +386,23 @@ def upload_tiles_post():
     for f in files:
         fname = secure_filename(f.filename or "").strip()
         if not fname:
-            results.append({"ok": False, "name": "(unnamed)", "msg": "Empty filename."})
+            results.append(
+                {
+                    "ok": False,
+                    "name": "(unnamed)",
+                    "msg": "Empty filename.",
+                    "validation": None,
+                }
+            )
             continue
         if not fname.endswith(".pb"):
             results.append(
-                {"ok": False, "name": fname, "msg": "Only .pb files are allowed."}
+                {
+                    "ok": False,
+                    "name": fname,
+                    "msg": "Only .pb files are allowed.",
+                    "validation": None,
+                }
             )
             continue
         try:
@@ -379,10 +411,41 @@ def upload_tiles_post():
             if target.exists():
                 overwrites.append(fname)
             f.save(str(target))
+
+            # Validate the file after saving
+            try:
+                validation = validate_pb_file(target)
+                validation_summary = format_validation_summary(validation)
+            except Exception as val_err:
+                # Don't fail the upload if validation fails
+                current_app.logger.exception("Validation error for %s", fname)
+                validation = {
+                    "valid": False,
+                    "errors": None,
+                    "warnings": None,
+                    "error_message": f"Validation failed: {str(val_err)}",
+                }
+                validation_summary = f"⚠ Validation failed: {str(val_err)}"
+
             saved += 1
-            results.append({"ok": True, "name": fname, "msg": "Uploaded to /tmp."})
+            results.append(
+                {
+                    "ok": True,
+                    "name": fname,
+                    "msg": "Uploaded to /tmp.",
+                    "validation": validation,
+                    "validation_summary": validation_summary,
+                }
+            )
         except Exception as e:
-            results.append({"ok": False, "name": fname, "msg": f"Failed to save: {e}"})
+            results.append(
+                {
+                    "ok": False,
+                    "name": fname,
+                    "msg": f"Failed to save: {e}",
+                    "validation": None,
+                }
+            )
 
     tiles = _list_tmp_tiles()
 

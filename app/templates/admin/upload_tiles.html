@@ -87,6 +87,50 @@
           </div>
           {% endif %}
 
+          {% if results %}
+          <div class="mt-3 space-y-2">
+            {% for r in results %}
+            <div class="p-2 rounded-md text-xs border {{ 'bg-emerald-50 border-emerald-200' if r.ok else 'bg-red-50 border-red-200' }}">
+              <div class="flex items-start gap-2">
+                <span class="{{ 'text-emerald-700' if r.ok else 'text-red-700' }}">{{ '✓' if r.ok else '✗' }}</span>
+                <div class="flex-1">
+                  <span class="font-medium">{{ r.name }}</span>: {{ r.msg }}
+                  {% if r.validation %}
+                  <div class="mt-1 {{ 'text-emerald-700' if r.validation.valid else ('text-orange-600' if r.validation.error_message else 'text-red-700') }}">
+                    {{ r.validation_summary }}
+                  </div>
+                  {% if r.validation.errors %}
+                  <div class="mt-1 text-red-600">
+                    <div class="font-medium">Errors:</div>
+                    <ul class="list-disc list-inside ml-2">
+                      {% for error_type, instances in r.validation.errors.items() %}
+                        {% for instance_id, message in instances.items() %}
+                          <li>{{ error_type }}: {{ message }}</li>
+                        {% endfor %}
+                      {% endfor %}
+                    </ul>
+                  </div>
+                  {% endif %}
+                  {% if r.validation.warnings %}
+                  <div class="mt-1 text-orange-600">
+                    <div class="font-medium">Warnings:</div>
+                    <ul class="list-disc list-inside ml-2">
+                      {% for warning_type, instances in r.validation.warnings.items() %}
+                        {% for instance_id, message in instances.items() %}
+                          <li>{{ warning_type }}: {{ message }}</li>
+                        {% endfor %}
+                      {% endfor %}
+                    </ul>
+                  </div>
+                  {% endif %}
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+
           <div id="dropzone" class="border-2 border-dashed border-slate-300 rounded-md p-8 text-center text-slate-500 hover:border-slate-400 cursor-pointer">
             <div class="text-lg font-medium mb-1">Add files</div>
             <div class="text-sm">Drag & drop .pb files here, or click to choose</div>
@@ -102,8 +146,10 @@
       data-file="{{ t.file_name|e }}"
       data-exists="{{ '1' if t.exists_conflict else '' }}"
     >
-      <div class="flex items-start gap-3">
+      <div class="flex items-start gap-4">
         <input class="row-check mt-1.5" type="checkbox" data-file="{{ t.file_name|e }}" />
+        
+        {# Main tile info #}
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-3">
             <h2 class="text-lg font-semibold text-slate-800 truncate">{{ t.title }}</h2>
@@ -115,15 +161,81 @@
             {% endif %}
           </div>
           <div class="text-slate-600 text-sm mt-1">{{ t.description }}</div>
-          <div class="grid grid-cols-6 gap-3 mt-3 text-sm">
+          <div class="text-slate-500 text-xs mt-1 font-mono truncate" title="{{ t.file_name }}">{{ t.file_name }}</div>
+          <div class="grid grid-cols-5 gap-3 mt-3 text-sm">
             <div class="text-slate-500"># votes<br><span class="text-slate-800">{{ t.num_votes }}</span></div>
             <div class="text-slate-500"># projects<br><span class="text-slate-800">{{ t.num_projects }}</span></div>
             <div class="text-slate-500">Budget<br><span class="text-slate-800">{{ t.budget }}</span></div>
             <div class="text-slate-500">Vote type<br><span class="text-slate-800">{{ t.vote_type }}</span></div>
             <div class="text-slate-500">Vote length<br><span class="text-slate-800">{{ t.vote_length }}</span></div>
-            <div class="text-slate-500">File<br><span class="text-slate-800 font-mono truncate block" title="{{ t.file_name }}">{{ t.file_name }}</span></div>
           </div>
         </div>
+        
+        {# Validation Report Column #}
+        {% if t.validation %}
+        <div class="w-64 shrink-0 border-l border-slate-200 pl-4">
+          <div class="text-xs font-medium text-slate-600 mb-2">Validation Report</div>
+          <div class="flex items-start gap-2 mb-2">
+            <span class="text-xl {{ 'text-emerald-600' if t.validation.valid else ('text-orange-600' if t.validation.error_message else 'text-red-600') }}">
+              {{ '✓' if t.validation.valid else ('⚠' if t.validation.error_message else '✗') }}
+            </span>
+            <div class="flex-1 text-xs">
+              <div class="{{ 'text-emerald-700 font-medium' if t.validation.valid else ('text-orange-700' if t.validation.error_message else 'text-red-700 font-medium') }}">
+                {% if t.validation.valid %}
+                  Valid file
+                {% elif t.validation.error_message %}
+                  {{ t.validation.error_message }}
+                {% else %}
+                  Invalid file
+                {% endif %}
+              </div>
+              {% if t.error_count > 0 %}
+              <div class="text-red-700 mt-1">{{ t.error_count }} error{{ 's' if t.error_count != 1 else '' }}</div>
+              {% endif %}
+              {% if t.warning_count > 0 %}
+              <div class="text-orange-700 mt-1">{{ t.warning_count }} warning{{ 's' if t.warning_count != 1 else '' }}</div>
+              {% endif %}
+            </div>
+          </div>
+          
+          {% if t.validation.errors or t.validation.warnings %}
+          <button type="button" class="text-xs text-indigo-600 hover:text-indigo-800 underline" onclick="toggleValidationDetails('{{ t.file_name|e }}')">
+            Show details
+          </button>
+          
+          {# Detailed validation errors/warnings (initially hidden) #}
+          <div id="validation-{{ t.file_name|e }}" class="hidden mt-2 p-2 bg-slate-50 rounded text-xs space-y-2 max-h-48 overflow-y-auto">
+            {% if t.validation.errors %}
+            <div>
+              <div class="font-semibold text-red-700 mb-1">Errors:</div>
+              <ul class="list-disc list-inside space-y-1 text-red-600">
+                {% for error_type, instances in t.validation.errors.items() %}
+                  {% for instance_id, message in instances.items() %}
+                    <li><span class="font-medium">{{ error_type }}:</span> {{ message }}</li>
+                  {% endfor %}
+                {% endfor %}
+              </ul>
+            </div>
+            {% endif %}
+            
+            {% if t.validation.warnings %}
+            <div>
+              <div class="font-semibold text-orange-700 mb-1">Warnings:</div>
+              <ul class="list-disc list-inside space-y-1 text-orange-600">
+                {% for warning_type, instances in t.validation.warnings.items() %}
+                  {% for instance_id, message in instances.items() %}
+                    <li><span class="font-medium">{{ warning_type }}:</span> {{ message }}</li>
+                  {% endfor %}
+                {% endfor %}
+              </ul>
+            </div>
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+        
+        {# Action buttons column #}
         <div class="flex flex-col items-center gap-2 ml-2">
           <a class="p-2 rounded-md border border-slate-300 hover:bg-slate-50" title="Download" href="{{ url_for('admin.upload_tiles_download', name=t.file_name) }}">⬇</a>
           <div class="flex flex-col items-center gap-1">
@@ -368,6 +480,14 @@
   });
 
   // Replace functionality removed from UI as per requirements.
+
+  // Validation details toggle
+  window.toggleValidationDetails = function(fileName) {
+    const detailsEl = document.getElementById('validation-' + fileName);
+    if (detailsEl) {
+      detailsEl.classList.toggle('hidden');
+    }
+  };
 
   // Initial
   document.addEventListener('change', (e)=>{
