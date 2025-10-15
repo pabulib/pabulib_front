@@ -328,6 +328,18 @@
   // Removed explicit Selected: X label from UI; keep internal count only if needed.
   // const replaceWithSelected = document.getElementById('replaceWithSelected');
   const total = tiles.length;
+  // Collect filenames that were not loaded due to pre-flight checks (with reasons)
+  const preflightRejected = [];
+
+  // On load: display any pending upload report saved before reload
+  try{
+    const stored = localStorage.getItem('pabulibUploadReport');
+    if(stored){
+      const payload = JSON.parse(stored);
+      if(payload && payload.summary){ renderBannerSummary(payload); }
+      localStorage.removeItem('pabulibUploadReport');
+    }
+  }catch(_e){}
 
   function updateCount(){
     const visible = tiles.filter(t => t.style.display !== 'none').length;
@@ -420,13 +432,37 @@
       if(progressHint) progressHint.textContent = 'After upload completes, files will be validated. Please wait...';
     }
     
-    // Note: Server will check for webpage_name duplicates based on META data
+    // Pre-flight checks: only .pb and <= 10 MB
+    const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
+    const rejected = [];
+    const okFiles = [];
+    for(const f of files){
+      const name = f.name || '';
+      if(!name.toLowerCase().endsWith('.pb')){
+        rejected.push({ name, reason: 'Only .pb files are allowed' });
+        continue;
+      }
+      if(typeof f.size === 'number' && f.size > MAX_SIZE){
+        rejected.push({ name, reason: 'File too large (>10 MB)' });
+        continue;
+      }
+      okFiles.push(f);
+    }
+    if(rejected.length){
+      rejected.forEach(r => preflightRejected.push(`${r.name} — ${r.reason}`));
+    }
+    if(okFiles.length === 0){
+      if(progressContainer) progressContainer.classList.add('hidden');
+      return;
+    }
+
+    // Note: Server will also check for webpage_name duplicates based on META data
     // First try uploading without force_replace to detect duplicates
     let fd = new FormData();
-    files.forEach(f => fd.append('files', f));
+    okFiles.forEach(f => fd.append('files', f));
     
-    // Create XMLHttpRequest to track upload progress
-    const xhr = new XMLHttpRequest();
+  // Create XMLHttpRequest to track upload progress
+  const xhr = new XMLHttpRequest();
     
     // Track upload progress
     xhr.upload.addEventListener('progress', (e) => {
@@ -441,7 +477,14 @@
     const uploadPromise = new Promise((resolve, reject) => {
       xhr.onload = () => {
         if(xhr.status >= 200 && xhr.status < 300) {
-          resolve({ ok: true, text: () => Promise.resolve(xhr.responseText) });
+          // Try to parse JSON first (our endpoint now supports JSON when X-Requested-With is fetch)
+          let parsed = null;
+          try { parsed = JSON.parse(xhr.responseText); } catch(_e) {}
+          if(parsed && typeof parsed === 'object' && parsed.results){
+            resolve({ ok: true, json: () => Promise.resolve(parsed) });
+          } else {
+            resolve({ ok: true, text: () => Promise.resolve(xhr.responseText) });
+          }
         } else {
           reject(new Error('Upload failed'));
         }
@@ -449,8 +492,9 @@
       xhr.onerror = () => reject(new Error('Upload failed'));
     });
     
-    xhr.open('POST', "{{ url_for('admin.upload_tiles') }}", true);
-    xhr.send(fd);
+  xhr.open('POST', "{{ url_for('admin.upload_tiles') }}", true);
+  xhr.setRequestHeader('X-Requested-With', 'fetch');
+  xhr.send(fd);
     
     let resp;
     try {
@@ -462,18 +506,65 @@
     }
     
     if(resp.ok){
-      // Get the HTML response
-      const html = await resp.text();
-      const hasDuplicateWarning = html.includes('duplicate webpage_name') || html.includes('Duplicate detected');
+      // Prefer JSON pathway when available
+  let uploadJson = null;
+      let html = '';
+      if(resp.json){
+        uploadJson = await resp.json();
+      } else if(resp.text) {
+        html = await resp.text();
+      }
+      const hasDuplicateWarning = (html && (html.includes('duplicate webpage_name') || html.includes('Duplicate detected')))
+        || (uploadJson && uploadJson.overwrites_rejected && uploadJson.overwrites_rejected.length > 0);
+
+      // Try to extract saved filenames from the HTML so we validate the correct names
+      const savedNames = [];
+      if(uploadJson && uploadJson.results){
+        uploadJson.results.forEach(r => {
+          // server returns name (final saved) and original_name when applicable
+          if(r && r.name && r.ok){ savedNames.push(r.name); }
+        });
+      } else if(html){
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        try{
+          doc.querySelectorAll('.mt-3 .p-2 .flex-1').forEach(node => {
+            const text = node.textContent || '';
+            const m = text.match(/Saved as\s+([\w\-\.]+\.pb)/i);
+            const nameLabel = node.querySelector('.font-medium');
+            const labelName = nameLabel ? (nameLabel.textContent || '').trim() : null;
+            if(m && m[1]){
+              savedNames.push(m[1]);
+            } else if(labelName && labelName.endsWith('.pb')){
+              savedNames.push(labelName);
+            }
+          });
+        }catch(_e){}
+      }
+      // Collect upload-time issues (e.g., parse errors, wrong extension) into banner list
+      const uploadIssues = [];
+      if(uploadJson && uploadJson.results){
+        uploadJson.results.forEach(r => {
+          if(r && r.ok === false){
+            const nm = (r.name || r.original_name || '');
+            const why = (r.msg || 'upload rejected');
+            uploadIssues.push(`${nm} — ${why}`);
+          }
+        });
+      }
       
       if(hasDuplicateWarning){
         // Hide progress bar before showing confirmation
         if(progressContainer) progressContainer.classList.add('hidden');
         
-        // Extract webpage_names from the warning message
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
+        // Extract webpage_names from JSON if available; fallback to HTML parse
         const webpageNames = [];
+        if(uploadJson && uploadJson.overwrites_rejected){
+          uploadJson.overwrites_rejected.forEach(n => { if(n && !webpageNames.includes(n)) webpageNames.push(n); });
+        }
+        if(webpageNames.length === 0 && html){
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, 'text/html');
         
         // Look for the main warning message that contains the list of webpage_names
         const messageDiv = doc.querySelector('.bg-red-50.text-red-700, .bg-red-100.text-red-700');
@@ -493,7 +584,7 @@
         }
         
         // Also check individual error messages for webpage_names
-        if(webpageNames.length === 0){
+  if(webpageNames.length === 0){
           const errorDivs = doc.querySelectorAll('.text-red-700, .text-red-600');
           errorDivs.forEach(div => {
             const text = div.textContent;
@@ -504,6 +595,9 @@
           });
         }
         
+        // Close HTML parsing branch
+      }
+
         // Only show confirmation dialog if there are actual webpage_names to replace
         // If the list is empty, it means files were uploaded successfully without conflicts
         if(webpageNames.length === 0){
@@ -519,8 +613,19 @@
           if(progressHint) progressHint.textContent = 'Upload complete. Starting validation...';
           await new Promise(resolve => setTimeout(resolve, 300));
           
-          await validateUploadedFiles(files.map(f => f.name));
-          window.location.reload();
+          const namesToValidate = savedNames.length ? savedNames : okFiles.map(f => f.name);
+          const summary = await validateUploadedFiles(namesToValidate);
+          // Merge in pre-flight not-loaded items and upload-time issues
+          if(preflightRejected.length){
+            summary.failedNames = (summary.failedNames || []).concat(preflightRejected);
+          }
+          if(uploadIssues.length){
+            summary.failedNames = (summary.failedNames || []).concat(uploadIssues);
+          }
+          const payload = { phase: 'validation', summary };
+          try{ localStorage.setItem('pabulibUploadReport', JSON.stringify(payload)); }catch(_e){}
+          renderBannerSummary(payload);
+          setTimeout(() => window.location.reload(), 1200);
           return;
         }
         
@@ -541,7 +646,7 @@
             progressContainer.classList.remove('hidden');
             progressBar.style.width = '0%';
             progressPercent.textContent = '0%';
-            progressText.textContent = `Re-uploading ${files.length} file${files.length === 1 ? '' : 's'}...`;
+            progressText.textContent = `Re-uploading ${okFiles.length} file${okFiles.length === 1 ? '' : 's'}...`;
             if(progressPhase) {
               progressPhase.textContent = 'Re-upload';
               progressPhase.className = 'px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700';
@@ -553,7 +658,7 @@
           
           // Re-upload with force_replace flag
           fd = new FormData();
-          files.forEach(f => fd.append('files', f));
+          okFiles.forEach(f => fd.append('files', f));
           fd.append('force_replace', '1');
           
           const xhr2 = new XMLHttpRequest();
@@ -617,13 +722,24 @@
       if(progressHint) progressHint.textContent = 'Upload complete. Starting validation...';
       await new Promise(resolve => setTimeout(resolve, 300));
       
-      await validateUploadedFiles(files.map(f => f.name));
+      const namesToValidate = savedNames.length ? savedNames : okFiles.map(f => f.name);
+      const summary = await validateUploadedFiles(namesToValidate);
+      if(preflightRejected.length){
+        summary.failedNames = (summary.failedNames || []).concat(preflightRejected);
+      }
+      if(uploadIssues.length){
+        summary.failedNames = (summary.failedNames || []).concat(uploadIssues);
+      }
+      const payload = { phase: 'validation', summary };
+      try{ localStorage.setItem('pabulibUploadReport', JSON.stringify(payload)); }catch(_e){}
+      renderBannerSummary(payload);
       
       // Reload to render server-side parsed previews and messages
       window.location.reload();
     } else {
       if(progressContainer) progressContainer.classList.add('hidden');
-      alert('Upload failed');
+      const failedList = okFiles.map(f=>`${f.name} — upload failed`);
+      renderBannerSummary({ phase: 'upload', summary: { total: okFiles.length, ok: 0, invalid: 0, errored: okFiles.length, failedNames: failedList, errors: ['Upload failed'] } });
     }
   }
 
@@ -642,7 +758,7 @@
     
     if(!filenames || filenames.length === 0) return;
     
-    try {
+  try {
       // Ensure the progress UI is visible and in view
       if(progressContainer){
         progressContainer.classList.remove('hidden');
@@ -665,6 +781,8 @@
       
       // Validate files one by one for better progress feedback
       const results = [];
+      let okCount = 0, invalidCount = 0, erroredCount = 0;
+      const failedNames = [];
       for(let i = 0; i < filenames.length; i++) {
         const filename = filenames[i];
         const percent = Math.round(((i + 1) / filenames.length) * 100);
@@ -713,12 +831,18 @@
               progressFileName.title = displayName;
             }
             
-            // Update hint based on validation status
-            if(progressHint) {
-              if(result.validation && result.validation.valid) {
+            // Update counts and hint based on validation status
+            const isValid = !!(result.validation && result.validation.valid);
+            if(isValid) {
+              okCount++;
+              if(progressHint){
                 progressHint.textContent = '✓ File validated successfully';
                 progressHint.className = 'text-emerald-600';
-              } else {
+              }
+            } else {
+              invalidCount++;
+              failedNames.push(progressFileName ? (progressFileName.textContent || filename) : filename);
+              if(progressHint){
                 progressHint.textContent = '⚠ File has validation issues';
                 progressHint.className = 'text-orange-600';
               }
@@ -726,6 +850,8 @@
           } else {
             // If individual validation fails, continue with others
             console.warn(`Failed to validate ${filename}`);
+            erroredCount++;
+            failedNames.push(filename);
             if(progressHint) {
               progressHint.textContent = '⚠ Validation error occurred';
               progressHint.className = 'text-orange-600';
@@ -733,6 +859,8 @@
           }
         } catch(error) {
           console.error(`Error validating ${filename}:`, error);
+          erroredCount++;
+          failedNames.push(filename);
           if(progressHint) {
             progressHint.textContent = '⚠ Validation error occurred';
             progressHint.className = 'text-orange-600';
@@ -743,13 +871,16 @@
         await new Promise(resolve => setTimeout(resolve, 100));
       }
       
-      // Final validation complete message
+  // Final validation complete message
       if(progressText) progressText.textContent = 'Validation complete!';
       if(progressHint) {
         progressHint.textContent = 'All files processed. Refreshing view...';
         progressHint.className = 'text-slate-400';
       }
-      if(progressFileName) progressFileName.classList.add('hidden');
+  if(progressFileName) progressFileName.classList.add('hidden');
+
+  // Build a compact summary for caller
+  return { total: filenames.length, ok: okCount, invalid: invalidCount, errored: erroredCount, failedNames };
       
     } catch(error) {
       console.error('Validation error:', error);
@@ -759,7 +890,60 @@
         progressHint.className = 'text-orange-600';
       }
       // Continue anyway - validation errors shouldn't block the upload
+      return { total: (filenames || []).length, ok: 0, invalid: (filenames || []).length, errored: 0, failedNames: filenames || [] };
     }
+  }
+
+  // Render a persistent banner summary above the dropzone (same place as Deleted files message)
+  function renderBannerSummary(payload){
+    try{
+      const container = document.querySelector('.w-full.bg-white.rounded-lg.shadow-lg.p-6.mt-8');
+      if(!container) return;
+
+      // Find or create banner area at top (just below title block)
+      let banner = container.querySelector('[data-banner]');
+      if(!banner){
+        banner = document.createElement('div');
+        banner.setAttribute('data-banner', '1');
+        banner.className = 'mb-4';
+        // Insert after the header section (first child div)
+        const insertAfter = container.firstElementChild && container.firstElementChild.nextElementSibling ? container.firstElementChild.nextElementSibling : container.firstElementChild;
+        if(insertAfter && insertAfter.nextSibling){
+          insertAfter.parentNode.insertBefore(banner, insertAfter.nextSibling);
+        } else {
+          container.prepend(banner);
+        }
+      }
+
+      const summary = payload && payload.summary ? payload.summary : null;
+      if(!summary) return;
+      const { total, ok, invalid, errored, failedNames, errors } = summary;
+
+      const lines = [];
+      lines.push(`<div><strong>Valid:</strong> ${ok} file${ok===1?'':'s'}</div>`);
+      const badCount = (invalid||0) + (errored||0);
+      lines.push(`<div><strong>Processed but invalid:</strong> ${invalid||0} file${(invalid||0)===1?'':'s'}</div>`);
+      if(badCount>0){
+        const list = (failedNames||[]).slice(0, 20).map(n => `<li class="whitespace-pre-line">${escapeHtml(n)}</li>`).join('');
+        const reasons = (errors && errors.length) ? `<div class="mt-1 text-slate-600 text-xs">${errors.map(escapeHtml).join('; ')}</div>` : '';
+        lines.push(`<div class="mt-2"><strong>Not loaded:</strong><ul class="list-disc list-inside mt-1">${list}</ul>${reasons}</div>`);
+      }
+
+      banner.innerHTML = `<div class="p-4 rounded-md text-sm bg-emerald-50 text-emerald-700 border border-emerald-200">${lines.join('')}</div>`;
+
+      // Add extra spacing above dropzone
+      const drop = document.getElementById('dropzone');
+      if(drop){ drop.style.marginTop = '2rem'; }
+    }catch(_e){}
+  }
+
+  function escapeHtml(s){
+    return String(s||'')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   // Upload selected button label updater
@@ -950,6 +1134,7 @@
       
       if(progressContainer) {
         progressContainer.classList.remove('hidden');
+        try { progressContainer.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(_e) {}
         progressBar.style.width = '0%';
         progressPercent.textContent = '0%';
         progressText.textContent = `Processing ${boxes.length} selected file${boxes.length === 1 ? '' : 's'}...`;
@@ -966,9 +1151,11 @@
         if(progressHint) progressHint.textContent = 'Uploading temporary files to the main library...';
       }
       
-      let allOk = true;
+  let allOk = true;
       const total = boxes.length;
       let completed = 0;
+  const failed = [];
+  const succeeded = [];
       
       for(const cb of boxes){
         const name = cb.dataset.file;
@@ -986,7 +1173,12 @@
         
         // We've already shown the summary confirmation; skip per-file confirm prompts
         const ok = await ingestOne(name, true);
-        if(!ok) allOk = false;
+        if(!ok){
+          allOk = false;
+          failed.push(name);
+        } else {
+          succeeded.push(name);
+        }
         
         // Update progress
         completed++;
@@ -1006,15 +1198,27 @@
       }
       if(progressFileName) progressFileName.classList.add('hidden');
       
+      // Show a brief summary report
+      const summaryLines = [
+        `Processed: ${total}`,
+        `Succeeded: ${succeeded.length}`,
+        `Failed: ${failed.length}`
+      ];
+      if(failed.length){
+        const maxList = failed.slice(0, 10).map(n => `  • ${n}`).join('\n');
+        summaryLines.push('\nFailed files (first 10):');
+        summaryLines.push(maxList);
+      }
+      alert('Upload report:\n\n' + summaryLines.join('\n'));
+
       // Hide progress bar after a brief success display
       setTimeout(() => {
         if(progressContainer) progressContainer.classList.add('hidden');
-      }, 1000);
-      
+      }, 600);
+
       if(allOk){
         window.location.href = "{{ url_for('admin.upload_tiles') }}?message="+encodeURIComponent('New files uploaded.')+"&success=1";
       } else {
-        alert('Some uploads failed. See server logs for details.');
         window.location.reload();
       }
     });

@@ -42,6 +42,9 @@ bp = Blueprint(
     static_url_path="/static",
 )
 
+# Max accepted size of a single PB upload (10 MB)
+MAX_PB_FILE_SIZE = 10 * 1024 * 1024
+
 
 @bp.before_request
 def _require_admin_login():
@@ -461,6 +464,24 @@ def upload_tiles_post():
             temp_save_path = tmp_dir / f"temp_{fname}"
             f.save(str(temp_save_path))
 
+            # Enforce max size per file
+            try:
+                size = temp_save_path.stat().st_size
+                if size > MAX_PB_FILE_SIZE:
+                    temp_save_path.unlink(missing_ok=True)
+                    results.append(
+                        {
+                            "ok": False,
+                            "name": fname,
+                            "msg": "File too large. Maximum allowed size is 10 MB.",
+                            "validation": None,
+                        }
+                    )
+                    continue
+            except Exception:
+                # If size check fails, continue; parse step may still fail later
+                pass
+
             # Parse the uploaded file to get its webpage_name
             try:
                 uploaded_tile = _parse_pb_to_tile(temp_save_path)
@@ -585,6 +606,20 @@ def upload_tiles_post():
         msg += f" ℹ Replaced {len(overwrites_replaced)} existing temp file(s): {', '.join(overwrites_replaced)}"
     elif overwrites_rejected:
         msg += f" ⚠ WARNING: {len(overwrites_rejected)} file(s) rejected as duplicates: {', '.join(overwrites_rejected)}"
+    # If called via fetch/AJAX, return JSON response for client-side reporting
+    if request.headers.get("X-Requested-With") == "fetch" or request.is_json:
+        return jsonify(
+            {
+                "ok": saved > 0,
+                "message": msg,
+                "results": results,
+                "processed": len(files),
+                "saved": saved,
+                "overwrites_rejected": overwrites_rejected,
+                "overwrites_replaced": overwrites_replaced,
+                "tiles_count": len(tiles),
+            }
+        )
 
     return render_template(
         "admin/upload_tiles.html",
