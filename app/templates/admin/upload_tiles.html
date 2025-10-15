@@ -5,62 +5,87 @@
 
 {% block body %}
 {% include 'admin/_navbar.html' %}
-<section class="max-w-5xl mx-auto px-4">
-  <div class="w-full bg-white rounded-lg shadow-lg p-6 mt-8">
-    <div class="flex items-baseline justify-between mb-4">
-      <h1 class="text-3xl font-bold text-slate-800">Admin – Upload Tiles</h1>
-      <span class="text-sm text-slate-500">{{ count or 0 }} PB files</span>
-    </div>
-    <p class="text-gray-600 mb-6">These are temporary uploads. You can ingest them as new files or remove them from the temporary area.</p>
+<section class="max-w-7xl mx-auto px-4">
+  <div class="flex gap-6 justify-center">
+    <!-- Sidebar filters (left) to match admin dashboard/delete -->
+    <aside class="hidden md:block w-64 shrink-0 mt-8">
+      <div class="bg-white rounded-lg shadow-lg p-5 sticky top-24">
+        <h2 class="text-lg font-semibold text-slate-800 mb-4">Filters</h2>
 
-    <!-- Toolbar: search + bulk actions (mirrors admin dashboard style) -->
-    <div class="mb-4 flex items-start gap-6">
-      <!-- Left group: search + x/x + select all -->
-      <div class="flex items-center gap-4 flex-1 min-w-0">
-        <div class="relative w-full max-w-sm">
-        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M10.5 3.75a6.75 6.75 0 1 0 4.238 12.03l4.241 4.241a.75.75 0 1 0 1.06-1.06l-4.24-4.242A6.75 6.75 0 0 0 10.5 3.75Zm-5.25 6.75a5.25 5.25 0 1 1 10.5 0 5.25 5.25 0 0 1-10.5 0Z" clip-rule="evenodd"/></svg>
-        </span>
-        <input id="tmpSearch" type="text" placeholder="Search titles…" class="w-full pl-10 pr-10 py-2.5 rounded-md border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-800 placeholder-slate-400" />
-        <button id="tmpSearchClear" type="button" class="hidden absolute inset-y-0 right-0 pr-3 text-slate-400 hover:text-slate-600" aria-label="Clear search">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M12 2.25a9.75 9.75 0 1 0 0 19.5 9.75 9.75 0 0 0 0-19.5Zm-2.47 6.78a.75.75 0 0 1 1.06 0L12 10.44l1.41-1.41a.75.75 0 0 1 1.06 1.06L13.06 11.5l1.41 1.41a.75.75 0 1 1-1.06 1.06L12 12.56l-1.41 1.41a.75.75 0 0 1-1.06-1.06l1.41-1.41-1.41-1.41a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg>
-        </button>
-      </div>
-        <span id="tmpCount" class="text-sm text-slate-500 whitespace-nowrap"></span>
-        <label class="inline-flex items-center gap-2 text-slate-700">
-          <input id="tmpSelectAll" type="checkbox" class="w-4 h-4">
-          <span>Select all</span>
-        </label>
-      </div>
-
-      <!-- Right group: selected label (left) + stacked actions (right) -->
-      <div class="shrink-0 flex items-start gap-3">
-        <span id="tmpSelectedLabel" class="mt-2 text-sm text-slate-600 whitespace-nowrap">Selected: <span id="tmpSelected">0</span></span>
-        <div class="flex flex-col items-end gap-2">
-          <button id="uploadSelectedBtn" type="button" class="w-48 px-3 py-2 rounded-md bg-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed">Upload</button>
-          <button type="button" id="downloadSelected" class="w-48 px-3 py-2 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed">Download</button>
-          <button type="button" id="deleteSelected" class="w-48 px-3 py-2 rounded-md border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed">Delete</button>
+        <div class="mb-2">
+          <label for="filterStatus" class="block text-sm font-medium text-slate-700 mb-1">Status</label>
+          <select id="filterStatus" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
+            <option value="">All files</option>
+            <option value="new">New only</option>
+            <option value="existing">Existing (overwrite)</option>
+          </select>
         </div>
-      </div>
-    </div>
 
-      {% if message %}
-      <div class="p-3 rounded-md text-sm {{ 'bg-green-50 text-green-700 border border-green-200' if success else 'bg-red-50 text-red-700 border border-red-200' }}">
-        {{ message }}
+        <button id="filtersClear" type="button" class="mt-4 w-full px-3 py-2 text-sm rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50">Clear filters</button>
       </div>
-      {% endif %}
+    </aside>
 
-      <div id="dropzone" class="border-2 border-dashed border-slate-300 rounded-md p-8 text-center text-slate-500 hover:border-slate-400 cursor-pointer">
-        <div class="text-lg font-medium mb-1">Add files</div>
-        <div class="text-sm">Drag & drop .pb files here, or click to choose</div>
-        <input id="files" name="files" type="file" accept=".pb" multiple class="hidden" />
-      </div>
-    </div>
-  </div>
+    <div class="w-full">
+      <div class="w-full bg-white rounded-lg shadow-lg p-6 mt-8">
+        <div class="flex items-baseline justify-between mb-4">
+          <h1 class="text-3xl font-bold text-slate-800">Admin – Upload Tiles</h1>
+          <span class="text-sm text-slate-500">{{ count or 0 }} PB files</span>
+        </div>
+        <p class="text-gray-600 mb-6">These are temporary uploads. You can ingest them as new files or remove them from the temporary area.</p>
 
-  <div class="mt-6 space-y-4" id="tilesContainer">
+        <!-- Subtle legend -->
+        <div class="text-xs text-slate-500 mb-4 flex items-center gap-3">
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-emerald-100 bg-emerald-50 text-emerald-700" title="File will be ingested as a new dataset">New</span>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-red-100 bg-red-50 text-red-700" title="File will overwrite an existing dataset">Will overwrite</span>
+        </div>
+
+        <!-- Toolbar: search + bulk actions (mirrors admin dashboard style) -->
+        <div class="mb-4 flex items-start gap-6">
+          <!-- Left group: search + x/x + select all -->
+          <div class="flex items-center gap-4 flex-1 min-w-0">
+            <div class="relative w-full max-w-sm">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M10.5 3.75a6.75 6.75 0 1 0 4.238 12.03l4.241 4.241a.75.75 0 1 0 1.06-1.06l-4.24-4.242A6.75 6.75 0 0 0 10.5 3.75Zm-5.25 6.75a5.25 5.25 0 1 1 10.5 0 5.25 5.25 0 0 1-10.5 0Z" clip-rule="evenodd"/></svg>
+            </span>
+            <input id="tmpSearch" type="text" placeholder="Search titles…" class="w-full pl-10 pr-10 py-2.5 rounded-md border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-800 placeholder-slate-400" />
+            <button id="tmpSearchClear" type="button" class="hidden absolute inset-y-0 right-0 pr-3 text-slate-400 hover:text-slate-600" aria-label="Clear search">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M12 2.25a9.75 9.75 0 1 0 0 19.5 9.75 9.75 0 0 0 0-19.5Zm-2.47 6.78a.75.75 0 0 1 1.06 0L12 10.44l1.41-1.41a.75.75 0 0 1 1.06 1.06L13.06 11.5l1.41 1.41a.75.75 0 1 1-1.06 1.06L12 12.56l-1.41 1.41a.75.75 0 0 1-1.06-1.06l1.41-1.41-1.41-1.41a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg>
+            </button>
+          </div>
+            <span id="tmpCount" class="text-sm text-slate-500 whitespace-nowrap"></span>
+            <label class="inline-flex items-center gap-2 text-slate-700">
+              <input id="tmpSelectAll" type="checkbox" class="w-4 h-4">
+              <span>Select all</span>
+            </label>
+          </div>
+
+          <!-- Right group: selected label (left) + stacked actions (right) -->
+          <div class="shrink-0 flex items-start gap-3">
+            <span id="tmpSelectedLabel" class="mt-2 text-sm text-slate-600 whitespace-nowrap">Selected: <span id="tmpSelected">0</span></span>
+            <div class="flex flex-col items-end gap-2">
+              <button id="uploadSelectedBtn" type="button" class="w-48 px-3 py-2 rounded-md bg-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed">Upload</button>
+              <button type="button" id="downloadSelected" class="w-48 px-3 py-2 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed">Download</button>
+              <button type="button" id="deleteSelected" class="w-48 px-3 py-2 rounded-md border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed">Delete</button>
+            </div>
+          </div>
+        </div>
+
+          {% if message %}
+          <div class="p-3 rounded-md text-sm {{ 'bg-green-50 text-green-700 border border-green-200' if success else 'bg-red-50 text-red-700 border border-red-200' }}">
+            {{ message }}
+          </div>
+          {% endif %}
+
+          <div id="dropzone" class="border-2 border-dashed border-slate-300 rounded-md p-8 text-center text-slate-500 hover:border-slate-400 cursor-pointer">
+            <div class="text-lg font-medium mb-1">Add files</div>
+            <div class="text-sm">Drag & drop .pb files here, or click to choose</div>
+            <input id="files" name="files" type="file" accept=".pb" multiple class="hidden" />
+          </div>
+        </div>
+
+        <div class="mt-6 space-y-4" id="tilesContainer">
     {% for t in tiles %}
-    <section class="bg-white rounded-lg shadow p-4 tile-preview"
+    <section class="rounded-lg shadow p-4 tile-preview {{ 'bg-red-50 ring-1 ring-red-100' if t.exists_conflict else 'bg-emerald-50 ring-1 ring-emerald-100' }}"
       data-title="{{ t.title|e }}"
       data-desc="{{ t.description|e }}"
       data-file="{{ t.file_name|e }}"
@@ -108,6 +133,8 @@
       <div class="text-center text-slate-500">No temporary uploads yet.</div>
     {% endif %}
   </div>
+    </div>
+  </div>
 </section>
 {% endblock %}
 
@@ -121,6 +148,8 @@
   const selectAll = document.getElementById('tmpSelectAll');
   const search = document.getElementById('tmpSearch');
   const searchClear = document.getElementById('tmpSearchClear');
+  const statusSel = document.getElementById('filterStatus');
+  const clearFilters = document.getElementById('filtersClear');
   const uploadSelectedBtn = document.getElementById('uploadSelectedBtn');
   const deleteSelected = document.getElementById('deleteSelected');
   const downloadSelected = document.getElementById('downloadSelected');
@@ -136,11 +165,15 @@
 
   function filter(){
     const q = (search.value || '').toLowerCase().trim();
+    const fs = (statusSel && statusSel.value) || '';
     tiles.forEach(t => {
       const title = (t.dataset.title || '').toLowerCase();
       const desc = (t.dataset.desc || '').toLowerCase();
       const file = (t.dataset.file || '').toLowerCase();
-      const match = !q || title.includes(q) || desc.includes(q) || file.includes(q);
+      const textMatch = !q || title.includes(q) || desc.includes(q) || file.includes(q);
+      const exists = t.dataset.exists === '1';
+      const statusMatch = !fs || (fs === 'existing' ? exists : !exists);
+      const match = textMatch && statusMatch;
       t.style.display = match ? '' : 'none';
     });
     updateCount();
@@ -155,6 +188,12 @@
   }
   if(searchClear){
     searchClear.addEventListener('click', ()=>{ search.value=''; filter(); search.focus(); searchClear.classList.add('hidden'); });
+  }
+  if(statusSel){
+    statusSel.addEventListener('change', ()=>{ filter(); });
+  }
+  if(clearFilters){
+    clearFilters.addEventListener('click', ()=>{ if(statusSel) statusSel.value=''; filter(); });
   }
   if(selectAll){
     selectAll.addEventListener('change', ()=>{
