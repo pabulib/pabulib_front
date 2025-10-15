@@ -230,6 +230,26 @@
   });
 
   async function uploadFiles(files){
+    // Check if any of the files being uploaded already exist in temp folder
+    const existingFiles = [];
+    const existingTempFiles = tiles.map(t => t.dataset.file);
+    
+    for(const f of files){
+      if(existingTempFiles.includes(f.name)){
+        existingFiles.push(f.name);
+      }
+    }
+    
+    // Show warning if any temp files will be overwritten
+    if(existingFiles.length > 0){
+      const proceed = confirm(
+        `WARNING: The following ${existingFiles.length} file${existingFiles.length === 1 ? '' : 's'} already exist${existingFiles.length === 1 ? 's' : ''} in temporary uploads and will be overwritten:\n\n` +
+        existingFiles.map(name => `• ${name}`).join('\n') +
+        `\n\nThese files have NOT been published yet. Do you want to overwrite them?`
+      );
+      if(!proceed) return;
+    }
+    
     const fd = new FormData();
     files.forEach(f => fd.append('files', f));
   const resp = await fetch("{{ url_for('admin.upload_tiles') }}", { method: 'POST', body: fd });

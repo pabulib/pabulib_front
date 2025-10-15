@@ -361,6 +361,8 @@ def upload_tiles_post():
     tmp_dir = _tmp_upload_dir()
     saved = 0
     results = []
+    overwrites = []  # Track files that will overwrite temp files
+
     for f in files:
         fname = secure_filename(f.filename or "").strip()
         if not fname:
@@ -373,6 +375,9 @@ def upload_tiles_post():
             continue
         try:
             target = tmp_dir / fname
+            # Check if temp file already exists (not yet published)
+            if target.exists():
+                overwrites.append(fname)
             f.save(str(target))
             saved += 1
             results.append({"ok": True, "name": fname, "msg": "Uploaded to /tmp."})
@@ -380,9 +385,15 @@ def upload_tiles_post():
             results.append({"ok": False, "name": fname, "msg": f"Failed to save: {e}"})
 
     tiles = _list_tmp_tiles()
+
+    # Build message with overwrite warning if any temp files were overwritten
+    msg = f"Processed {len(files)} file(s). Uploaded {saved}."
+    if overwrites:
+        msg += f" WARNING: Overwrote {len(overwrites)} existing temp file(s): {', '.join(overwrites)}"
+
     return render_template(
         "admin/upload_tiles.html",
-        message=f"Processed {len(files)} file(s). Uploaded {saved}.",
+        message=msg,
         success=saved > 0,
         results=results,
         tiles=tiles,
