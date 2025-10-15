@@ -8,8 +8,9 @@
 <section class="max-w-7xl mx-auto px-4">
   <div class="flex gap-6 justify-center">
     <!-- Sidebar filters (left) to match admin dashboard/delete -->
-    <aside class="hidden md:block w-64 shrink-0 mt-8">
-      <div class="bg-white rounded-lg shadow-lg p-5 sticky top-24">
+    <!-- Make the whole column sticky so inner cards don't overlap each other -->
+    <aside class="hidden md:block w-64 shrink-0 mt-8 self-start sticky top-[120px] space-y-6">
+      <div class="bg-white rounded-lg shadow-lg p-5">
         <h2 class="text-lg font-semibold text-slate-800 mb-4">Filters</h2>
 
         <div class="mb-2">
@@ -33,7 +34,7 @@
         <button id="filtersClear" type="button" class="mt-4 w-full px-3 py-2 text-sm rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50">Clear filters</button>
       </div>
 
-      <div class="bg-white rounded-lg shadow-lg p-5 sticky top-24 mt-6">
+      <div class="bg-white rounded-lg shadow-lg p-5">
         <h2 class="text-lg font-semibold text-slate-800 mb-4">Upload settings</h2>
         <div class="mb-3">
           <label for="maxFileMb" class="block text-sm font-medium text-slate-700 mb-1">Max MB per file</label>
