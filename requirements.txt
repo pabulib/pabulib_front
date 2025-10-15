@@ -6,3 +6,4 @@ cryptography>=41
 bibtexparser
 requests>=2.25.0
 gunicorn>=21.2.0
+pabulib-checker

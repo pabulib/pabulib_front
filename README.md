@@ -34,6 +34,14 @@ Docker
 
 To re-ingest after adding files: docker compose exec web python -m scripts.db_refresh
 
+## PB File Validation (Checker)
+
+This project uses the [pabulib/checker](https://github.com/pabulib/checker) library to validate .pb files. The checker is automatically installed during Docker build via `requirements.txt`.
+
+To update the checker: `docker compose build web && docker compose up -d`
+
+To validate files: `docker compose exec web python scripts/validate_pb_files.py /app/pb_files 10`
+
 ## Deployment
 
 To deploy changes to the server:
