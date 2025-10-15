@@ -154,11 +154,22 @@
               <div id="progressBar" class="bg-indigo-600 h-full transition-all duration-300 ease-out" style="width: 0%"></div>
             </div>
             <div class="mt-2 text-sm text-slate-600 text-center">
-              <span id="progressText">Uploading files...</span>
-              <span id="progressPercent" class="font-medium">0%</span>
+              <div class="flex items-center justify-center gap-2">
+                <span id="progressPhase" class="px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">Upload</span>
+                <span id="progressText">Uploading files...</span>
+                <span id="progressPercent" class="font-medium">0%</span>
+              </div>
             </div>
-            <div class="text-xs text-slate-500 text-center mt-1">
-              After upload completes, files will be validated. Please wait...
+            <div class="text-xs text-slate-500 text-center mt-2 space-y-1">
+              <div id="progressFileCount" class="hidden">
+                Processing file <span id="currentFileNum">1</span> of <span id="totalFileNum">1</span>
+              </div>
+              <div id="progressFileName" class="hidden font-mono text-slate-600 truncate max-w-md mx-auto" title="">
+                <!-- Current file webpage name will appear here -->
+              </div>
+              <div id="progressHint" class="text-slate-400">
+                After upload completes, files will be validated. Please wait...
+              </div>
             </div>
           </div>
         </div>
@@ -388,12 +399,25 @@
     const progressBar = document.getElementById('progressBar');
     const progressText = document.getElementById('progressText');
     const progressPercent = document.getElementById('progressPercent');
+    const progressPhase = document.getElementById('progressPhase');
+    const progressFileCount = document.getElementById('progressFileCount');
+    const progressFileName = document.getElementById('progressFileName');
+    const progressHint = document.getElementById('progressHint');
+    const currentFileNum = document.getElementById('currentFileNum');
+    const totalFileNum = document.getElementById('totalFileNum');
     
     if(progressContainer) {
       progressContainer.classList.remove('hidden');
       progressBar.style.width = '0%';
       progressPercent.textContent = '0%';
-      progressText.textContent = 'Uploading files...';
+      progressText.textContent = `Uploading ${files.length} file${files.length === 1 ? '' : 's'}...`;
+      if(progressPhase) {
+        progressPhase.textContent = 'Upload';
+        progressPhase.className = 'px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700';
+      }
+      if(progressFileCount) progressFileCount.classList.add('hidden');
+      if(progressFileName) progressFileName.classList.add('hidden');
+      if(progressHint) progressHint.textContent = 'After upload completes, files will be validated. Please wait...';
     }
     
     // Note: Server will check for webpage_name duplicates based on META data
@@ -484,6 +508,17 @@
         // If the list is empty, it means files were uploaded successfully without conflicts
         if(webpageNames.length === 0){
           // No actual duplicates - just reload to show the uploaded files
+          // Transition to validation phase
+          if(progressPhase) {
+            progressPhase.textContent = 'Validation';
+            progressPhase.className = 'px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700';
+          }
+          if(progressText) progressText.textContent = 'Preparing validation...';
+          if(progressBar) progressBar.style.width = '100%';
+          if(progressPercent) progressPercent.textContent = '100%';
+          if(progressHint) progressHint.textContent = 'Upload complete. Starting validation...';
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
           await validateUploadedFiles(files.map(f => f.name));
           window.location.reload();
           return;
@@ -506,7 +541,14 @@
             progressContainer.classList.remove('hidden');
             progressBar.style.width = '0%';
             progressPercent.textContent = '0%';
-            progressText.textContent = 'Re-uploading files...';
+            progressText.textContent = `Re-uploading ${files.length} file${files.length === 1 ? '' : 's'}...`;
+            if(progressPhase) {
+              progressPhase.textContent = 'Re-upload';
+              progressPhase.className = 'px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700';
+            }
+            if(progressFileCount) progressFileCount.classList.add('hidden');
+            if(progressFileName) progressFileName.classList.add('hidden');
+            if(progressHint) progressHint.textContent = 'Replacing existing files, then validating. Please wait...';
           }
           
           // Re-upload with force_replace flag
@@ -540,12 +582,17 @@
           
           try {
             resp = await reuploadPromise;
-            if(progressText) progressText.textContent = 'Validating files...';
+            if(progressText) progressText.textContent = 'Preparing validation...';
+            if(progressPhase) {
+              progressPhase.textContent = 'Validation';
+              progressPhase.className = 'px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700';
+            }
             if(progressBar) progressBar.style.width = '100%';
             if(progressPercent) progressPercent.textContent = '100%';
+            if(progressHint) progressHint.textContent = 'Upload complete. Starting validation...';
             
             // Add a small delay to show the validation message
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise(resolve => setTimeout(resolve, 300));
           } catch(error) {
             if(progressContainer) progressContainer.classList.add('hidden');
             alert('Re-upload failed');
@@ -559,6 +606,17 @@
       }
       
       // After successful upload, validate files with progress
+      // Transition to validation phase
+      if(progressPhase) {
+        progressPhase.textContent = 'Validation';
+        progressPhase.className = 'px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700';
+      }
+      if(progressText) progressText.textContent = 'Preparing validation...';
+      if(progressBar) progressBar.style.width = '100%';
+      if(progressPercent) progressPercent.textContent = '100%';
+      if(progressHint) progressHint.textContent = 'Upload complete. Starting validation...';
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
       await validateUploadedFiles(files.map(f => f.name));
       
       // Reload to render server-side parsed previews and messages
@@ -569,47 +627,137 @@
     }
   }
 
-  // Validate uploaded files with progress tracking
+  // Validate uploaded files with progress tracking - one by one for better progress display
   async function validateUploadedFiles(filenames) {
     const progressContainer = document.getElementById('uploadProgress');
     const progressBar = document.getElementById('progressBar');
     const progressText = document.getElementById('progressText');
     const progressPercent = document.getElementById('progressPercent');
+    const progressPhase = document.getElementById('progressPhase');
+    const progressFileCount = document.getElementById('progressFileCount');
+    const progressFileName = document.getElementById('progressFileName');
+    const progressHint = document.getElementById('progressHint');
+    const currentFileNum = document.getElementById('currentFileNum');
+    const totalFileNum = document.getElementById('totalFileNum');
     
     if(!filenames || filenames.length === 0) return;
     
     try {
-      // Show validation progress
-      if(progressText) progressText.textContent = 'Validating files...';
+      // Ensure the progress UI is visible and in view
+      if(progressContainer){
+        progressContainer.classList.remove('hidden');
+        try { progressContainer.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(_e) {}
+      }
+      // Transition to validation phase
+      if(progressPhase) {
+        progressPhase.textContent = 'Validation';
+        progressPhase.className = 'px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700';
+      }
+      if(progressText) progressText.textContent = 'Starting validation...';
       if(progressBar) progressBar.style.width = '0%';
       if(progressPercent) progressPercent.textContent = '0%';
+      if(progressHint) progressHint.textContent = 'Analyzing file structure and content...';
+      if(progressFileCount) {
+        progressFileCount.classList.remove('hidden');
+        if(totalFileNum) totalFileNum.textContent = filenames.length;
+        if(currentFileNum) currentFileNum.textContent = '0';
+      }
       
-      const resp = await fetch("{{ url_for('admin.upload_tiles_validate') }}", {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ files: filenames })
-      });
-      
-      if(resp.ok) {
-        const data = await resp.json();
-        if(data.results) {
-          // Update progress as we process results
-          for(let i = 0; i < data.results.length; i++) {
-            const result = data.results[i];
-            const percent = Math.round(((i + 1) / data.total) * 100);
-            if(progressBar) progressBar.style.width = percent + '%';
-            if(progressPercent) progressPercent.textContent = percent + '%';
-            if(progressText) progressText.textContent = `Validating file ${i + 1} of ${data.total}...`;
+      // Validate files one by one for better progress feedback
+      const results = [];
+      for(let i = 0; i < filenames.length; i++) {
+        const filename = filenames[i];
+        const percent = Math.round(((i + 1) / filenames.length) * 100);
+        
+        if(progressBar) progressBar.style.width = percent + '%';
+        if(progressPercent) progressPercent.textContent = percent + '%';
+        if(progressText) progressText.textContent = `Validating files...`;
+        if(currentFileNum) currentFileNum.textContent = (i + 1).toString();
+        
+        // Show current filename first (as fallback)
+        if(progressFileName) {
+          progressFileName.classList.remove('hidden');
+          progressFileName.textContent = filename;
+          progressFileName.title = filename;
+        }
+        
+        try {
+          const resp = await fetch("{{ url_for('admin.upload_tiles_validate_single') }}", {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ file: filename })
+          });
+          
+          if(resp.ok) {
+            const result = await resp.json();
+            results.push(result);
             
-            // Small delay to show progress
-            await new Promise(resolve => setTimeout(resolve, 50));
+            // Update display with actual webpage name if available
+            if(progressFileName) {
+              let displayName = '';
+              if(result.webpage_name) {
+                displayName = result.webpage_name;
+              } else if(result.title) {
+                displayName = result.title;
+              } else if(result.name) {
+                displayName = result.name;
+              } else if(result.file) {
+                displayName = result.file;
+              } else {
+                displayName = filename;
+              }
+              
+              progressFileName.textContent = displayName;
+              progressFileName.title = displayName;
+            }
+            
+            // Update hint based on validation status
+            if(progressHint) {
+              if(result.validation && result.validation.valid) {
+                progressHint.textContent = '✓ File validated successfully';
+                progressHint.className = 'text-emerald-600';
+              } else {
+                progressHint.textContent = '⚠ File has validation issues';
+                progressHint.className = 'text-orange-600';
+              }
+            }
+          } else {
+            // If individual validation fails, continue with others
+            console.warn(`Failed to validate ${filename}`);
+            if(progressHint) {
+              progressHint.textContent = '⚠ Validation error occurred';
+              progressHint.className = 'text-orange-600';
+            }
+          }
+        } catch(error) {
+          console.error(`Error validating ${filename}:`, error);
+          if(progressHint) {
+            progressHint.textContent = '⚠ Validation error occurred';
+            progressHint.className = 'text-orange-600';
           }
         }
+        
+        // Small delay to show progress and let users see the webpage names
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
+      
+      // Final validation complete message
+      if(progressText) progressText.textContent = 'Validation complete!';
+      if(progressHint) {
+        progressHint.textContent = 'All files processed. Refreshing view...';
+        progressHint.className = 'text-slate-400';
+      }
+      if(progressFileName) progressFileName.classList.add('hidden');
+      
     } catch(error) {
       console.error('Validation error:', error);
+      if(progressText) progressText.textContent = 'Validation completed with errors';
+      if(progressHint) {
+        progressHint.textContent = 'Some validation errors occurred. Check results below.';
+        progressHint.className = 'text-orange-600';
+      }
       // Continue anyway - validation errors shouldn't block the upload
     }
   }
@@ -661,11 +809,67 @@
   document.querySelectorAll('.ingest-one').forEach(btn => {
     btn.addEventListener('click', async () => {
       const name = btn.dataset.file;
+      const tile = btn.closest('.tile-preview');
+      const webpageName = tile ? (tile.dataset.title || name) : name;
+
+      // Show progress bar for per-file ingest
+      const progressContainer = document.getElementById('uploadProgress');
+      const progressBar = document.getElementById('progressBar');
+      const progressText = document.getElementById('progressText');
+      const progressPercent = document.getElementById('progressPercent');
+      const progressPhase = document.getElementById('progressPhase');
+      const progressFileCount = document.getElementById('progressFileCount');
+      const progressFileName = document.getElementById('progressFileName');
+      const progressHint = document.getElementById('progressHint');
+      const currentFileNum = document.getElementById('currentFileNum');
+      const totalFileNum = document.getElementById('totalFileNum');
+
+      if(progressContainer){
+        progressContainer.classList.remove('hidden');
+        try { progressContainer.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(_e) {}
+        if(progressBar) progressBar.style.width = '0%';
+        if(progressPercent) progressPercent.textContent = '0%';
+        if(progressText) progressText.textContent = 'Processing 1 selected file...';
+        if(progressPhase){
+          progressPhase.textContent = 'Processing';
+          progressPhase.className = 'px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700';
+        }
+        if(progressFileCount){
+          progressFileCount.classList.remove('hidden');
+          if(totalFileNum) totalFileNum.textContent = '1';
+          if(currentFileNum) currentFileNum.textContent = '1';
+        }
+        if(progressFileName){
+          progressFileName.classList.remove('hidden');
+          progressFileName.textContent = webpageName;
+          progressFileName.title = webpageName;
+        }
+        if(progressHint){
+          progressHint.textContent = 'Uploading file to the main library...';
+          progressHint.className = 'text-slate-400';
+        }
+      }
+
       // Per-row ingest keeps its own overwrite confirmation (skipConfirm=false)
       const ok = await ingestOne(name, false);
       if(ok){
-        window.location.href = "{{ url_for('admin.upload_tiles') }}?message="+encodeURIComponent(`Uploaded ${name}.`)+"&success=1";
+        // Show completion state briefly then redirect
+        if(progressBar) progressBar.style.width = '100%';
+        if(progressPercent) progressPercent.textContent = '100%';
+        if(progressText) progressText.textContent = 'Processing complete!';
+        if(progressHint){
+          progressHint.textContent = 'File uploaded. Redirecting...';
+          progressHint.className = 'text-slate-400';
+        }
+        setTimeout(() => {
+          window.location.href = "{{ url_for('admin.upload_tiles') }}?message="+encodeURIComponent(`Uploaded ${name}.`)+"&success=1";
+        }, 400);
       } else {
+        if(progressText) progressText.textContent = 'Processing failed';
+        if(progressHint){
+          progressHint.textContent = 'Failed to upload file. See server logs for details.';
+          progressHint.className = 'text-red-600';
+        }
         alert(`Failed to upload ${name}. See server logs for details.`);
         window.location.reload();
       }
@@ -737,12 +941,29 @@
       const progressBar = document.getElementById('progressBar');
       const progressText = document.getElementById('progressText');
       const progressPercent = document.getElementById('progressPercent');
+      const progressPhase = document.getElementById('progressPhase');
+      const progressFileCount = document.getElementById('progressFileCount');
+      const progressFileName = document.getElementById('progressFileName');
+      const progressHint = document.getElementById('progressHint');
+      const currentFileNum = document.getElementById('currentFileNum');
+      const totalFileNum = document.getElementById('totalFileNum');
       
       if(progressContainer) {
         progressContainer.classList.remove('hidden');
         progressBar.style.width = '0%';
         progressPercent.textContent = '0%';
-        progressText.textContent = 'Uploading selected files...';
+        progressText.textContent = `Processing ${boxes.length} selected file${boxes.length === 1 ? '' : 's'}...`;
+        if(progressPhase) {
+          progressPhase.textContent = 'Processing';
+          progressPhase.className = 'px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700';
+        }
+        if(progressFileCount) {
+          progressFileCount.classList.remove('hidden');
+          if(totalFileNum) totalFileNum.textContent = boxes.length;
+          if(currentFileNum) currentFileNum.textContent = '0';
+        }
+        if(progressFileName) progressFileName.classList.add('hidden');
+        if(progressHint) progressHint.textContent = 'Uploading temporary files to the main library...';
       }
       
       let allOk = true;
@@ -751,6 +972,18 @@
       
       for(const cb of boxes){
         const name = cb.dataset.file;
+        const tile = cb.closest('.tile-preview');
+        const webpageName = tile ? tile.dataset.title : name;
+        
+        // Show current file being processed
+        if(currentFileNum) currentFileNum.textContent = (completed + 1).toString();
+        if(progressFileName && webpageName) {
+          progressFileName.classList.remove('hidden');
+          progressFileName.textContent = webpageName;
+          progressFileName.title = webpageName;
+        }
+        if(progressText) progressText.textContent = `Processing files...`;
+        
         // We've already shown the summary confirmation; skip per-file confirm prompts
         const ok = await ingestOne(name, true);
         if(!ok) allOk = false;
@@ -760,11 +993,23 @@
         const percent = Math.round((completed / total) * 100);
         if(progressBar) progressBar.style.width = percent + '%';
         if(progressPercent) progressPercent.textContent = percent + '%';
-        if(progressText) progressText.textContent = `Uploading file ${completed} of ${total}...`;
+        
+        // Small delay to show current file
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
       
-      // Hide progress bar
-      if(progressContainer) progressContainer.classList.add('hidden');
+      // Final completion message
+      if(progressText) progressText.textContent = 'Processing complete!';
+      if(progressHint) {
+        progressHint.textContent = 'All selected files processed. Redirecting...';
+        progressHint.className = 'text-slate-400';
+      }
+      if(progressFileName) progressFileName.classList.add('hidden');
+      
+      // Hide progress bar after a brief success display
+      setTimeout(() => {
+        if(progressContainer) progressContainer.classList.add('hidden');
+      }, 1000);
       
       if(allOk){
         window.location.href = "{{ url_for('admin.upload_tiles') }}?message="+encodeURIComponent('New files uploaded.')+"&success=1";

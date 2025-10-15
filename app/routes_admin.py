@@ -972,6 +972,18 @@ def upload_tiles_validate():
             results.append({"file": fname, "ok": False, "error": "File not found"})
             continue
 
+        # Parse file to get metadata including webpage_name
+        tile_data = None
+        try:
+            tile_data = _parse_pb_to_tile(file_path)
+        except Exception:
+            # Continue with validation even if parsing fails
+            pass
+
+        # Print progress to console for server logs
+        webpage_name = tile_data.get("webpage_name") if tile_data else fname
+        current_app.logger.info(f"Processing file: `{webpage_name}`...")
+
         # Check for cached validation first
         validation_cache_path = tmp_dir / f".{fname}.validation.json"
         validation = None
@@ -1006,16 +1018,102 @@ def upload_tiles_validate():
                     "error_message": f"Validation error: {str(e)}. This file cannot be checked and is likely corrupted or malformed.",
                 }
 
-        results.append(
-            {
-                "file": fname,
-                "ok": True,
-                "validation": validation,
-                "progress": {"current": idx + 1, "total": total},
-            }
-        )
+        # Include webpage_name and title in the response for progress display
+        result = {
+            "file": fname,
+            "name": fname,  # Keep for compatibility
+            "ok": True,
+            "validation": validation,
+            "progress": {"current": idx + 1, "total": total},
+        }
+
+        # Add parsed metadata if available
+        if tile_data:
+            result["webpage_name"] = tile_data.get("webpage_name", "")
+            result["title"] = tile_data.get("title", "")
+
+        results.append(result)
 
     return jsonify({"ok": True, "results": results, "total": total})
+
+
+@bp.post("/admin/upload/validate_single")
+def upload_tiles_validate_single():
+    """Validate a single uploaded file with metadata.
+    Expects JSON: { "file": "filename.pb" }
+    Returns file metadata and validation results.
+    """
+    if not request.is_json:
+        return jsonify({"error": "JSON required"}), 400
+
+    data = request.get_json()
+    fname = data.get("file", "").strip()
+
+    if not fname or "/" in fname or ".." in fname or not fname.endswith(".pb"):
+        return jsonify({"error": "Invalid filename"}), 400
+
+    tmp_dir = _tmp_upload_dir()
+    file_path = tmp_dir / fname
+
+    if not file_path.exists():
+        return jsonify({"error": "File not found"}), 404
+
+    # Parse file to get metadata including webpage_name
+    tile_data = None
+    try:
+        tile_data = _parse_pb_to_tile(file_path)
+    except Exception as e:
+        return (
+            jsonify({"error": f"Parse error: {str(e)}", "file": fname, "ok": False}),
+            400,
+        )
+
+    # Check for cached validation first
+    validation_cache_path = tmp_dir / f".{fname}.validation.json"
+    validation = None
+
+    if validation_cache_path.exists():
+        try:
+            if validation_cache_path.stat().st_mtime >= file_path.stat().st_mtime:
+                import json
+
+                with open(validation_cache_path, "r") as f:
+                    validation = json.load(f)
+        except Exception:
+            pass
+
+    # If no cached validation, validate now
+    if validation is None:
+        try:
+            validation = validate_pb_file(file_path)
+            # Cache the result
+            try:
+                import json
+
+                with open(validation_cache_path, "w") as f:
+                    json.dump(validation, f)
+            except Exception:
+                pass
+        except Exception as e:
+            validation = {
+                "valid": False,
+                "errors": None,
+                "warnings": None,
+                "error_message": f"Validation error: {str(e)}. This file cannot be checked and is likely corrupted or malformed.",
+            }
+
+    # Return comprehensive result
+    result = {
+        "file": fname,
+        "name": fname,
+        "ok": True,
+        "validation": validation,
+        "webpage_name": tile_data.get("webpage_name", "") if tile_data else "",
+        "title": tile_data.get("title", "") if tile_data else "",
+        "description": tile_data.get("description", "") if tile_data else "",
+    }
+
+    return jsonify(result)
 
 
 @bp.get("/admin/upload/check")
