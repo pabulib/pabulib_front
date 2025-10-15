@@ -329,6 +329,7 @@
   // const replaceWithSelected = document.getElementById('replaceWithSelected');
   const total = tiles.length;
   // Collect filenames that were not loaded due to pre-flight checks (with reasons)
+  // Shape: { name: string, reason: string }
   const preflightRejected = [];
 
   // On load: display any pending upload report saved before reload
@@ -449,7 +450,7 @@
       okFiles.push(f);
     }
     if(rejected.length){
-      rejected.forEach(r => preflightRejected.push(`${r.name} — ${r.reason}`));
+      rejected.forEach(r => preflightRejected.push({ name: r.name, reason: r.reason }));
     }
     if(okFiles.length === 0){
       if(progressContainer) progressContainer.classList.add('hidden');
@@ -548,7 +549,7 @@
           if(r && r.ok === false){
             const nm = (r.name || r.original_name || '');
             const why = (r.msg || 'upload rejected');
-            uploadIssues.push(`${nm} — ${why}`);
+            uploadIssues.push({ name: nm, reason: why, webpage_name: r.webpage_name });
           }
         });
       }
@@ -616,13 +617,15 @@
           const namesToValidate = savedNames.length ? savedNames : okFiles.map(f => f.name);
           const summary = await validateUploadedFiles(namesToValidate);
           // Merge in pre-flight not-loaded items and upload-time issues
+          // Build structured notLoaded list for banner table
+          const notLoaded = ([]).concat(preflightRejected).concat(uploadIssues);
           if(preflightRejected.length){
-            summary.failedNames = (summary.failedNames || []).concat(preflightRejected);
+            summary.failedNames = (summary.failedNames || []).concat(preflightRejected.map(i => `${i.name} — ${i.reason}`));
           }
           if(uploadIssues.length){
-            summary.failedNames = (summary.failedNames || []).concat(uploadIssues);
+            summary.failedNames = (summary.failedNames || []).concat(uploadIssues.map(i => `${i.name} — ${i.reason}`));
           }
-          const payload = { phase: 'validation', summary };
+          const payload = { phase: 'validation', summary: { ...summary, notLoaded } };
           try{ localStorage.setItem('pabulibUploadReport', JSON.stringify(payload)); }catch(_e){}
           renderBannerSummary(payload);
           setTimeout(() => window.location.reload(), 1200);
@@ -724,13 +727,14 @@
       
       const namesToValidate = savedNames.length ? savedNames : okFiles.map(f => f.name);
       const summary = await validateUploadedFiles(namesToValidate);
+      const notLoaded = ([]).concat(preflightRejected).concat(uploadIssues);
       if(preflightRejected.length){
-        summary.failedNames = (summary.failedNames || []).concat(preflightRejected);
+        summary.failedNames = (summary.failedNames || []).concat(preflightRejected.map(i => `${i.name} — ${i.reason}`));
       }
       if(uploadIssues.length){
-        summary.failedNames = (summary.failedNames || []).concat(uploadIssues);
+        summary.failedNames = (summary.failedNames || []).concat(uploadIssues.map(i => `${i.name} — ${i.reason}`));
       }
-      const payload = { phase: 'validation', summary };
+      const payload = { phase: 'validation', summary: { ...summary, notLoaded } };
       try{ localStorage.setItem('pabulibUploadReport', JSON.stringify(payload)); }catch(_e){}
       renderBannerSummary(payload);
       
@@ -738,8 +742,8 @@
       window.location.reload();
     } else {
       if(progressContainer) progressContainer.classList.add('hidden');
-      const failedList = okFiles.map(f=>`${f.name} — upload failed`);
-      renderBannerSummary({ phase: 'upload', summary: { total: okFiles.length, ok: 0, invalid: 0, errored: okFiles.length, failedNames: failedList, errors: ['Upload failed'] } });
+  const failedList = okFiles.map(f=>({ name: f.name, reason: 'upload failed' }));
+  renderBannerSummary({ phase: 'upload', summary: { total: okFiles.length, ok: 0, invalid: 0, errored: okFiles.length, failedNames: failedList.map(i => `${i.name} — ${i.reason}`), notLoaded: failedList, errors: ['Upload failed'] } });
     }
   }
 
@@ -917,19 +921,30 @@
 
       const summary = payload && payload.summary ? payload.summary : null;
       if(!summary) return;
-      const { total, ok, invalid, errored, failedNames, errors } = summary;
+      const { total, ok, invalid, errored, failedNames, errors, notLoaded } = summary;
 
       const lines = [];
-      lines.push(`<div><strong>Valid:</strong> ${ok} file${ok===1?'':'s'}</div>`);
-      const badCount = (invalid||0) + (errored||0);
-      lines.push(`<div><strong>Processed but invalid:</strong> ${invalid||0} file${(invalid||0)===1?'':'s'}</div>`);
-      if(badCount>0){
-        const list = (failedNames||[]).slice(0, 20).map(n => `<li class="whitespace-pre-line">${escapeHtml(n)}</li>`).join('');
-        const reasons = (errors && errors.length) ? `<div class="mt-1 text-slate-600 text-xs">${errors.map(escapeHtml).join('; ')}</div>` : '';
-        lines.push(`<div class="mt-2"><strong>Not loaded:</strong><ul class="list-disc list-inside mt-1">${list}</ul>${reasons}</div>`);
+      // Counters with subtle colors
+      lines.push(`<div class="flex flex-col gap-1">
+        <div class="text-emerald-700"><strong>Valid:</strong> ${ok} file${ok===1?'':'s'}</div>
+        <div class="text-orange-700"><strong>Processed but invalid:</strong> ${invalid||0} file${(invalid||0)===1?'':'s'}</div>
+        <div class="text-red-700"><strong>Not loaded:</strong> ${(notLoaded && notLoaded.length) || 0} file${(notLoaded && notLoaded.length)===1?'':'s'}</div>
+      </div>`);
+
+      // Table of Not loaded with two columns
+      if(notLoaded && notLoaded.length){
+        const rows = notLoaded.map(item => {
+          const display = bestDisplayName(item);
+          const reason = item.reason || '';
+          return `<tr class="border-b border-slate-200"><td class="py-1 pr-3 align-top">${escapeHtml(display)}</td><td class="py-1 text-red-700">${escapeHtml(reason)}</td></tr>`;
+        }).join('');
+        lines.push(`<div class="mt-3"><table class="w-full text-sm">
+          <thead><tr class="text-slate-600"><th class="text-left font-medium pr-3">File</th><th class="text-left font-medium">Reason</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>`);
       }
 
-      banner.innerHTML = `<div class="p-4 rounded-md text-sm bg-emerald-50 text-emerald-700 border border-emerald-200">${lines.join('')}</div>`;
+      banner.innerHTML = `<div class="p-4 rounded-md text-sm bg-emerald-50 border border-emerald-200">${lines.join('')}</div>`;
 
       // Add extra spacing above dropzone
       const drop = document.getElementById('dropzone');
@@ -944,6 +959,20 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  function bestDisplayName(item){
+    // Prefer webpage_name if available; else derive from filename by stripping extension and prettifying
+    if(item && item.webpage_name){ return item.webpage_name; }
+    const n = (item && item.name) ? String(item.name) : '';
+    return prettifyName(n);
+  }
+
+  function prettifyName(name){
+    if(!name) return '';
+    // strip extension
+    const base = name.replace(/\.[^.]+$/, '');
+    return base.replace(/_/g, ' ');
   }
 
   // Upload selected button label updater
