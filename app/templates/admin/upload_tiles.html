@@ -35,8 +35,10 @@
 
         <!-- Subtle legend -->
         <div class="text-xs text-slate-500 mb-4 flex items-center gap-3">
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-emerald-100 bg-emerald-50 text-emerald-700" title="File will be uploaded as a new dataset">New</span>
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-red-100 bg-red-50 text-red-700" title="File will overwrite an existing dataset">Will overwrite</span>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-emerald-200 bg-emerald-100 text-emerald-800" title="Valid file">✓ Valid</span>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-red-200 bg-red-100 text-red-800" title="Invalid file">✗ Invalid</span>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-700" title="File will be uploaded as a new dataset">New</span>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-orange-200 bg-orange-50 text-orange-700" title="File will overwrite an existing dataset">Overwrite</span>
         </div>
 
         <!-- Toolbar: search + bulk actions (mirrors admin dashboard style) -->
@@ -140,11 +142,12 @@
 
         <div class="mt-6 space-y-4" id="tilesContainer">
     {% for t in tiles %}
-    <section class="rounded-lg shadow p-4 tile-preview {{ 'bg-red-50 ring-1 ring-red-100' if t.exists_conflict else 'bg-emerald-50 ring-1 ring-emerald-100' }}"
+    <section class="rounded-lg shadow p-4 tile-preview {{ 'bg-red-100 ring-2 ring-red-200' if not t.validation.valid else 'bg-emerald-100 ring-2 ring-emerald-200' }}"
       data-title="{{ t.title|e }}"
       data-desc="{{ t.description|e }}"
       data-file="{{ t.file_name|e }}"
       data-exists="{{ '1' if t.exists_conflict else '' }}"
+      data-valid="{{ '1' if t.validation.valid else '0' }}"
     >
       <div class="flex items-start gap-4">
         <input class="row-check mt-1.5" type="checkbox" data-file="{{ t.file_name|e }}" />
@@ -153,6 +156,11 @@
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-3">
             <h2 class="text-lg font-semibold text-slate-800 truncate">{{ t.title }}</h2>
+            {% if t.exists_conflict %}
+              <span class="text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200">Overwrite</span>
+            {% else %}
+              <span class="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700 border border-blue-200">New</span>
+            {% endif %}
             {% if t.experimental %}
               <span class="text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700">Experimental</span>
             {% endif %}
@@ -342,31 +350,61 @@
   });
 
   async function uploadFiles(files){
-    // Check if any of the files being uploaded already exist in temp folder
-    const existingFiles = [];
-    const existingTempFiles = tiles.map(t => t.dataset.file);
-    
-    for(const f of files){
-      if(existingTempFiles.includes(f.name)){
-        existingFiles.push(f.name);
-      }
-    }
-    
-    // Show warning if any temp files will be overwritten
-    if(existingFiles.length > 0){
-      const proceed = confirm(
-        `WARNING: The following ${existingFiles.length} file${existingFiles.length === 1 ? '' : 's'} already exist${existingFiles.length === 1 ? 's' : ''} in temporary uploads and will be overwritten:\n\n` +
-        existingFiles.map(name => `• ${name}`).join('\n') +
-        `\n\nThese files have NOT been published yet. Do you want to overwrite them?`
-      );
-      if(!proceed) return;
-    }
-    
-    const fd = new FormData();
+    // Note: Server will check for webpage_name duplicates based on META data
+    // First try uploading without force_replace to detect duplicates
+    let fd = new FormData();
     files.forEach(f => fd.append('files', f));
-  const resp = await fetch("{{ url_for('admin.upload_tiles') }}", { method: 'POST', body: fd });
-    // Reload to render server-side parsed previews and messages
-    if(resp.ok){ window.location.reload(); } else { alert('Upload failed'); }
+    
+    let resp = await fetch("{{ url_for('admin.upload_tiles') }}", { method: 'POST', body: fd });
+    
+    if(resp.ok){
+      // Check if there were any duplicate webpage_name rejections in the response
+      const html = await resp.text();
+      const hasDuplicateWarning = html.includes('duplicate webpage_name') || html.includes('Duplicate detected');
+      
+      if(hasDuplicateWarning){
+        // Extract webpage_names from the error messages
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const webpageNames = [];
+        
+        // Look for all error messages containing webpage_name info
+        const errorDivs = doc.querySelectorAll('.text-red-700, .text-red-600');
+        errorDivs.forEach(div => {
+          const text = div.textContent;
+          const match = text.match(/webpage_name '([^']+)'/);
+          if(match && match[1] && !webpageNames.includes(match[1])){
+            webpageNames.push(match[1]);
+          }
+        });
+        
+        // Build a nice confirmation message with the list of webpage_names
+        let confirmMsg = `Some files were rejected because they have the same webpage_name (based on META data: country, unit, instance, subunit) as existing temp files.\n\n`;
+        if(webpageNames.length > 0){
+          confirmMsg += `The following webpage_names already exist:\n`;
+          webpageNames.forEach(name => {
+            confirmMsg += `  • ${name}\n`;
+          });
+          confirmMsg += `\n`;
+        }
+        confirmMsg += `Do you want to REPLACE the existing temp files with the new ones?`;
+        
+        const proceed = confirm(confirmMsg);
+        
+        if(proceed){
+          // Re-upload with force_replace flag
+          fd = new FormData();
+          files.forEach(f => fd.append('files', f));
+          fd.append('force_replace', '1');
+          resp = await fetch("{{ url_for('admin.upload_tiles') }}", { method: 'POST', body: fd });
+        }
+      }
+      
+      // Reload to render server-side parsed previews and messages
+      window.location.reload();
+    } else {
+      alert('Upload failed');
+    }
   }
 
   // Upload selected button label updater

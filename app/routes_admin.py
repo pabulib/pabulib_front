@@ -378,10 +378,28 @@ def upload_tiles_post():
             count=len(tiles),
         )
 
+    # Check if user confirmed to force replace duplicates
+    force_replace = request.form.get("force_replace") in {"1", "true", "True"}
+
     tmp_dir = _tmp_upload_dir()
     saved = 0
     results = []
-    overwrites = []  # Track files that will overwrite temp files
+    overwrites_rejected = (
+        []
+    )  # webpage_names rejected due to duplicates (when not force_replace)
+    overwrites_replaced = []  # webpage_names that were replaced (when force_replace)
+
+    # Build a map of existing temp files by webpage_name for duplicate checking
+    existing_temp_files = {}  # webpage_name -> filename
+    for existing_file in tmp_dir.glob("*.pb"):
+        try:
+            tile_data = _parse_pb_to_tile(existing_file)
+            existing_webpage_name = (tile_data.get("webpage_name") or "").strip()
+            if existing_webpage_name:
+                existing_temp_files[existing_webpage_name] = existing_file.name
+        except Exception:
+            # Skip files that can't be parsed
+            pass
 
     for f in files:
         fname = secure_filename(f.filename or "").strip()
@@ -407,10 +425,60 @@ def upload_tiles_post():
             continue
         try:
             target = tmp_dir / fname
-            # Check if temp file already exists (not yet published)
-            if target.exists():
-                overwrites.append(fname)
-            f.save(str(target))
+
+            # Save to a temporary location first to parse and check webpage_name
+            temp_save_path = tmp_dir / f"temp_{fname}"
+            f.save(str(temp_save_path))
+
+            # Parse the uploaded file to get its webpage_name
+            try:
+                uploaded_tile = _parse_pb_to_tile(temp_save_path)
+                uploaded_webpage_name = (
+                    uploaded_tile.get("webpage_name") or ""
+                ).strip()
+            except Exception as parse_err:
+                # If parsing fails, we can't check webpage_name, so reject the file
+                temp_save_path.unlink(missing_ok=True)
+                results.append(
+                    {
+                        "ok": False,
+                        "name": fname,
+                        "msg": f"Failed to parse file: {parse_err}",
+                        "validation": None,
+                    }
+                )
+                continue
+
+            # Check if a file with the same webpage_name already exists in temp
+            existing_filename = None
+            if uploaded_webpage_name and uploaded_webpage_name in existing_temp_files:
+                existing_filename = existing_temp_files[uploaded_webpage_name]
+
+                if not force_replace:
+                    # Don't upload - reject with a warning about duplicate webpage_name
+                    temp_save_path.unlink(missing_ok=True)
+                    overwrites_rejected.append(uploaded_webpage_name)
+                    results.append(
+                        {
+                            "ok": False,
+                            "name": fname,
+                            "msg": f"⚠ Duplicate detected: A file with the same webpage_name '{uploaded_webpage_name}' already exists in temp ({existing_filename}). Please remove the existing file first if you want to upload this one.",
+                            "validation": None,
+                        }
+                    )
+                    continue
+                else:
+                    # User confirmed - remove the old file with the same webpage_name
+                    old_file_path = tmp_dir / existing_filename
+                    old_file_path.unlink(missing_ok=True)
+                    overwrites_replaced.append(uploaded_webpage_name)
+
+            # Move temp file to final location
+            temp_save_path.rename(target)
+
+            # Update the existing_temp_files map with the new file
+            if uploaded_webpage_name:
+                existing_temp_files[uploaded_webpage_name] = fname
 
             # Validate the file after saving
             try:
@@ -428,16 +496,22 @@ def upload_tiles_post():
                 validation_summary = f"⚠ Validation failed: {str(val_err)}"
 
             saved += 1
+            upload_msg = "Uploaded to /tmp."
+            if existing_filename:
+                upload_msg += f" (Replaced {existing_filename} with same webpage_name)"
             results.append(
                 {
                     "ok": True,
                     "name": fname,
-                    "msg": "Uploaded to /tmp.",
+                    "msg": upload_msg,
                     "validation": validation,
                     "validation_summary": validation_summary,
                 }
             )
         except Exception as e:
+            # Clean up temp file if it still exists
+            temp_save_path = tmp_dir / f"temp_{fname}"
+            temp_save_path.unlink(missing_ok=True)
             results.append(
                 {
                     "ok": False,
@@ -449,10 +523,12 @@ def upload_tiles_post():
 
     tiles = _list_tmp_tiles()
 
-    # Build message with overwrite warning if any temp files were overwritten
+    # Build message with duplicate warning/info
     msg = f"Processed {len(files)} file(s). Uploaded {saved}."
-    if overwrites:
-        msg += f" WARNING: Overwrote {len(overwrites)} existing temp file(s): {', '.join(overwrites)}"
+    if overwrites_replaced:
+        msg += f" ℹ Replaced {len(overwrites_replaced)} existing temp file(s) based on webpage_name: {', '.join(overwrites_replaced)}"
+    elif overwrites_rejected:
+        msg += f" ⚠ WARNING: {len(overwrites_rejected)} file(s) rejected due to duplicate webpage_name: {', '.join(overwrites_rejected)}"
 
     return render_template(
         "admin/upload_tiles.html",
