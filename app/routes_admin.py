@@ -338,9 +338,9 @@ def _list_tmp_tiles() -> list[dict]:
                         "valid": False,
                         "errors": None,
                         "warnings": None,
-                        "error_message": f"Parse error: {str(e)}. This file cannot be checked and is likely corrupted or malformed.",
+                        "error_message": f"Parse error: {e.__class__.__name__}: {str(e)}. This file cannot be checked and is likely corrupted or malformed.",
                     },
-                    "validation_summary": f"⚠ Parse error: {str(e)}. File likely corrupted.",
+                    "validation_summary": f"⚠ Parse error: {e.__class__.__name__}: {str(e)}. File likely corrupted.",
                     "error_count": 0,
                     "warning_count": 0,
                 }
@@ -562,11 +562,13 @@ def upload_tiles_post():
                 continue
 
             # Use webpage_name as the target filename if available, otherwise use original filename
-            # This ensures files with different webpage_names don't overwrite each other
+            # IMPORTANT: sanitize to avoid slashes and invalid path characters
             if uploaded_webpage_name:
                 target_fname = f"{uploaded_webpage_name}.pb"
             else:
                 target_fname = fname
+            # Ensure the target file name is safe for filesystem usage
+            target_fname = secure_filename(target_fname) or secure_filename(fname)
 
             target = tmp_dir / target_fname
 
@@ -653,7 +655,7 @@ def upload_tiles_post():
                 {
                     "ok": False,
                     "name": fname,
-                    "msg": f"Failed to save: {e}",
+                    "msg": f"Failed to save: {e.__class__.__name__}: {e}",
                     "validation": None,
                 }
             )
@@ -1138,7 +1140,7 @@ def upload_tiles_validate():
                     "valid": False,
                     "errors": None,
                     "warnings": None,
-                    "error_message": f"Validation error: {str(e)}. This file cannot be checked and is likely corrupted or malformed.",
+                    "error_message": f"Validation error: {e.__class__.__name__}: {str(e)}. This file cannot be checked and is likely corrupted or malformed.",
                 }
 
         # Include webpage_name and title in the response for progress display
@@ -1187,7 +1189,13 @@ def upload_tiles_validate_single():
         tile_data = _parse_pb_to_tile(file_path)
     except Exception as e:
         return (
-            jsonify({"error": f"Parse error: {str(e)}", "file": fname, "ok": False}),
+            jsonify(
+                {
+                    "error": f"Parse error: {e.__class__.__name__}: {str(e)}",
+                    "file": fname,
+                    "ok": False,
+                }
+            ),
             400,
         )
 

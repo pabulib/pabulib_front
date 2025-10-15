@@ -133,7 +133,7 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 "num_selected_projects": format_int(int(num_selected_projects or 0)),
                 "num_selected_projects_raw": int(num_selected_projects or 0),
                 "budget": (
-                    format_budget(currency or "", int(budget or 0))
+                    format_budget(currency or "", int(float(budget or 0)))
                     if budget is not None
                     else "—"
                 ),

@@ -137,10 +137,17 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
             if str(p.get("selected", "0")).strip() == "1":
                 selected_count += 1
                 c = p.get("cost")
-                if isinstance(c, str) and c.isdigit():
-                    sum_selected_cost += int(c)
-                elif isinstance(c, int):
-                    sum_selected_cost += c
+                # Robust cost parsing: accept ints, floats, and numeric strings like '40000' or '40000.0'
+                try:
+                    if isinstance(c, (int, float)):
+                        sum_selected_cost += int(float(c))
+                    elif isinstance(c, str):
+                        # Normalize decimal comma and whitespace
+                        cs = c.strip().replace(",", ".")
+                        sum_selected_cost += int(float(cs))
+                except Exception:
+                    # Ignore non-parsable costs for the fully_funded heuristic
+                    pass
         fully_funded = all_selected or (
             budget is not None and sum_selected_cost >= budget
         )

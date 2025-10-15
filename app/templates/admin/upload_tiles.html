@@ -57,6 +57,23 @@
         </div>
   <p class="text-gray-600 mb-6">These are temporary uploads. You can upload them as new files or remove them from the temporary area.</p>
 
+        <!-- How it works / Checker info -->
+        <div class="mb-6 p-4 rounded-md bg-blue-50 border border-blue-200 text-blue-800 text-sm">
+          <div class="font-medium mb-1">How this works</div>
+          <ul class="list-disc pl-5 space-y-1">
+            <li>Files are uploaded to a temporary area (tmp) and then analyzed by our <strong>Checker</strong>. The per-tile panel below shows the <em>Validation Report (Checker)</em>.</li>
+            <li>Outcomes:
+              <ul class="list-disc pl-5 mt-1 space-y-1">
+                <li><strong>Valid</strong> — file parsed successfully and is ready to upload to the main library.</li>
+                <li><strong>Processed but invalid</strong> — file was parsed, but the Checker found issues (e.g., inconsistent metadata or schema problems). Review details under “Show details”.</li>
+                <li><strong>Not processed</strong> — file was skipped (e.g., not a .pb file, cannot be parsed, or exceeds the size limit).</li>
+              </ul>
+            </li>
+            <li>Limits: up to <strong>{{ (upload_settings.max_batch if upload_settings else 100) | int }}</strong> files per batch and a maximum file size of <strong>{{ (upload_settings.max_file_mb if upload_settings else 10) | int }}</strong> MB.</li>
+            <li>Duplicates: if an uploaded file has the same <code>webpage_name</code> as an existing temp file, you’ll be prompted to confirm replacement.</li>
+          </ul>
+        </div>
+
         <!-- Subtle legend -->
         <div class="text-xs text-slate-500 mb-4 flex items-center gap-3">
           <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-emerald-200 bg-emerald-100 text-emerald-800" title="Valid file">✓ Valid</span>
@@ -234,7 +251,7 @@
         {# Validation Report Column #}
         {% if t.validation %}
         <div class="w-64 shrink-0 border-l border-slate-200 pl-4">
-          <div class="text-xs font-medium text-slate-600 mb-2">Validation Report</div>
+          <div class="text-xs font-medium text-slate-600 mb-2" title="Results produced by the Checker">Validation Report (Checker)</div>
           <div class="flex items-start gap-2 mb-2">
             <span class="text-xl {{ 'text-emerald-600' if t.validation.valid else ('text-orange-600' if t.validation.error_message else 'text-red-600') }}">
               {{ '✓' if t.validation.valid else ('⚠' if t.validation.error_message else '✗') }}
