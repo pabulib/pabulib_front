@@ -9,22 +9,40 @@
   <div class="w-full bg-white rounded-lg shadow-lg p-6 mt-8">
     <div class="flex items-baseline justify-between mb-4">
       <h1 class="text-3xl font-bold text-slate-800">Admin – Upload Tiles</h1>
-      <span class="text-sm text-slate-500">{{ count or 0 }} PBs found</span>
+      <span class="text-sm text-slate-500">{{ count or 0 }} PB files</span>
     </div>
-    <p class="text-gray-600 mb-4">These are temporary uploads. You can ingest them as new files, replace existing ones, or remove them from the temporary area.</p>
-    <div class="flex flex-col gap-4">
-      <div class="flex items-center gap-3">
-        <input id="tmpSearch" type="text" placeholder="Search..." class="flex-1 px-3 py-2 rounded-md border border-slate-300 focus:ring-2 focus:ring-indigo-500" />
+    <p class="text-gray-600 mb-6">These are temporary uploads. You can ingest them as new files or remove them from the temporary area.</p>
+
+    <!-- Toolbar: search + bulk actions (mirrors admin dashboard style) -->
+    <div class="mb-4 flex items-start gap-6">
+      <!-- Left group: search + x/x + select all -->
+      <div class="flex items-center gap-4 flex-1 min-w-0">
+        <div class="relative w-full max-w-sm">
+        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M10.5 3.75a6.75 6.75 0 1 0 4.238 12.03l4.241 4.241a.75.75 0 1 0 1.06-1.06l-4.24-4.242A6.75 6.75 0 0 0 10.5 3.75Zm-5.25 6.75a5.25 5.25 0 1 1 10.5 0 5.25 5.25 0 0 1-10.5 0Z" clip-rule="evenodd"/></svg>
+        </span>
+        <input id="tmpSearch" type="text" placeholder="Search titles…" class="w-full pl-10 pr-10 py-2.5 rounded-md border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-800 placeholder-slate-400" />
+        <button id="tmpSearchClear" type="button" class="hidden absolute inset-y-0 right-0 pr-3 text-slate-400 hover:text-slate-600" aria-label="Clear search">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M12 2.25a9.75 9.75 0 1 0 0 19.5 9.75 9.75 0 0 0 0-19.5Zm-2.47 6.78a.75.75 0 0 1 1.06 0L12 10.44l1.41-1.41a.75.75 0 0 1 1.06 1.06L13.06 11.5l1.41 1.41a.75.75 0 1 1-1.06 1.06L12 12.56l-1.41 1.41a.75.75 0 0 1-1.06-1.06l1.41-1.41-1.41-1.41a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/></svg>
+        </button>
+      </div>
+        <span id="tmpCount" class="text-sm text-slate-500 whitespace-nowrap"></span>
         <label class="inline-flex items-center gap-2 text-slate-700">
           <input id="tmpSelectAll" type="checkbox" class="w-4 h-4">
           <span>Select all</span>
         </label>
-        <div class="ml-auto flex items-center gap-2">
-          <div class="text-slate-600"><span id="tmpCount">{{ count or 0 }}</span> PBs found</div>
-          <button id="uploadSelectedBtn" type="button" class="px-3 py-2 rounded-md bg-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed">Upload 0 selected files</button>
-          <button type="button" id="deleteSelected" class="px-3 py-2 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Delete selected</button>
+      </div>
+
+      <!-- Right group: selected label (left) + stacked actions (right) -->
+      <div class="shrink-0 flex items-start gap-3">
+        <span id="tmpSelectedLabel" class="mt-2 text-sm text-slate-600 whitespace-nowrap">Selected: <span id="tmpSelected">0</span></span>
+        <div class="flex flex-col items-end gap-2">
+          <button id="uploadSelectedBtn" type="button" class="w-48 px-3 py-2 rounded-md bg-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed">Upload</button>
+          <button type="button" id="downloadSelected" class="w-48 px-3 py-2 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed">Download</button>
+          <button type="button" id="deleteSelected" class="w-48 px-3 py-2 rounded-md border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed">Delete</button>
         </div>
       </div>
+    </div>
 
       {% if message %}
       <div class="p-3 rounded-md text-sm {{ 'bg-green-50 text-green-700 border border-green-200' if success else 'bg-red-50 text-red-700 border border-red-200' }}">
@@ -102,13 +120,18 @@
   const countEl = document.getElementById('tmpCount');
   const selectAll = document.getElementById('tmpSelectAll');
   const search = document.getElementById('tmpSearch');
+  const searchClear = document.getElementById('tmpSearchClear');
   const uploadSelectedBtn = document.getElementById('uploadSelectedBtn');
   const deleteSelected = document.getElementById('deleteSelected');
+  const downloadSelected = document.getElementById('downloadSelected');
+  const selectedCountEl = document.getElementById('tmpSelected');
+  const selectedLabel = document.getElementById('tmpSelectedLabel');
   // const replaceWithSelected = document.getElementById('replaceWithSelected');
+  const total = tiles.length;
 
   function updateCount(){
     const visible = tiles.filter(t => t.style.display !== 'none').length;
-    if(countEl) countEl.textContent = String(visible);
+    if(countEl) countEl.textContent = `${visible} / ${total}`;
   }
 
   function filter(){
@@ -128,7 +151,10 @@
   }
 
   if(search){
-    let tid=null; search.addEventListener('input', ()=>{ if(tid) cancelAnimationFrame(tid); tid=requestAnimationFrame(filter); });
+    let tid=null; search.addEventListener('input', ()=>{ if(tid) cancelAnimationFrame(tid); tid=requestAnimationFrame(()=>{ filter(); const has= (search.value||'').length>0; if(searchClear) searchClear.classList.toggle('hidden', !has); }); });
+  }
+  if(searchClear){
+    searchClear.addEventListener('click', ()=>{ search.value=''; filter(); search.focus(); searchClear.classList.add('hidden'); });
   }
   if(selectAll){
     selectAll.addEventListener('change', ()=>{
@@ -164,9 +190,20 @@
     const boxes = checkedBoxes();
     const n = boxes.length;
     if(uploadSelectedBtn){
-      uploadSelectedBtn.textContent = `Upload ${n} selected file${n===1?'':'s'}`;
+      // Keep concise label; optionally append count when > 0
+      uploadSelectedBtn.textContent = n > 0 ? `Upload ${n}` : 'Upload';
       uploadSelectedBtn.disabled = n === 0;
     }
+    if(deleteSelected){
+      deleteSelected.textContent = n > 0 ? `Delete ${n}` : 'Delete';
+      deleteSelected.disabled = n === 0;
+    }
+    if(downloadSelected){
+      downloadSelected.textContent = n > 0 ? `Download ${n}` : 'Download';
+      downloadSelected.disabled = n === 0;
+    }
+    if(selectedCountEl){ selectedCountEl.textContent = String(n); }
+    // keep label visible as per request, but show 0 when nothing selected
   }
 
   async function postAction(url, name){
@@ -244,6 +281,21 @@
       } else {
         alert('Some ingests failed. See server logs for details.');
         window.location.reload();
+      }
+    });
+  }
+  if(downloadSelected){
+    downloadSelected.addEventListener('click', ()=>{
+      const boxes = checkedBoxes(); if(!boxes.length){ alert('No files selected'); return; }
+      // Trigger browser downloads sequentially
+      for(const cb of boxes){
+        const name = cb.dataset.file;
+        const a = document.createElement('a');
+        a.href = "{{ url_for('admin.upload_tiles_download', name='__NAME__') }}".replace('__NAME__', encodeURIComponent(name));
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
       }
     });
   }
