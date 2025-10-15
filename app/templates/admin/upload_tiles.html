@@ -256,29 +256,24 @@
     return resp;
   }
 
-  async function ingestOne(name){
+  // Upload a single temp file. When called from bulk flow, skipConfirm=true to avoid
+  // any additional per-file confirmations; we rely on the single summary confirmation.
+  async function ingestOne(name, skipConfirm){
     if(!name) return;
-    // Check potential overwrite
-    let proceed = true;
-    try{
-      const chk = await fetch("{{ url_for('admin.upload_tiles_check') }}?name="+encodeURIComponent(name), { headers: { 'X-Requested-With': 'fetch' }});
-  if(chk.ok){ const data = await chk.json(); if(data.exists){ proceed = confirm(`A current dataset exists for ${name}. Overwrite?`); } }
-    }catch(_e){ /* ignore */ }
-    if(!proceed) return;
+    // Optional pre-check (only when not already confirmed at batch level)
+    if(!skipConfirm){
+      let proceed = true;
+      try{
+        const chk = await fetch("{{ url_for('admin.upload_tiles_check') }}?name="+encodeURIComponent(name), { headers: { 'X-Requested-With': 'fetch' }});
+        if(chk.ok){ const data = await chk.json(); if(data.exists){ proceed = confirm(`A current dataset exists for ${name}. Overwrite?`); } }
+      }catch(_e){ /* ignore */ }
+      if(!proceed) return;
+    }
     const params = new URLSearchParams(); params.set('name', name); params.set('confirm', '1');
     const resp = await fetch("{{ url_for('admin.upload_tiles_ingest') }}", { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'fetch' }, body: params.toString() });
     if(!resp.ok){
-      if(resp.status === 409){
-        const ask = confirm(`A current dataset exists for ${name}. Overwrite?`);
-        if(ask){
-          const retryParams = new URLSearchParams(); retryParams.set('name', name); retryParams.set('confirm', '1');
-          const retry = await fetch("{{ url_for('admin.upload_tiles_ingest') }}", { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'fetch' }, body: retryParams.toString() });
-          if(!retry.ok){
-            try { const data = await retry.json(); alert(`Failed to upload ${name}: ${data.error || data.message || retry.status}`); } catch(_e) { alert(`Failed to upload ${name}.`); }
-            return false;
-          }
-        } else { return; }
-      } else {
+      // If server reports conflict (409) but we already confirmed at batch level, don't prompt again.
+      if(resp.status !== 409 || !skipConfirm){
         try { const data = await resp.json(); alert(`Failed to upload ${name}: ${data.error || data.message || resp.status}`); } catch(_e) { alert(`Failed to upload ${name}.`); }
         return false;
       }
@@ -289,7 +284,8 @@
   document.querySelectorAll('.ingest-one').forEach(btn => {
     btn.addEventListener('click', async () => {
       const name = btn.dataset.file;
-      const ok = await ingestOne(name);
+      // Per-row ingest keeps its own overwrite confirmation (skipConfirm=false)
+      const ok = await ingestOne(name, false);
       if(ok){
         window.location.href = "{{ url_for('admin.upload_tiles') }}?message="+encodeURIComponent(`Uploaded ${name}.`)+"&success=1";
       } else {
@@ -317,7 +313,8 @@
       let allOk = true;
       for(const cb of boxes){
         const name = cb.dataset.file;
-        const ok = await ingestOne(name);
+        // We've already shown the summary confirmation; skip per-file confirm prompts
+        const ok = await ingestOne(name, true);
         if(!ok) allOk = false;
       }
       if(allOk){

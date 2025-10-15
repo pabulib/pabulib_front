@@ -285,7 +285,6 @@ def _format_preview_tile(tile: dict) -> dict:
         "year": str(tile.get("year_raw")) if tile.get("year_raw") is not None else "",
         "year_raw": tile.get("year_raw"),
         "fully_funded": bool(tile.get("fully_funded") or False),
-        "has_selected_col": tile.get("num_selected_projects_raw") is not None,
         "experimental": bool(tile.get("experimental") or False),
         "quality": float(tile.get("quality") or 0.0),
         "rule_raw": tile.get("rule_raw") or "",
@@ -303,22 +302,7 @@ def upload_tiles():
             for t in tiles:
                 name = (t.get("file_name") or "").strip()
                 webpage_name = (t.get("webpage_name") or "").strip()
-                country = t.get("country") or ""
-                unit = t.get("unit") or ""
-                instance = t.get("instance") or ""
-                subunit = t.get("subunit") or ""
-                name_conflict = False
                 webpage_conflict = False
-                group_conflict = False
-                if name:
-                    name_conflict = (
-                        s.query(PBFile.id)
-                        .filter(
-                            PBFile.file_name == name, PBFile.is_current == True
-                        )  # noqa: E712
-                        .first()
-                        is not None
-                    )
                 if webpage_name:
                     webpage_conflict = (
                         s.query(PBFile.id)
@@ -329,26 +313,11 @@ def upload_tiles():
                         .first()
                         is not None
                     )
-                try:
-                    group_key = _build_group_key(country, unit, instance, subunit)
-                except Exception:
-                    group_key = None
-                if group_key:
-                    group_conflict = (
-                        s.query(PBFile.id)
-                        .filter(
-                            PBFile.group_key == group_key,
-                            PBFile.is_current == True,  # noqa: E712
-                        )
-                        .first()
-                        is not None
-                    )
-                t["exists_conflict"] = bool(
-                    name_conflict or webpage_conflict or group_conflict
-                )
-                t["name_conflict"] = bool(name_conflict)
+                # Overwrite determination is based only on webpage_name
+                t["exists_conflict"] = bool(webpage_conflict)
+                t["name_conflict"] = False
                 t["webpage_conflict"] = bool(webpage_conflict)
-                t["group_conflict"] = bool(group_conflict)
+                t["group_conflict"] = False
     except Exception:
         # If any error, don't block rendering; flags will be absent/false
         pass
@@ -456,14 +425,8 @@ def upload_tiles_ingest():
         tile_preview.get("subunit") or "",
     )
 
-    # If a current record exists for this file name, webpage_name, or group and no confirm provided, request confirmation
+    # If a current record exists for this webpage_name and no confirm provided, request confirmation
     with get_session() as s:
-        name_exists = (
-            s.query(PBFile.id)
-            .filter(PBFile.file_name == name, PBFile.is_current == True)  # noqa: E712
-            .first()
-            is not None
-        )
         webpage_exists = False
         webpage_val = (tile_preview.get("webpage_name") or "").strip()
         if webpage_val:
@@ -476,26 +439,16 @@ def upload_tiles_ingest():
                 .first()
                 is not None
             )
-        group_exists = False
-        if group_key:
-            group_exists = (
-                s.query(PBFile.id)
-                .filter(
-                    PBFile.group_key == group_key, PBFile.is_current == True
-                )  # noqa: E712
-                .first()
-                is not None
-            )
-    if (name_exists or webpage_exists or group_exists) and not confirm:
+    if webpage_exists and not confirm:
         # For fetch-based calls, return a 409 to trigger a prompt client-side
         return (
             jsonify(
                 {
                     "ok": False,
                     "requires_confirm": True,
-                    "name_conflict": bool(name_exists),
+                    "name_conflict": False,
                     "webpage_conflict": bool(webpage_exists),
-                    "group_conflict": bool(group_exists),
+                    "group_conflict": False,
                     "message": "A current record exists for this dataset. Confirm overwrite to proceed.",
                 }
             ),
@@ -506,7 +459,7 @@ def upload_tiles_ingest():
     dest_dir = _pb_folder()
     dest_dir.mkdir(parents=True, exist_ok=True)
     target = dest_dir / name
-    # If there is a current record matching the same dataset, archive its file first (prefer webpage_name, then group)
+    # If there is a current record matching the same webpage_name, archive its file first
     archived_to: Optional[Path] = None
     try:
         with get_session() as s:
@@ -525,21 +478,6 @@ def upload_tiles_ingest():
                     logger.debug(
                         "Archiving previous by webpage_name=%s: %s",
                         webpage_val,
-                        prev_rec.path,
-                    )
-            if prev_rec is None and group_key:
-                prev_rec = (
-                    s.query(PBFile)
-                    .filter(
-                        PBFile.group_key == group_key,
-                        PBFile.is_current == True,
-                    )  # noqa: E712
-                    .one_or_none()
-                )
-                if prev_rec:
-                    logger.debug(
-                        "Archiving previous by group_key=%s: %s",
-                        group_key,
                         prev_rec.path,
                     )
             if prev_rec and prev_rec.path:
@@ -629,7 +567,6 @@ def upload_tiles_ingest():
     vote_type = tile.get("vote_type") or None
     vote_length = tile.get("vote_length_raw")
     fully_funded = bool(tile.get("fully_funded") or False)
-    has_selected_col = num_selected_projects is not None
     experimental = bool(tile.get("experimental") or False)
     rule_raw = tile.get("rule_raw") or None
     edition = tile.get("edition") or None
@@ -645,12 +582,17 @@ def upload_tiles_ingest():
 
     try:
         with get_session() as s:
-            prev = (
-                s.query(PBFile)
-                .filter(PBFile.group_key == group_key, PBFile.is_current == True)
-                .order_by(PBFile.ingested_at.desc())
-                .first()
-            )
+            prev = None
+            if webpage_name:
+                prev = (
+                    s.query(PBFile)
+                    .filter(
+                        PBFile.webpage_name == webpage_name,
+                        PBFile.is_current == True,
+                    )  # noqa: E712
+                    .order_by(PBFile.ingested_at.desc())
+                    .first()
+                )
             supersedes_id = prev.id if prev else None
             if prev:
                 prev.is_current = False
@@ -673,7 +615,6 @@ def upload_tiles_ingest():
                 vote_type=vote_type,
                 vote_length=vote_length,
                 fully_funded=fully_funded,
-                has_selected_col=has_selected_col,
                 experimental=experimental,
                 rule_raw=rule_raw,
                 edition=edition,
@@ -752,24 +693,10 @@ def upload_tiles_check():
         return jsonify({"error": "not found"}), 404
     try:
         tile_preview = _parse_pb_to_tile(tmp_path)
-        group_key = _build_group_key(
-            tile_preview.get("country") or "",
-            tile_preview.get("unit") or "",
-            tile_preview.get("instance") or "",
-            tile_preview.get("subunit") or "",
-        )
     except Exception:
-        group_key = None
-    name_exists = False
-    group_exists = False
+        tile_preview = {"webpage_name": ""}
     webpage_exists = False
     with get_session() as s:
-        name_exists = (
-            s.query(PBFile.id)
-            .filter(PBFile.file_name == name, PBFile.is_current == True)  # noqa: E712
-            .first()
-            is not None
-        )
         webpage_val = (tile_preview.get("webpage_name") or "").strip()
         if webpage_val:
             webpage_exists = (
@@ -781,23 +708,14 @@ def upload_tiles_check():
                 .first()
                 is not None
             )
-        if group_key:
-            group_exists = (
-                s.query(PBFile.id)
-                .filter(
-                    PBFile.group_key == group_key, PBFile.is_current == True
-                )  # noqa: E712
-                .first()
-                is not None
-            )
     return jsonify(
         {
-            "exists": bool(name_exists or webpage_exists or group_exists),
-            "name_conflict": bool(name_exists),
+            "exists": bool(webpage_exists),
+            "name_conflict": False,
             "webpage_conflict": bool(webpage_exists),
-            "group_conflict": bool(group_exists),
+            "group_conflict": False,
             "name": name,
-            "group_key": group_key,
+            "group_key": None,
         }
     )
 
@@ -1142,7 +1060,6 @@ def admin_replace_file():
             vote_type=tile.get("vote_type"),
             vote_length=tile.get("vote_length_raw"),
             fully_funded=bool(tile.get("fully_funded") or False),
-            has_selected_col=tile.get("num_selected_projects_raw") is not None,
             experimental=bool(tile.get("experimental") or False),
             rule_raw=tile.get("rule_raw"),
             edition=tile.get("edition"),

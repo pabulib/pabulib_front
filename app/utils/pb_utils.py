@@ -214,7 +214,6 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
         "subunit": subunit,
         "year_raw": year_int,
         "fully_funded": fully_funded,
-        "has_selected_col": has_selected_col,
         "experimental": experimental,
         "quality": quality,
         "rule_raw": rule_raw,
