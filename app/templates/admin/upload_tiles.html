@@ -363,20 +363,39 @@
       const hasDuplicateWarning = html.includes('duplicate webpage_name') || html.includes('Duplicate detected');
       
       if(hasDuplicateWarning){
-        // Extract webpage_names from the error messages
+        // Extract webpage_names from the warning message
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
         const webpageNames = [];
         
-        // Look for all error messages containing webpage_name info
-        const errorDivs = doc.querySelectorAll('.text-red-700, .text-red-600');
-        errorDivs.forEach(div => {
-          const text = div.textContent;
-          const match = text.match(/webpage_name '([^']+)'/);
-          if(match && match[1] && !webpageNames.includes(match[1])){
-            webpageNames.push(match[1]);
+        // Look for the main warning message that contains the list of webpage_names
+        const messageDiv = doc.querySelector('.bg-red-50.text-red-700, .bg-red-100.text-red-700');
+        if(messageDiv){
+          const text = messageDiv.textContent;
+          // Extract webpage_names from the message after "duplicate webpage_name: "
+          const match = text.match(/duplicate webpage_name:\s*(.+?)(?:\s*$|\s*⚠|\s*Do you)/);
+          if(match && match[1]){
+            // Split by comma and clean up each name
+            const names = match[1].split(',').map(n => n.trim()).filter(n => n);
+            names.forEach(name => {
+              if(!webpageNames.includes(name)){
+                webpageNames.push(name);
+              }
+            });
           }
-        });
+        }
+        
+        // Also check individual error messages for webpage_names
+        if(webpageNames.length === 0){
+          const errorDivs = doc.querySelectorAll('.text-red-700, .text-red-600');
+          errorDivs.forEach(div => {
+            const text = div.textContent;
+            const match = text.match(/webpage_name '([^']+)'/);
+            if(match && match[1] && !webpageNames.includes(match[1])){
+              webpageNames.push(match[1]);
+            }
+          });
+        }
         
         // Build a nice confirmation message with the list of webpage_names
         let confirmMsg = `Some files were rejected because they have the same webpage_name (based on META data: country, unit, instance, subunit) as existing temp files.\n\n`;
