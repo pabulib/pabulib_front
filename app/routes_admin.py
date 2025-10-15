@@ -316,7 +316,9 @@ def _format_preview_tile(tile: dict) -> dict:
             else None
         ),
         "budget": (
-            _format_budget(currency, int(budget or 0)) if budget is not None else "—"
+            _format_budget(currency, float(budget) if budget is not None else 0)
+            if budget is not None
+            else "—"
         ),
         "budget_raw": budget,
         "vote_type": tile.get("vote_type") or "",
@@ -428,6 +430,9 @@ def upload_tiles_post():
 
     # Track webpage_names in current upload batch to detect intra-batch duplicates
     current_batch_webpage_names = {}  # webpage_name -> filename
+    current_batch_filenames = (
+        set()
+    )  # Track filenames to prevent overwriting within batch
 
     for f in files:
         fname = secure_filename(f.filename or "").strip()
@@ -452,9 +457,7 @@ def upload_tiles_post():
             )
             continue
         try:
-            target = tmp_dir / fname
-
-            # Save to a temporary location first to parse and check webpage_name
+            # Save to a temporary location first to parse and get webpage_name
             temp_save_path = tmp_dir / f"temp_{fname}"
             f.save(str(temp_save_path))
 
@@ -477,33 +480,42 @@ def upload_tiles_post():
                 )
                 continue
 
+            # Use webpage_name as the target filename if available, otherwise use original filename
+            # This ensures files with different webpage_names don't overwrite each other
+            if uploaded_webpage_name:
+                target_fname = f"{uploaded_webpage_name}.pb"
+            else:
+                target_fname = fname
+
+            target = tmp_dir / target_fname
+
             # Check if a file with the same webpage_name already exists in temp
             existing_filename = None
             if uploaded_webpage_name and uploaded_webpage_name in existing_temp_files:
                 existing_filename = existing_temp_files[uploaded_webpage_name]
 
                 if not force_replace:
-                    # Don't upload - reject with a warning about duplicate webpage_name
+                    # Reject - ask user for confirmation to replace
                     temp_save_path.unlink(missing_ok=True)
                     overwrites_rejected.append(uploaded_webpage_name)
                     results.append(
                         {
                             "ok": False,
                             "name": fname,
-                            "msg": f"⚠ Duplicate detected: A file with the same webpage_name '{uploaded_webpage_name}' already exists in temp ({existing_filename}). Please remove the existing file first if you want to upload this one.",
+                            "msg": f"⚠ A file with this dataset already exists in temp ({existing_filename}).",
                             "validation": None,
                         }
                     )
                     continue
                 else:
-                    # User confirmed - remove the old file with the same webpage_name
+                    # force_replace=True: remove old file and track as replaced
                     old_file_path = tmp_dir / existing_filename
                     old_file_path.unlink(missing_ok=True)
-                    # Also remove validation cache
                     validation_cache_path = (
                         tmp_dir / f".{existing_filename}.validation.json"
                     )
                     validation_cache_path.unlink(missing_ok=True)
+                    current_batch_filenames.discard(existing_filename)
                     overwrites_replaced.append(uploaded_webpage_name)
 
             # Also check for duplicates within the current upload batch
@@ -528,20 +540,26 @@ def upload_tiles_post():
             # Move temp file to final location
             temp_save_path.rename(target)
 
-            # Update both maps with the new file
+            # Update tracking structures with the new file
+            # Note: Don't update existing_temp_files during batch - it represents pre-existing files
+            # Only update current_batch_webpage_names to track files in THIS batch
             if uploaded_webpage_name:
-                existing_temp_files[uploaded_webpage_name] = fname
-                current_batch_webpage_names[uploaded_webpage_name] = fname
+                current_batch_webpage_names[uploaded_webpage_name] = target_fname
+            current_batch_filenames.add(target_fname)
 
             # Don't validate inline - let the frontend trigger validation with progress
             saved += 1
             upload_msg = "Uploaded to /tmp."
             if existing_filename:
-                upload_msg += f" (Replaced {existing_filename} with same webpage_name)"
+                upload_msg += f" (Replaced existing file: {existing_filename})"
+            # Inform user if file was renamed based on META data
+            if target_fname != fname:
+                upload_msg += f" (Saved as {target_fname})"
             results.append(
                 {
                     "ok": True,
-                    "name": fname,
+                    "name": target_fname,  # Report the actual saved filename
+                    "original_name": fname,  # Keep track of original for reference
                     "msg": upload_msg,
                     "needs_validation": True,
                 }
@@ -564,9 +582,9 @@ def upload_tiles_post():
     # Build message with duplicate warning/info
     msg = f"Processed {len(files)} file(s). Uploaded {saved}."
     if overwrites_replaced:
-        msg += f" ℹ Replaced {len(overwrites_replaced)} existing temp file(s) based on webpage_name: {', '.join(overwrites_replaced)}"
+        msg += f" ℹ Replaced {len(overwrites_replaced)} existing temp file(s): {', '.join(overwrites_replaced)}"
     elif overwrites_rejected:
-        msg += f" ⚠ WARNING: {len(overwrites_rejected)} file(s) rejected due to duplicate webpage_name: {', '.join(overwrites_rejected)}"
+        msg += f" ⚠ WARNING: {len(overwrites_rejected)} file(s) rejected as duplicates: {', '.join(overwrites_rejected)}"
 
     return render_template(
         "admin/upload_tiles.html",

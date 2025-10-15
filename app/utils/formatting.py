@@ -29,8 +29,24 @@ def format_int(num: int) -> str:
     return f"{num:,}".replace(",", " ")
 
 
-def format_budget(currency: str, amount: int) -> str:
-    formatted = format_int(amount)
+def format_budget(currency: str, amount: float | int) -> str:
+    """Format budget amount with proper number formatting.
+
+    Args:
+        currency: Currency string (e.g., 'PLN', 'USD')
+        amount: Budget amount as float or int
+
+    Returns:
+        Formatted budget string with currency (uses spaces as thousand separators)
+    """
+    # If it's a float with decimal places, show them; otherwise format as int
+    if isinstance(amount, float) and amount % 1 != 0:
+        # Has decimal places - format with 2 decimal places and space as thousand separator
+        formatted = f"{amount:,.2f}".replace(",", " ")
+    else:
+        # No decimal places or is int - format as integer
+        formatted = format_int(int(amount))
+
     return f"{formatted} {currency}" if currency else formatted
 
 

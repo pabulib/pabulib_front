@@ -455,8 +455,8 @@
         const messageDiv = doc.querySelector('.bg-red-50.text-red-700, .bg-red-100.text-red-700');
         if(messageDiv){
           const text = messageDiv.textContent;
-          // Extract webpage_names from the message after "duplicate webpage_name: "
-          const match = text.match(/duplicate webpage_name:\s*(.+?)(?:\s*$|\s*⚠|\s*Do you)/);
+          // Extract webpage_names from the message after "duplicate webpage_name: " or "duplicates: "
+          const match = text.match(/(?:duplicate webpage_name|duplicates):\s*(.+?)(?:\s*$|\s*⚠|\s*Do you)/);
           if(match && match[1]){
             // Split by comma and clean up each name
             const names = match[1].split(',').map(n => n.trim()).filter(n => n);
@@ -480,15 +480,22 @@
           });
         }
         
+        // Only show confirmation dialog if there are actual webpage_names to replace
+        // If the list is empty, it means files were uploaded successfully without conflicts
+        if(webpageNames.length === 0){
+          // No actual duplicates - just reload to show the uploaded files
+          await validateUploadedFiles(files.map(f => f.name));
+          window.location.reload();
+          return;
+        }
+        
         // Build a nice confirmation message with the list of webpage_names
         let confirmMsg = `Some files were rejected because they have the same webpage_name (based on META data: country, unit, instance, subunit) as existing temp files.\n\n`;
-        if(webpageNames.length > 0){
-          confirmMsg += `The following webpage_names already exist:\n`;
-          webpageNames.forEach(name => {
-            confirmMsg += `  • ${name}\n`;
-          });
-          confirmMsg += `\n`;
-        }
+        confirmMsg += `The following webpage_names already exist:\n`;
+        webpageNames.forEach(name => {
+          confirmMsg += `  • ${name}\n`;
+        });
+        confirmMsg += `\n`;
         confirmMsg += `Do you want to REPLACE the existing temp files with the new ones?`;
         
         const proceed = confirm(confirmMsg);

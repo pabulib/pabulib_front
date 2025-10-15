@@ -95,12 +95,9 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
         num_projects = len(projects)
     budget_raw = meta.get("budget")
     try:
-        budget = (
-            int(budget_raw)
-            if budget_raw is not None and str(budget_raw).isdigit()
-            else None
-        )
-    except Exception:
+        # Convert to float first, then to int to truncate decimal part
+        budget = int(float(budget_raw)) if budget_raw is not None else None
+    except (ValueError, TypeError):
         budget = None
     vote_type = str(meta.get("vote_type", meta.get("rule", ""))).lower()
 
