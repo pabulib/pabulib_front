@@ -229,8 +229,33 @@ def _list_tmp_tiles() -> list[dict]:
             t = _parse_pb_to_tile(p)
             tile_data = _format_preview_tile(t)
 
-            # Add validation
-            validation = validate_pb_file(p)
+            # Add validation - check for cached validation first
+            validation_cache_path = tmp_dir / f".{p.name}.validation.json"
+            validation = None
+
+            # Use cached validation if it exists and is newer than the file
+            if validation_cache_path.exists():
+                try:
+                    if validation_cache_path.stat().st_mtime >= p.stat().st_mtime:
+                        import json
+
+                        with open(validation_cache_path, "r") as f:
+                            validation = json.load(f)
+                except Exception:
+                    pass  # If cache read fails, re-validate
+
+            # If no cached validation, validate and cache it
+            if validation is None:
+                validation = validate_pb_file(p)
+                # Cache the validation result
+                try:
+                    import json
+
+                    with open(validation_cache_path, "w") as f:
+                        json.dump(validation, f)
+                except Exception:
+                    pass  # If cache write fails, continue without caching
+
             tile_data["validation"] = validation
             tile_data["validation_summary"] = format_validation_summary(validation)
             issue_counts = count_issues(validation)
@@ -811,10 +836,15 @@ def upload_tiles_delete():
     name = (request.form.get("name") or "").strip()
     if not name or "/" in name or ".." in name:
         abort(400)
-    p = _tmp_upload_dir() / name
+    tmp_dir = _tmp_upload_dir()
+    p = tmp_dir / name
     if p.exists() and p.is_file():
         try:
             p.unlink()
+            # Also remove the cached validation file if it exists
+            validation_cache_path = tmp_dir / f".{name}.validation.json"
+            if validation_cache_path.exists():
+                validation_cache_path.unlink()
         except Exception:
             pass
     return redirect(url_for("admin.upload_tiles"))
