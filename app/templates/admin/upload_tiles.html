@@ -21,11 +21,20 @@
           </select>
         </div>
 
+        <div class="mb-2">
+          <label for="filterValidation" class="block text-sm font-medium text-slate-700 mb-1">Validation</label>
+          <select id="filterValidation" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500">
+            <option value="">All files</option>
+            <option value="valid">Valid only</option>
+            <option value="invalid">Invalid only</option>
+          </select>
+        </div>
+
         <button id="filtersClear" type="button" class="mt-4 w-full px-3 py-2 text-sm rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50">Clear filters</button>
       </div>
     </aside>
 
-    <div class="w-full">
+    <div class="w-full max-w-5xl">
       <div class="w-full bg-white rounded-lg shadow-lg p-6 mt-8">
         <div class="flex items-baseline justify-between mb-4">
           <h1 class="text-3xl font-bold text-slate-800">Admin – Upload Tiles</h1>
@@ -138,16 +147,28 @@
             <div class="text-sm">Drag & drop .pb files here, or click to choose</div>
             <input id="files" name="files" type="file" accept=".pb" multiple class="hidden" />
           </div>
+
+          <!-- Progress bar (hidden by default) -->
+          <div id="uploadProgress" class="hidden mt-4">
+            <div class="bg-slate-100 rounded-full h-2.5 overflow-hidden">
+              <div id="progressBar" class="bg-indigo-600 h-full transition-all duration-300 ease-out" style="width: 0%"></div>
+            </div>
+            <div class="mt-2 text-sm text-slate-600 text-center">
+              <span id="progressText">Uploading files...</span>
+              <span id="progressPercent" class="font-medium">0%</span>
+            </div>
+          </div>
         </div>
 
-        <div class="mt-6 space-y-4" id="tilesContainer">
+        <div class="mt-6 mb-12 space-y-4" id="tilesContainer">
     {% for t in tiles %}
-    <section class="rounded-lg shadow p-4 tile-preview {{ 'bg-red-100 ring-2 ring-red-200' if not t.validation.valid else 'bg-emerald-100 ring-2 ring-emerald-200' }}"
+    <section class="rounded-lg shadow p-4 tile-preview relative cursor-pointer hover:ring-4 transition-all {{ 'bg-red-50 ring-2 ring-red-200' if not t.validation.valid else 'bg-emerald-50 ring-2 ring-emerald-200' }}"
       data-title="{{ t.title|e }}"
       data-desc="{{ t.description|e }}"
       data-file="{{ t.file_name|e }}"
       data-exists="{{ '1' if t.exists_conflict else '' }}"
       data-valid="{{ '1' if t.validation.valid else '0' }}"
+      onclick="toggleTileSelection(this, event)"
     >
       <div class="flex items-start gap-4">
         <input class="row-check mt-1.5" type="checkbox" data-file="{{ t.file_name|e }}" />
@@ -155,12 +176,7 @@
         {# Main tile info #}
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-3">
-            <h2 class="text-lg font-semibold text-slate-800 truncate">{{ t.title }}</h2>
-            {% if t.exists_conflict %}
-              <span class="text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200">Overwrite</span>
-            {% else %}
-              <span class="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700 border border-blue-200">New</span>
-            {% endif %}
+            <h2 class="text-lg font-semibold text-slate-800 truncate" title="{{ t.title }}">{{ t.title }}</h2>
             {% if t.experimental %}
               <span class="text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700">Experimental</span>
             {% endif %}
@@ -168,8 +184,15 @@
               <span class="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">Fully funded</span>
             {% endif %}
           </div>
+          <div class="mt-1">
+            {% if t.exists_conflict %}
+              <span class="text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200">Overwrite</span>
+            {% else %}
+              <span class="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700 border border-blue-200">New</span>
+            {% endif %}
+          </div>
           <div class="text-slate-600 text-sm mt-1">{{ t.description }}</div>
-          <div class="text-slate-500 text-xs mt-1 font-mono truncate" title="{{ t.file_name }}">{{ t.file_name }}</div>
+          <div class="text-slate-500 text-xs mt-1 font-mono break-words">{{ t.file_name }}</div>
           <div class="grid grid-cols-5 gap-3 mt-3 text-sm">
             <div class="text-slate-500"># votes<br><span class="text-slate-800">{{ t.num_votes }}</span></div>
             <div class="text-slate-500"># projects<br><span class="text-slate-800">{{ t.num_projects }}</span></div>
@@ -280,6 +303,7 @@
   const search = document.getElementById('tmpSearch');
   const searchClear = document.getElementById('tmpSearchClear');
   const statusSel = document.getElementById('filterStatus');
+  const validationSel = document.getElementById('filterValidation');
   const clearFilters = document.getElementById('filtersClear');
   const uploadSelectedBtn = document.getElementById('uploadSelectedBtn');
   const deleteSelected = document.getElementById('deleteSelected');
@@ -299,6 +323,7 @@
   function filter(){
     const q = (search.value || '').toLowerCase().trim();
     const fs = (statusSel && statusSel.value) || '';
+    const fv = (validationSel && validationSel.value) || '';
     tiles.forEach(t => {
       const title = (t.dataset.title || '').toLowerCase();
       const desc = (t.dataset.desc || '').toLowerCase();
@@ -306,7 +331,9 @@
       const textMatch = !q || title.includes(q) || desc.includes(q) || file.includes(q);
       const exists = t.dataset.exists === '1';
       const statusMatch = !fs || (fs === 'existing' ? exists : !exists);
-      const match = textMatch && statusMatch;
+      const isValid = t.dataset.valid === '1';
+      const validationMatch = !fv || (fv === 'valid' ? isValid : !isValid);
+      const match = textMatch && statusMatch && validationMatch;
       t.style.display = match ? '' : 'none';
     });
     updateCount();
@@ -325,8 +352,11 @@
   if(statusSel){
     statusSel.addEventListener('change', ()=>{ filter(); });
   }
+  if(validationSel){
+    validationSel.addEventListener('change', ()=>{ filter(); });
+  }
   if(clearFilters){
-    clearFilters.addEventListener('click', ()=>{ if(statusSel) statusSel.value=''; filter(); });
+    clearFilters.addEventListener('click', ()=>{ if(statusSel) statusSel.value=''; if(validationSel) validationSel.value=''; filter(); });
   }
   if(selectAll){
     selectAll.addEventListener('change', ()=>{
@@ -350,12 +380,64 @@
   });
 
   async function uploadFiles(files){
+    // Show progress bar
+    const progressContainer = document.getElementById('uploadProgress');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const progressPercent = document.getElementById('progressPercent');
+    
+    if(progressContainer) {
+      progressContainer.classList.remove('hidden');
+      progressBar.style.width = '0%';
+      progressPercent.textContent = '0%';
+      progressText.textContent = 'Uploading files...';
+    }
+    
     // Note: Server will check for webpage_name duplicates based on META data
     // First try uploading without force_replace to detect duplicates
     let fd = new FormData();
     files.forEach(f => fd.append('files', f));
     
-    let resp = await fetch("{{ url_for('admin.upload_tiles') }}", { method: 'POST', body: fd });
+    // Create XMLHttpRequest to track upload progress
+    const xhr = new XMLHttpRequest();
+    
+    // Track upload progress
+    xhr.upload.addEventListener('progress', (e) => {
+      if(e.lengthComputable && progressBar && progressPercent) {
+        const percentComplete = Math.round((e.loaded / e.total) * 100);
+        progressBar.style.width = percentComplete + '%';
+        progressPercent.textContent = percentComplete + '%';
+      }
+    });
+    
+    // Handle response
+    const uploadPromise = new Promise((resolve, reject) => {
+      xhr.onload = () => {
+        if(xhr.status >= 200 && xhr.status < 300) {
+          resolve({ ok: true, text: () => Promise.resolve(xhr.responseText) });
+        } else {
+          reject(new Error('Upload failed'));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Upload failed'));
+    });
+    
+    xhr.open('POST', "{{ url_for('admin.upload_tiles') }}", true);
+    xhr.send(fd);
+    
+    let resp;
+    try {
+      resp = await uploadPromise;
+      
+      // Update progress to show processing
+      if(progressText) progressText.textContent = 'Processing files...';
+      if(progressBar) progressBar.style.width = '100%';
+      if(progressPercent) progressPercent.textContent = '100%';
+    } catch(error) {
+      if(progressContainer) progressContainer.classList.add('hidden');
+      alert('Upload failed');
+      return;
+    }
     
     if(resp.ok){
       // Check if there were any duplicate webpage_name rejections in the response
@@ -363,6 +445,9 @@
       const hasDuplicateWarning = html.includes('duplicate webpage_name') || html.includes('Duplicate detected');
       
       if(hasDuplicateWarning){
+        // Hide progress bar before showing confirmation
+        if(progressContainer) progressContainer.classList.add('hidden');
+        
         // Extract webpage_names from the warning message
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
@@ -411,17 +496,64 @@
         const proceed = confirm(confirmMsg);
         
         if(proceed){
+          // Show progress again for re-upload
+          if(progressContainer) {
+            progressContainer.classList.remove('hidden');
+            progressBar.style.width = '0%';
+            progressPercent.textContent = '0%';
+            progressText.textContent = 'Re-uploading files...';
+          }
+          
           // Re-upload with force_replace flag
           fd = new FormData();
           files.forEach(f => fd.append('files', f));
           fd.append('force_replace', '1');
-          resp = await fetch("{{ url_for('admin.upload_tiles') }}", { method: 'POST', body: fd });
+          
+          const xhr2 = new XMLHttpRequest();
+          
+          xhr2.upload.addEventListener('progress', (e) => {
+            if(e.lengthComputable && progressBar && progressPercent) {
+              const percentComplete = Math.round((e.loaded / e.total) * 100);
+              progressBar.style.width = percentComplete + '%';
+              progressPercent.textContent = percentComplete + '%';
+            }
+          });
+          
+          const reuploadPromise = new Promise((resolve, reject) => {
+            xhr2.onload = () => {
+              if(xhr2.status >= 200 && xhr2.status < 300) {
+                resolve({ ok: true });
+              } else {
+                reject(new Error('Re-upload failed'));
+              }
+            };
+            xhr2.onerror = () => reject(new Error('Re-upload failed'));
+          });
+          
+          xhr2.open('POST', "{{ url_for('admin.upload_tiles') }}", true);
+          xhr2.send(fd);
+          
+          try {
+            resp = await reuploadPromise;
+            if(progressText) progressText.textContent = 'Processing files...';
+            if(progressBar) progressBar.style.width = '100%';
+            if(progressPercent) progressPercent.textContent = '100%';
+          } catch(error) {
+            if(progressContainer) progressContainer.classList.add('hidden');
+            alert('Re-upload failed');
+            return;
+          }
+        } else {
+          // User cancelled, just hide progress and return
+          if(progressContainer) progressContainer.classList.add('hidden');
+          return;
         }
       }
       
       // Reload to render server-side parsed previews and messages
       window.location.reload();
     } else {
+      if(progressContainer) progressContainer.classList.add('hidden');
       alert('Upload failed');
     }
   }
@@ -499,13 +631,41 @@
         `• ${overwrite} overwrite`+
         `\n\nContinue?`);
       if(!proceed) return;
+      
+      // Show progress bar
+      const progressContainer = document.getElementById('uploadProgress');
+      const progressBar = document.getElementById('progressBar');
+      const progressText = document.getElementById('progressText');
+      const progressPercent = document.getElementById('progressPercent');
+      
+      if(progressContainer) {
+        progressContainer.classList.remove('hidden');
+        progressBar.style.width = '0%';
+        progressPercent.textContent = '0%';
+        progressText.textContent = 'Uploading selected files...';
+      }
+      
       let allOk = true;
+      const total = boxes.length;
+      let completed = 0;
+      
       for(const cb of boxes){
         const name = cb.dataset.file;
         // We've already shown the summary confirmation; skip per-file confirm prompts
         const ok = await ingestOne(name, true);
         if(!ok) allOk = false;
+        
+        // Update progress
+        completed++;
+        const percent = Math.round((completed / total) * 100);
+        if(progressBar) progressBar.style.width = percent + '%';
+        if(progressPercent) progressPercent.textContent = percent + '%';
+        if(progressText) progressText.textContent = `Uploading file ${completed} of ${total}...`;
       }
+      
+      // Hide progress bar
+      if(progressContainer) progressContainer.classList.add('hidden');
+      
       if(allOk){
         window.location.href = "{{ url_for('admin.upload_tiles') }}?message="+encodeURIComponent('New files uploaded.')+"&success=1";
       } else {
@@ -543,6 +703,24 @@
     const detailsEl = document.getElementById('validation-' + fileName);
     if (detailsEl) {
       detailsEl.classList.toggle('hidden');
+    }
+  };
+
+  // Toggle tile selection when clicking anywhere on the tile
+  window.toggleTileSelection = function(tile, event) {
+    // Don't toggle if clicking on buttons, links, or inputs
+    const target = event.target;
+    if (target.tagName === 'BUTTON' || target.tagName === 'A' || 
+        target.tagName === 'INPUT' || target.closest('button') || 
+        target.closest('a') || target.closest('form')) {
+      return;
+    }
+    
+    const checkbox = tile.querySelector('.row-check');
+    if (checkbox) {
+      checkbox.checked = !checkbox.checked;
+      // Trigger change event to update button states
+      checkbox.dispatchEvent(new Event('change', { bubbles: true }));
     }
   };
 
