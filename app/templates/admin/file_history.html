@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block bodyClass %}admin{% endblock %}
+{% block title %}File History - {{ file_name }}{% endblock %}
+
+{% block body %}
+{% include 'admin/_navbar.html' %}
+<section class="max-w-5xl mx-auto px-4">
+  <div class="w-full bg-white rounded-lg shadow-lg p-8 mt-8">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-3xl font-bold text-slate-800">File History</h1>
+        <p class="text-slate-600 mt-1 font-mono">{{ file_name }}</p>
+      </div>
+      <div class="text-sm text-slate-500">
+        <a href="{{ url_for('admin.admin_dashboard') }}" class="text-indigo-600 hover:text-indigo-800">← Back to dashboard</a>
+      </div>
+    </div>
+
+    <p class="text-gray-600 mb-6">{{ count }} version{{ 's' if count != 1 else '' }} found. Current version is marked in green.</p>
+
+    <div class="space-y-4">
+      {% for version in history %}
+      <div class="border border-gray-200 rounded-lg p-4 {{ 'bg-green-50 border-green-200' if version.is_current else 'bg-gray-50' }}">
+        <div class="flex items-start justify-between">
+          <div class="flex-1">
+            <div class="flex items-center gap-3 mb-2">
+              <h3 class="text-lg font-semibold text-slate-800">
+                Version {{ version.version }}
+                {% if version.is_current %}
+                  <span class="ml-2 text-xs px-2 py-1 bg-green-100 text-green-800 rounded">CURRENT</span>
+                {% else %}
+                  <span class="ml-2 text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">ARCHIVED</span>
+                {% endif %}
+              </h3>
+            </div>
+            
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <span class="font-medium text-slate-600">Ingested:</span><br>
+                <span class="text-slate-800">{{ version.ingested_at.strftime('%Y-%m-%d %H:%M:%S') if version.ingested_at else '—' }}</span>
+              </div>
+              <div>
+                <span class="font-medium text-slate-600">File Modified:</span><br>
+                <span class="text-slate-800">{{ version.file_mtime.strftime('%Y-%m-%d %H:%M:%S') if version.file_mtime else '—' }}</span>
+              </div>
+              <div>
+                <span class="font-medium text-slate-600">Location:</span><br>
+                <span class="text-slate-800">{{ version.country or '—' }}</span>
+                {% if version.unit %} / {{ version.unit }}{% endif %}
+              </div>
+              <div>
+                <span class="font-medium text-slate-600">Year:</span><br>
+                <span class="text-slate-800">{{ version.year or '—' }}</span>
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mt-2">
+              <div>
+                <span class="font-medium text-slate-600">Votes:</span><br>
+                <span class="text-slate-800">{{ version.num_votes or '—' }}</span>
+              </div>
+              <div>
+                <span class="font-medium text-slate-600">Projects:</span><br>
+                <span class="text-slate-800">{{ version.num_projects or '—' }}</span>
+              </div>
+              <div>
+                <span class="font-medium text-slate-600">Quality:</span><br>
+                <span class="text-slate-800">{{ "%.2f"|format(version.quality) if version.quality is not none else '—' }}</span>
+              </div>
+              <div>
+                <span class="font-medium text-slate-600">Database ID:</span><br>
+                <span class="text-slate-800 font-mono">#{{ version.id }}</span>
+              </div>
+            </div>
+            
+            <div class="mt-2 text-sm">
+              <span class="font-medium text-slate-600">File Path:</span><br>
+              <code class="text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded">{{ version.path }}</code>
+            </div>
+          </div>
+          
+          <div class="ml-4 flex flex-col gap-2">
+            {% if version.is_current %}
+              <span class="px-3 py-1 text-xs bg-green-100 text-green-800 rounded text-center">Active</span>
+            {% else %}
+              <span class="px-3 py-1 text-xs bg-gray-100 text-gray-600 rounded text-center">Archived</span>
+            {% endif %}
+            
+            <!-- Action buttons for non-current versions could go here -->
+            {% if not version.is_current %}
+              <!-- Future: restore button, download button, etc. -->
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+      
+      {% if not history %}
+      <div class="text-center text-slate-500 py-8">
+        No version history found for this file.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

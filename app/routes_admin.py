@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shutil
 import tempfile
 from datetime import datetime
@@ -143,11 +144,80 @@ def admin_dashboard():
     )
 
 
+@bp.route("/admin/deleted")
+def admin_deleted():
+    # Fetch all deleted/archived files (is_current = False)
+    with get_session() as s:
+        rows: List[PBFile] = (
+            s.query(PBFile)
+            .filter(PBFile.is_current == False)  # noqa: E712
+            .order_by(PBFile.ingested_at.desc(), PBFile.file_name.asc())
+            .all()
+        )
+
+        # Convert to plain dicts so templates don't rely on active DB session
+        files: List[Dict[str, Any]] = [
+            {
+                "file_name": r.file_name,
+                "path": r.path,
+                "country": r.country,
+                "unit": r.unit,
+                "instance": r.instance,
+                "subunit": r.subunit,
+                "year": r.year,
+                "file_mtime": r.file_mtime,
+                "ingested_at": r.ingested_at,
+                "webpage_name": r.webpage_name,
+                "vote_type": r.vote_type,
+                "supersedes_id": r.supersedes_id,
+                "id": r.id,
+                "deleted_at": _extract_deletion_timestamp(r.path),
+                "file_exists": Path(r.path).exists() if r.path else False,
+            }
+            for r in rows
+        ]
+
+    # Optional banner message
+    msg = request.args.get("message")
+    succ = request.args.get("success")
+    success: Optional[bool] = None
+    if succ is not None:
+        success = succ in {"1", "true", "True"}
+
+    return render_template(
+        "admin/admin_deleted.html",
+        files=files,
+        count=len(files),
+        message=msg,
+        success=success,
+    )
+
+
 def _tmp_upload_dir() -> Path:
     # Use container/host temp dir with a stable subfolder
     base = Path(tempfile.gettempdir()) / "pabulib_uploads"
     base.mkdir(parents=True, exist_ok=True)
     return base
+
+
+def _extract_deletion_timestamp(file_path: str) -> Optional[datetime]:
+    """Extract deletion timestamp from archived file path"""
+    if not file_path:
+        return None
+
+    # Look for timestamp patterns in the path like: 20241015T143022Z or replaced_20241015T143022Z
+    timestamp_pattern = r"(?:replaced_)?(\d{8}T\d{6}Z)"
+    match = re.search(timestamp_pattern, file_path)
+
+    if match:
+        timestamp_str = match.group(1)
+        try:
+            # Parse the timestamp: YYYYMMDDTHHMMSSZ
+            return datetime.strptime(timestamp_str, "%Y%m%dT%H%M%SZ")
+        except ValueError:
+            pass
+
+    return None
 
 
 def _list_tmp_tiles() -> list[dict]:
@@ -190,10 +260,16 @@ def _format_preview_tile(tile: dict) -> dict:
         "num_votes_raw": int(tile.get("num_votes_raw") or 0),
         "num_projects": _format_int(int(tile.get("num_projects_raw") or 0)),
         "num_projects_raw": int(tile.get("num_projects_raw") or 0),
-        "num_selected_projects": _format_int(
-            int(tile.get("num_selected_projects_raw") or 0)
+        "num_selected_projects": (
+            _format_int(int(tile.get("num_selected_projects_raw")))
+            if tile.get("num_selected_projects_raw") is not None
+            else "—"
         ),
-        "num_selected_projects_raw": int(tile.get("num_selected_projects_raw") or 0),
+        "num_selected_projects_raw": (
+            int(tile.get("num_selected_projects_raw"))
+            if tile.get("num_selected_projects_raw") is not None
+            else None
+        ),
         "budget": (
             _format_budget(currency, int(budget or 0)) if budget is not None else "—"
         ),
@@ -202,11 +278,14 @@ def _format_preview_tile(tile: dict) -> dict:
         "vote_length": _format_vote_length(tile.get("vote_length_raw")),
         "vote_length_raw": tile.get("vote_length_raw"),
         "country": tile.get("country") or "",
+        "unit": tile.get("unit") or "",
         "city": tile.get("unit") or "",
+        "instance": tile.get("instance") or "",
+        "subunit": tile.get("subunit") or "",
         "year": str(tile.get("year_raw")) if tile.get("year_raw") is not None else "",
         "year_raw": tile.get("year_raw"),
         "fully_funded": bool(tile.get("fully_funded") or False),
-        "has_selected_col": bool(tile.get("has_selected_col") or False),
+        "has_selected_col": tile.get("num_selected_projects_raw") is not None,
         "experimental": bool(tile.get("experimental") or False),
         "quality": float(tile.get("quality") or 0.0),
         "rule_raw": tile.get("rule_raw") or "",
@@ -218,6 +297,61 @@ def _format_preview_tile(tile: dict) -> dict:
 @bp.get("/admin/upload")
 def upload_tiles():
     tiles = _list_tmp_tiles()
+    # Precompute existence/conflict flags for each tile to adjust UI
+    try:
+        with get_session() as s:
+            for t in tiles:
+                name = (t.get("file_name") or "").strip()
+                webpage_name = (t.get("webpage_name") or "").strip()
+                country = t.get("country") or ""
+                unit = t.get("unit") or ""
+                instance = t.get("instance") or ""
+                subunit = t.get("subunit") or ""
+                name_conflict = False
+                webpage_conflict = False
+                group_conflict = False
+                if name:
+                    name_conflict = (
+                        s.query(PBFile.id)
+                        .filter(
+                            PBFile.file_name == name, PBFile.is_current == True
+                        )  # noqa: E712
+                        .first()
+                        is not None
+                    )
+                if webpage_name:
+                    webpage_conflict = (
+                        s.query(PBFile.id)
+                        .filter(
+                            PBFile.webpage_name == webpage_name,
+                            PBFile.is_current == True,  # noqa: E712
+                        )
+                        .first()
+                        is not None
+                    )
+                try:
+                    group_key = _build_group_key(country, unit, instance, subunit)
+                except Exception:
+                    group_key = None
+                if group_key:
+                    group_conflict = (
+                        s.query(PBFile.id)
+                        .filter(
+                            PBFile.group_key == group_key,
+                            PBFile.is_current == True,  # noqa: E712
+                        )
+                        .first()
+                        is not None
+                    )
+                t["exists_conflict"] = bool(
+                    name_conflict or webpage_conflict or group_conflict
+                )
+                t["name_conflict"] = bool(name_conflict)
+                t["webpage_conflict"] = bool(webpage_conflict)
+                t["group_conflict"] = bool(group_conflict)
+    except Exception:
+        # If any error, don't block rendering; flags will be absent/false
+        pass
     # Support message via query params after redirects
     msg = request.args.get("message")
     succ = request.args.get("success")
@@ -485,11 +619,17 @@ def upload_tiles_ingest():
     currency = tile.get("currency") or None
     num_votes = int(tile.get("num_votes_raw") or 0)
     num_projects = int(tile.get("num_projects_raw") or 0)
+    num_selected_projects_raw = tile.get("num_selected_projects_raw")
+    num_selected_projects = (
+        int(num_selected_projects_raw)
+        if num_selected_projects_raw is not None
+        else None
+    )
     budget = tile.get("budget_raw")
     vote_type = tile.get("vote_type") or None
     vote_length = tile.get("vote_length_raw")
     fully_funded = bool(tile.get("fully_funded") or False)
-    has_selected_col = bool(tile.get("has_selected_col") or False)
+    has_selected_col = num_selected_projects is not None
     experimental = bool(tile.get("experimental") or False)
     rule_raw = tile.get("rule_raw") or None
     edition = tile.get("edition") or None
@@ -528,6 +668,7 @@ def upload_tiles_ingest():
                 currency=currency,
                 num_votes=num_votes,
                 num_projects=num_projects,
+                num_selected_projects=num_selected_projects,
                 budget=budget,
                 vote_type=vote_type,
                 vote_length=vote_length,
@@ -769,3 +910,399 @@ def admin_delete_files_bulk():
     except Exception:
         pass
     return jsonify({"ok": True, "deleted": done})
+
+
+@bp.post("/admin/files/replace")
+def admin_replace_file():
+    """Replace an existing file with a new upload from tmp directory"""
+    existing_name = (request.form.get("existing_name") or "").strip()
+    new_name = (request.form.get("new_name") or "").strip()
+    confirm = (request.form.get("confirm") or "").strip() in {"1", "true", "True"}
+
+    if not existing_name or not new_name:
+        abort(400)
+    if (
+        "/" in existing_name
+        or ".." in existing_name
+        or not existing_name.endswith(".pb")
+    ):
+        abort(400)
+    if "/" in new_name or ".." in new_name or not new_name.endswith(".pb"):
+        abort(400)
+
+    logger = current_app.logger
+
+    # Check if existing file exists in database
+    with get_session() as s:
+        existing_rec = (
+            s.query(PBFile)
+            .filter(
+                PBFile.file_name == existing_name, PBFile.is_current == True
+            )  # noqa: E712
+            .one_or_none()
+        )
+        if not existing_rec:
+            if request.headers.get("X-Requested-With") == "fetch":
+                return (
+                    jsonify(
+                        {"ok": False, "error": "Original file not found or not current"}
+                    ),
+                    404,
+                )
+            return redirect(
+                url_for(
+                    "admin.admin_dashboard",
+                    message="Original file not found.",
+                    success=0,
+                )
+            )
+
+    # Check if new file exists in tmp
+    tmp_path = _tmp_upload_dir() / new_name
+    if not tmp_path.exists() or not tmp_path.is_file():
+        if request.headers.get("X-Requested-With") == "fetch":
+            return (
+                jsonify({"ok": False, "error": "Replacement file not found in tmp"}),
+                404,
+            )
+        return redirect(
+            url_for(
+                "admin.upload_tiles",
+                message="Replacement file not found in tmp.",
+                success=0,
+            )
+        )
+
+    # Parse replacement file first
+    try:
+        tile_preview = _parse_pb_to_tile(tmp_path)
+    except Exception as e:
+        logger.exception("Failed to parse replacement PB file: %s", new_name)
+        if request.headers.get("X-Requested-With") == "fetch":
+            return jsonify({"ok": False, "error": f"Parse error: {e}"}), 400
+        return redirect(
+            url_for(
+                "admin.upload_tiles",
+                message=f"Failed to parse {new_name}: {e}",
+                success=0,
+            )
+        )
+
+    # Check for conflicts with the parsed data (excluding the file being replaced)
+    group_key = _build_group_key(
+        tile_preview.get("country") or "",
+        tile_preview.get("unit") or "",
+        tile_preview.get("instance") or "",
+        tile_preview.get("subunit") or "",
+    )
+
+    with get_session() as s:
+        # Check if another current file has same webpage_name or group_key (excluding the one being replaced)
+        conflicts = []
+        webpage_val = (tile_preview.get("webpage_name") or "").strip()
+        if webpage_val:
+            webpage_conflict = (
+                s.query(PBFile.id)
+                .filter(
+                    PBFile.webpage_name == webpage_val,
+                    PBFile.is_current == True,
+                    PBFile.id != existing_rec.id,
+                )  # noqa: E712
+                .first()
+            )
+            if webpage_conflict:
+                conflicts.append(f"webpage_name '{webpage_val}'")
+
+        if group_key:
+            group_conflict = (
+                s.query(PBFile.id)
+                .filter(
+                    PBFile.group_key == group_key,
+                    PBFile.is_current == True,
+                    PBFile.id != existing_rec.id,
+                )  # noqa: E712
+                .first()
+            )
+            if group_conflict:
+                conflicts.append(f"group_key '{group_key}'")
+
+    if conflicts and not confirm:
+        if request.headers.get("X-Requested-With") == "fetch":
+            return (
+                jsonify(
+                    {
+                        "ok": False,
+                        "requires_confirm": True,
+                        "conflicts": conflicts,
+                        "message": f"Replacement would conflict with existing records: {', '.join(conflicts)}. Confirm to proceed.",
+                    }
+                ),
+                409,
+            )
+        return redirect(
+            url_for(
+                "admin.upload_tiles",
+                message=f"Replacement conflicts with: {', '.join(conflicts)}. Use force replace if intended.",
+                success=0,
+            )
+        )
+
+    # Archive the existing file
+    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    archived_to = None
+
+    try:
+        if existing_rec.path:
+            src_path = Path(existing_rec.path)
+            if src_path.exists():
+                archive_root = _pb_depr_folder()
+                dest_folder = archive_root / f"replaced_{ts}"
+                dest_folder.mkdir(parents=True, exist_ok=True)
+                archived_to = dest_folder / existing_name
+
+                if archived_to.exists():
+                    archived_to.unlink()
+                shutil.move(str(src_path), str(archived_to))
+                logger.info(
+                    "Archived replaced file %s to %s", existing_name, archived_to
+                )
+            else:
+                logger.warning("Original file missing on disk: %s", src_path)
+    except Exception as e:
+        logger.exception("Failed to archive original file: %s", e)
+        if request.headers.get("X-Requested-With") == "fetch":
+            return (
+                jsonify({"ok": False, "error": f"Failed to archive original: {e}"}),
+                500,
+            )
+        return redirect(
+            url_for(
+                "admin.upload_tiles",
+                message=f"Failed to archive original: {e}",
+                success=0,
+            )
+        )
+
+    # Move new file to destination (keep original filename or use new one)
+    dest_dir = _pb_folder()
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    target = dest_dir / existing_name  # Keep original filename
+
+    try:
+        if target.exists():
+            target.unlink()
+        shutil.move(str(tmp_path), str(target))
+        logger.info("Moved replacement file %s to %s", new_name, target)
+    except Exception as e:
+        logger.exception("Failed to move replacement file")
+        if request.headers.get("X-Requested-With") == "fetch":
+            return (
+                jsonify({"ok": False, "error": f"Failed to move replacement: {e}"}),
+                500,
+            )
+        return redirect(
+            url_for(
+                "admin.upload_tiles",
+                message=f"Failed to move replacement: {e}",
+                success=0,
+            )
+        )
+
+    # Update database record with new data
+    tile = tile_preview
+    stat = target.stat()
+    file_mtime = datetime.utcfromtimestamp(stat.st_mtime)
+
+    with get_session() as s:
+        # Mark old record as not current and update its path to archived location
+        existing_rec.is_current = False
+        if archived_to:
+            existing_rec.path = str(archived_to)
+
+        # Create new record with updated data
+        new_rec = PBFile(
+            file_name=existing_name,  # Keep original filename
+            path=str(target),
+            country=tile.get("country"),
+            unit=tile.get("unit"),
+            instance=tile.get("instance"),
+            subunit=tile.get("subunit"),
+            webpage_name=tile.get("webpage_name"),
+            year=tile.get("year_raw"),
+            description=tile.get("description"),
+            currency=tile.get("currency"),
+            num_votes=int(tile.get("num_votes_raw") or 0),
+            num_projects=int(tile.get("num_projects_raw") or 0),
+            num_selected_projects=(
+                int(tile.get("num_selected_projects_raw"))
+                if tile.get("num_selected_projects_raw") is not None
+                else None
+            ),
+            budget=tile.get("budget_raw"),
+            vote_type=tile.get("vote_type"),
+            vote_length=tile.get("vote_length_raw"),
+            fully_funded=bool(tile.get("fully_funded") or False),
+            has_selected_col=tile.get("num_selected_projects_raw") is not None,
+            experimental=bool(tile.get("experimental") or False),
+            rule_raw=tile.get("rule_raw"),
+            edition=tile.get("edition"),
+            language=tile.get("language"),
+            quality=float(tile.get("quality") or 0.0),
+            file_mtime=file_mtime,
+            ingested_at=datetime.utcnow(),
+            is_current=True,
+            supersedes_id=existing_rec.id,
+            group_key=group_key or "",
+        )
+        s.add(new_rec)
+
+    try:
+        pb_service.invalidate_caches()
+    except Exception:
+        pass
+
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify(
+            {"ok": True, "message": f"Replaced {existing_name} with {new_name}"}
+        )
+    return redirect(
+        url_for(
+            "admin.admin_dashboard",
+            message=f"Successfully replaced {existing_name}",
+            success=1,
+        )
+    )
+
+
+@bp.get("/admin/files/history/<path:name>")
+def admin_file_history(name: str):
+    """Show version history for a file"""
+    if not name or "/" in name or ".." in name or not name.endswith(".pb"):
+        abort(400)
+
+    with get_session() as s:
+        # Get all versions of this file (by name or supersession chain)
+        current_rec = (
+            s.query(PBFile)
+            .filter(PBFile.file_name == name, PBFile.is_current == True)  # noqa: E712
+            .one_or_none()
+        )
+
+        if not current_rec:
+            abort(404)
+
+        # Build version chain backwards from current
+        versions = [current_rec]
+        next_id = current_rec.supersedes_id
+
+        while next_id:
+            prev_rec = s.query(PBFile).filter(PBFile.id == next_id).one_or_none()
+            if prev_rec:
+                versions.append(prev_rec)
+                next_id = prev_rec.supersedes_id
+            else:
+                break
+
+        # Convert to plain dicts
+        history = []
+        for i, rec in enumerate(versions):
+            history.append(
+                {
+                    "version": len(versions) - i,  # Latest = highest number
+                    "id": rec.id,
+                    "file_name": rec.file_name,
+                    "path": rec.path,
+                    "is_current": rec.is_current,
+                    "ingested_at": rec.ingested_at,
+                    "file_mtime": rec.file_mtime,
+                    "country": rec.country,
+                    "unit": rec.unit,
+                    "year": rec.year,
+                    "num_votes": rec.num_votes,
+                    "num_projects": rec.num_projects,
+                    "quality": rec.quality,
+                    "supersedes_id": rec.supersedes_id,
+                }
+            )
+
+    return render_template(
+        "admin/file_history.html", file_name=name, history=history, count=len(history)
+    )
+
+
+@bp.get("/admin/deleted/download/<int:file_id>")
+def admin_download_deleted_file(file_id: int):
+    """Download a deleted/archived file by its database ID"""
+    with get_session() as s:
+        rec = (
+            s.query(PBFile)
+            .filter(PBFile.id == file_id, PBFile.is_current == False)  # noqa: E712
+            .one_or_none()
+        )
+
+        if not rec:
+            abort(404)
+
+        if not rec.path:
+            abort(404)
+
+        file_path = Path(rec.path)
+        if not file_path.exists():
+            abort(404)
+
+        # Use the original filename for download
+        download_name = rec.file_name or file_path.name
+
+        return send_file(
+            file_path,
+            as_attachment=True,
+            download_name=download_name,
+            mimetype="application/octet-stream",
+        )
+
+
+@bp.post("/admin/deleted/delete/<int:file_id>")
+def admin_delete_deleted_file(file_id: int):
+    """Permanently remove an archived (non-current) file from disk.
+
+    Does NOT remove the database record; only deletes the on-disk archived file.
+    """
+    # Only allow action on non-current (deleted/archived) files
+    with get_session() as s:
+        rec = (
+            s.query(PBFile)
+            .filter(PBFile.id == file_id, PBFile.is_current == False)  # noqa: E712
+            .one_or_none()
+        )
+        if not rec:
+            if request.headers.get("X-Requested-With") == "fetch":
+                return jsonify({"ok": False, "error": "Not found"}), 404
+            abort(404)
+
+        removed = False
+        try:
+            if rec.path:
+                p = Path(rec.path)
+                if p.exists():
+                    try:
+                        p.unlink()
+                        removed = True
+                    except Exception:
+                        removed = False
+        except Exception:
+            removed = False
+
+    try:
+        pb_service.invalidate_caches()
+    except Exception:
+        pass
+
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify({"ok": True, "removed": removed})
+    return redirect(
+        url_for(
+            "admin.admin_deleted",
+            message=("File removed from disk" if removed else "File not found on disk"),
+            success=1 if removed else 0,
+        )
+    )

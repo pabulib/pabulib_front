@@ -7,6 +7,11 @@
 {% include 'admin/_navbar.html' %}
 <section class="max-w-5xl mx-auto px-4">
   <div class="w-full bg-white rounded-lg shadow-lg p-6 mt-8">
+    <div class="flex items-baseline justify-between mb-4">
+      <h1 class="text-3xl font-bold text-slate-800">Admin – Upload Tiles</h1>
+      <span class="text-sm text-slate-500">{{ count or 0 }} PBs found</span>
+    </div>
+    <p class="text-gray-600 mb-4">These are temporary uploads. You can ingest them as new files, replace existing ones, or remove them from the temporary area.</p>
     <div class="flex flex-col gap-4">
       <div class="flex items-center gap-3">
         <input id="tmpSearch" type="text" placeholder="Search..." class="flex-1 px-3 py-2 rounded-md border border-slate-300 focus:ring-2 focus:ring-indigo-500" />
@@ -14,13 +19,10 @@
           <input id="tmpSelectAll" type="checkbox" class="w-4 h-4">
           <span>Select all</span>
         </label>
-        <div class="ml-auto text-slate-600"><span id="tmpCount">{{ count or 0 }}</span> PBs found</div>
-        <div class="relative">
-          <button id="tmpSelectedBtn" type="button" class="px-3 py-2 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Selected</button>
-          <div id="tmpSelectedMenu" class="hidden absolute right-0 mt-2 w-44 bg-white border border-slate-200 rounded-md shadow-lg z-10">
-            <button type="button" id="ingestSelected" class="w-full text-left px-3 py-2 text-sm hover:bg-slate-50">Ingest selected</button>
-            <button type="button" id="deleteSelected" class="w-full text-left px-3 py-2 text-sm hover:bg-slate-50">Delete selected</button>
-          </div>
+        <div class="ml-auto flex items-center gap-2">
+          <div class="text-slate-600"><span id="tmpCount">{{ count or 0 }}</span> PBs found</div>
+          <button id="uploadSelectedBtn" type="button" class="px-3 py-2 rounded-md bg-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed">Upload 0 selected files</button>
+          <button type="button" id="deleteSelected" class="px-3 py-2 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Delete selected</button>
         </div>
       </div>
 
@@ -44,6 +46,7 @@
       data-title="{{ t.title|e }}"
       data-desc="{{ t.description|e }}"
       data-file="{{ t.file_name|e }}"
+      data-exists="{{ '1' if t.exists_conflict else '' }}"
     >
       <div class="flex items-start gap-3">
         <input class="row-check mt-1.5" type="checkbox" data-file="{{ t.file_name|e }}" />
@@ -69,7 +72,12 @@
         </div>
         <div class="flex flex-col items-center gap-2 ml-2">
           <a class="p-2 rounded-md border border-slate-300 hover:bg-slate-50" title="Download" href="{{ url_for('admin.upload_tiles_download', name=t.file_name) }}">⬇</a>
-          <button class="p-2 rounded-md border border-slate-300 hover:bg-slate-50 ingest-one" data-file="{{ t.file_name|e }}" title="Ingest" type="button">⤴</button>
+          <div class="flex flex-col items-center gap-1">
+            <button class="p-2 rounded-md border border-slate-300 hover:bg-slate-50 ingest-one" data-file="{{ t.file_name|e }}" title="Ingest" type="button">⤴</button>
+            {% if t.exists_conflict %}
+              <span class="text-[10px] text-orange-600" title="A current dataset exists; ingest will overwrite.">overwrite</span>
+            {% endif %}
+          </div>
           <form method="post" action="{{ url_for('admin.upload_tiles_delete') }}" onsubmit="return confirm('Delete this temp file?')">
             <input type="hidden" name="name" value="{{ t.file_name }}" />
             <button class="p-2 rounded-md border border-slate-300 hover:bg-slate-50 text-red-700" title="Delete" type="submit">🗑</button>
@@ -94,10 +102,9 @@
   const countEl = document.getElementById('tmpCount');
   const selectAll = document.getElementById('tmpSelectAll');
   const search = document.getElementById('tmpSearch');
-  const selectedBtn = document.getElementById('tmpSelectedBtn');
-  const selectedMenu = document.getElementById('tmpSelectedMenu');
-  const ingestSelected = document.getElementById('ingestSelected');
+  const uploadSelectedBtn = document.getElementById('uploadSelectedBtn');
   const deleteSelected = document.getElementById('deleteSelected');
+  // const replaceWithSelected = document.getElementById('replaceWithSelected');
 
   function updateCount(){
     const visible = tiles.filter(t => t.style.display !== 'none').length;
@@ -126,6 +133,7 @@
   if(selectAll){
     selectAll.addEventListener('change', ()=>{
       tiles.forEach(t => { if(t.style.display !== 'none'){ const cb=t.querySelector('.row-check'); if(cb) cb.checked = selectAll.checked; }});
+      updateUploadSelectedButton();
     });
   }
 
@@ -151,9 +159,15 @@
     if(resp.ok){ window.location.reload(); } else { alert('Upload failed'); }
   }
 
-  // Selected menu
-  selectedBtn.addEventListener('click', ()=>{ selectedMenu.classList.toggle('hidden'); });
-  window.addEventListener('click', (e)=>{ if(!selectedBtn.contains(e.target) && !selectedMenu.contains(e.target)) selectedMenu.classList.add('hidden'); });
+  // Upload selected button label updater
+  function updateUploadSelectedButton(){
+    const boxes = checkedBoxes();
+    const n = boxes.length;
+    if(uploadSelectedBtn){
+      uploadSelectedBtn.textContent = `Upload ${n} selected file${n===1?'':'s'}`;
+      uploadSelectedBtn.disabled = n === 0;
+    }
+  }
 
   async function postAction(url, name){
     const body = new URLSearchParams(); body.set('name', name);
@@ -204,21 +218,35 @@
     });
   });
 
-  ingestSelected.addEventListener('click', async ()=>{
-    const boxes = checkedBoxes(); if(!boxes.length){ alert('No files selected'); return; }
-    let allOk = true;
-    for(const cb of boxes){
-      const name = cb.dataset.file;
-      const ok = await ingestOne(name);
-      if(!ok) allOk = false;
-    }
-    if(allOk){
-      window.location.href = "{{ url_for('admin.upload_tiles') }}?message="+encodeURIComponent('New files ingested.')+"&success=1";
-    } else {
-      alert('Some ingests failed. See server logs for details.');
-      window.location.reload();
-    }
-  });
+  if(uploadSelectedBtn){
+    uploadSelectedBtn.addEventListener('click', async ()=>{
+      const boxes = checkedBoxes(); if(!boxes.length){ alert('No files selected'); return; }
+      // Compute quick summary from each row's data-exists flag
+      let overwrite = 0, fresh = 0;
+      for(const cb of boxes){
+        const row = cb.closest('.tile-preview');
+        const existsHint = row && row.dataset.exists === '1';
+        if(existsHint){ overwrite++; } else { fresh++; }
+      }
+      const proceed = confirm(`You're about to upload ${boxes.length} file${boxes.length===1?'':'s'}:\n\n`+
+        `• ${fresh} new\n`+
+        `• ${overwrite} overwrite`+
+        `\n\nContinue?`);
+      if(!proceed) return;
+      let allOk = true;
+      for(const cb of boxes){
+        const name = cb.dataset.file;
+        const ok = await ingestOne(name);
+        if(!ok) allOk = false;
+      }
+      if(allOk){
+        window.location.href = "{{ url_for('admin.upload_tiles') }}?message="+encodeURIComponent('New files ingested.')+"&success=1";
+      } else {
+        alert('Some ingests failed. See server logs for details.');
+        window.location.reload();
+      }
+    });
+  }
   deleteSelected.addEventListener('click', async ()=>{
     const boxes = checkedBoxes(); if(!boxes.length){ alert('No files selected'); return; }
     if(!confirm('Delete selected temp files?')) return;
@@ -226,7 +254,15 @@
     window.location.reload();
   });
 
+  // Replace functionality removed from UI as per requirements.
+
   // Initial
+  document.addEventListener('change', (e)=>{
+    if(e.target.classList && e.target.classList.contains('row-check')){
+      updateUploadSelectedButton();
+    }
+  });
+  updateUploadSelectedButton();
   filter();
 })();
 </script>
