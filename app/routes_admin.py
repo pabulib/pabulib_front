@@ -729,47 +729,87 @@ def admin_delete_file():
 
     ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     archived = None
+    deleted_records = 0
+    errors: list[str] = []
     with get_session() as s:
-        rec = (
-            s.query(PBFile)
-            .filter(PBFile.file_name == name, PBFile.is_current == True)  # noqa: E712
-            .one_or_none()
-        )
-        if not rec:
+        try:
+            recs: list[PBFile] = (
+                s.query(PBFile)
+                .filter(
+                    PBFile.file_name == name, PBFile.is_current == True
+                )  # noqa: E712
+                .all()
+            )
+        except Exception as e:
+            current_app.logger.exception("Delete query failed for %s", name)
+            if request.headers.get("X-Requested-With") == "fetch":
+                return (
+                    jsonify(
+                        {"ok": False, "error": f"DB error while locating file: {e}"}
+                    ),
+                    500,
+                )
+            return redirect(
+                url_for(
+                    "admin.admin_dashboard",
+                    message=f"Failed to delete {name}: DB error while locating file.",
+                    success=0,
+                )
+            )
+        if not recs:
             if request.headers.get("X-Requested-With") == "fetch":
                 return jsonify({"ok": False, "error": "Not found or not current"}), 404
             return redirect(
                 url_for("admin.admin_dashboard", message="File not found.", success=0)
             )
-        # Try to archive the on-disk file if present
-        try:
-            if rec.path:
-                src = Path(rec.path)
-                if src.exists():
-                    dest_dir = _pb_depr_folder() / ts
-                    dest_dir.mkdir(parents=True, exist_ok=True)
-                    dest = dest_dir / Path(rec.path).name
-                    try:
-                        if dest.exists():
-                            dest.unlink()
-                    except Exception:
-                        pass
-                    shutil.move(str(src), str(dest))
-                    archived = str(dest)
-        except Exception:
-            archived = None
-        # Update DB: mark not current and update path if archived
-        rec.is_current = False
-        if archived:
-            rec.path = archived
+        # Try to archive on-disk file(s) if present (handle duplicates defensively)
+        for rec in recs:
+            try:
+                if rec.path:
+                    src = Path(rec.path)
+                    if src.exists():
+                        dest_dir = _pb_depr_folder() / ts
+                        dest_dir.mkdir(parents=True, exist_ok=True)
+                        dest = dest_dir / Path(rec.path).name
+                        try:
+                            if dest.exists():
+                                dest.unlink()
+                        except Exception:
+                            pass
+                        shutil.move(str(src), str(dest))
+                        archived = str(dest)
+                # Update DB: mark not current and update path if archived
+                rec.is_current = False
+                if archived:
+                    rec.path = archived
+                deleted_records += 1
+            except Exception as e:
+                current_app.logger.exception(
+                    "Archival failed during single delete for %s (id=%s)",
+                    name,
+                    getattr(rec, "id", "?"),
+                )
+                errors.append(str(e))
     try:
         pb_service.invalidate_caches()
     except Exception:
         pass
     if request.headers.get("X-Requested-With") == "fetch":
-        return jsonify({"ok": True})
+        if errors:
+            return jsonify(
+                {"ok": True, "deleted_records": deleted_records, "errors": errors}
+            )
+        return jsonify({"ok": True, "deleted_records": deleted_records})
     return redirect(
-        url_for("admin.admin_dashboard", message=f"Deleted {name}.", success=1)
+        url_for(
+            "admin.admin_dashboard",
+            message=(
+                f"Deleted {name}."
+                if not errors
+                else f"Deleted {name} with issues: {'; '.join(errors)}"
+            ),
+            success=1 if deleted_records else 0,
+        )
     )
 
 
@@ -792,42 +832,64 @@ def admin_delete_files_bulk():
         dest_root.mkdir(parents=True, exist_ok=True)
     except Exception:
         pass
-    done = 0
+    deleted_names = 0
+    errors: list[dict] = []
     with get_session() as s:
         for name in names:
-            rec = (
-                s.query(PBFile)
-                .filter(
-                    PBFile.file_name == name, PBFile.is_current == True
-                )  # noqa: E712
-                .one_or_none()
-            )
-            if not rec:
-                continue
-            archived = None
             try:
-                if rec.path:
-                    src = Path(rec.path)
-                    if src.exists():
-                        dest = dest_root / Path(rec.path).name
-                        try:
-                            if dest.exists():
-                                dest.unlink()
-                        except Exception:
-                            pass
-                        shutil.move(str(src), str(dest))
-                        archived = str(dest)
-            except Exception:
+                recs: list[PBFile] = (
+                    s.query(PBFile)
+                    .filter(
+                        PBFile.file_name == name, PBFile.is_current == True
+                    )  # noqa: E712
+                    .all()
+                )
+            except Exception as e:
+                current_app.logger.exception("Bulk delete query failed for %s", name)
+                errors.append(
+                    {"name": name, "error": f"DB error while locating file: {e}"}
+                )
+                continue
+            if not recs:
+                errors.append({"name": name, "error": "Not found or not current"})
+                continue
+            name_had_success = False
+            for rec in recs:
                 archived = None
-            rec.is_current = False
-            if archived:
-                rec.path = archived
-            done += 1
+                try:
+                    if rec.path:
+                        src = Path(rec.path)
+                        if src.exists():
+                            dest = dest_root / Path(rec.path).name
+                            try:
+                                if dest.exists():
+                                    dest.unlink()
+                            except Exception:
+                                pass
+                            shutil.move(str(src), str(dest))
+                            archived = str(dest)
+                except Exception as e:
+                    current_app.logger.exception(
+                        "Archival failed during bulk delete for %s (id=%s)",
+                        name,
+                        getattr(rec, "id", "?"),
+                    )
+                    errors.append({"name": name, "error": f"Failed to archive: {e}"})
+                # Update DB regardless of whether file existed on disk
+                try:
+                    rec.is_current = False
+                    if archived:
+                        rec.path = archived
+                    name_had_success = True
+                except Exception as e:
+                    errors.append({"name": name, "error": f"Failed to update DB: {e}"})
+            if name_had_success:
+                deleted_names += 1
     try:
         pb_service.invalidate_caches()
     except Exception:
         pass
-    return jsonify({"ok": True, "deleted": done})
+    return jsonify({"ok": True, "deleted": deleted_names, "errors": errors})
 
 
 @bp.post("/admin/files/replace")

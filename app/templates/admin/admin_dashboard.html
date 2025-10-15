@@ -54,6 +54,11 @@
         <h1 class="text-3xl font-bold text-slate-800">Admin – Active Files</h1>
         <span class="text-sm text-slate-500">{{ count }} current files</span>
       </div>
+      {% if message %}
+      <div class="p-3 rounded-md text-sm {{ 'bg-green-50 text-green-700 border border-green-200' if success else 'bg-red-50 text-red-700 border border-red-200' }}">
+        {{ message }}
+      </div>
+      {% endif %}
   <p class="text-gray-600 mb-6">Tip: search filters by title only (years ignored). Click a column header to sort by File, File mtime, or Uploaded.</p>
 
       <!-- Toolbar: search + bulk actions -->
@@ -422,9 +427,16 @@
     if(!confirm(msg)) return;
     try{
       const resp = await fetch("{{ url_for('admin.admin_delete_files_bulk') }}", { method:'POST', headers:{'Content-Type':'application/json','X-Requested-With':'fetch'}, body: JSON.stringify({ names }) });
-      if(!resp.ok){ const data = await resp.json().catch(()=>({})); alert('Delete failed: '+(data.error||resp.status)); return; }
-      const data = await resp.json();
-      window.location.href = "{{ url_for('admin.admin_dashboard') }}?message="+encodeURIComponent(`Deleted ${data.deleted||names.length} file(s).`)+"&success=1";
+      const data = await resp.json().catch(()=>({}));
+      if(!resp.ok){
+        const err = data && data.error ? String(data.error) : `HTTP ${resp.status}`;
+        const details = data && data.errors && data.errors.length ? ' Details: '+data.errors.map(e => e.name? `${e.name}: ${e.error}` : e.error).join('; ') : '';
+        window.location.href = "{{ url_for('admin.admin_dashboard') }}?message="+encodeURIComponent(`Delete failed: ${err}${details}`)+"&success=0";
+        return;
+      }
+      const deleted = data && typeof data.deleted === 'number' ? data.deleted : names.length;
+      const details = data && data.errors && data.errors.length ? ' (with issues: '+data.errors.map(e => e.name? `${e.name}: ${e.error}` : e.error).join('; ')+')' : '';
+      window.location.href = "{{ url_for('admin.admin_dashboard') }}?message="+encodeURIComponent(`Deleted ${deleted} file${deleted===1?'':'s'}${details}.`)+"&success=1";
     }catch(e){ alert('Delete failed'); }
   }
   if(btnDelSel){ btnDelSel.addEventListener('click', ()=>{ const names = checked().map(cb => cb.dataset.file); deleteNames(names); }); }
