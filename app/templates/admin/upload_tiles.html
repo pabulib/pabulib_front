@@ -31,11 +31,11 @@
           <h1 class="text-3xl font-bold text-slate-800">Admin – Upload Tiles</h1>
           <span class="text-sm text-slate-500">{{ count or 0 }} PB files</span>
         </div>
-        <p class="text-gray-600 mb-6">These are temporary uploads. You can ingest them as new files or remove them from the temporary area.</p>
+  <p class="text-gray-600 mb-6">These are temporary uploads. You can upload them as new files or remove them from the temporary area.</p>
 
         <!-- Subtle legend -->
         <div class="text-xs text-slate-500 mb-4 flex items-center gap-3">
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-emerald-100 bg-emerald-50 text-emerald-700" title="File will be ingested as a new dataset">New</span>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-emerald-100 bg-emerald-50 text-emerald-700" title="File will be uploaded as a new dataset">New</span>
           <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-red-100 bg-red-50 text-red-700" title="File will overwrite an existing dataset">Will overwrite</span>
         </div>
 
@@ -116,7 +116,7 @@
         <div class="flex flex-col items-center gap-2 ml-2">
           <a class="p-2 rounded-md border border-slate-300 hover:bg-slate-50" title="Download" href="{{ url_for('admin.upload_tiles_download', name=t.file_name) }}">⬇</a>
           <div class="flex flex-col items-center gap-1">
-            <button class="p-2 rounded-md border border-slate-300 hover:bg-slate-50 ingest-one" data-file="{{ t.file_name|e }}" title="Ingest" type="button">⤴</button>
+            <button class="p-2 rounded-md border border-slate-300 hover:bg-slate-50 ingest-one" data-file="{{ t.file_name|e }}" title="Upload" type="button">⤴</button>
             {% if t.exists_conflict %}
               <span class="text-[10px] text-orange-600" title="A current dataset exists; ingest will overwrite.">overwrite</span>
             {% endif %}
@@ -257,7 +257,7 @@
     let proceed = true;
     try{
       const chk = await fetch("{{ url_for('admin.upload_tiles_check') }}?name="+encodeURIComponent(name), { headers: { 'X-Requested-With': 'fetch' }});
-      if(chk.ok){ const data = await chk.json(); if(data.exists){ proceed = confirm(`A current dataset exists for ${name}. Overwrite?`); } }
+  if(chk.ok){ const data = await chk.json(); if(data.exists){ proceed = confirm(`A current dataset exists for ${name}. Overwrite?`); } }
     }catch(_e){ /* ignore */ }
     if(!proceed) return;
     const params = new URLSearchParams(); params.set('name', name); params.set('confirm', '1');
@@ -269,12 +269,12 @@
           const retryParams = new URLSearchParams(); retryParams.set('name', name); retryParams.set('confirm', '1');
           const retry = await fetch("{{ url_for('admin.upload_tiles_ingest') }}", { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'fetch' }, body: retryParams.toString() });
           if(!retry.ok){
-            try { const data = await retry.json(); alert(`Failed to ingest ${name}: ${data.error || data.message || retry.status}`); } catch(_e) { alert(`Failed to ingest ${name}.`); }
+            try { const data = await retry.json(); alert(`Failed to upload ${name}: ${data.error || data.message || retry.status}`); } catch(_e) { alert(`Failed to upload ${name}.`); }
             return false;
           }
         } else { return; }
       } else {
-        try { const data = await resp.json(); alert(`Failed to ingest ${name}: ${data.error || data.message || resp.status}`); } catch(_e) { alert(`Failed to ingest ${name}.`); }
+        try { const data = await resp.json(); alert(`Failed to upload ${name}: ${data.error || data.message || resp.status}`); } catch(_e) { alert(`Failed to upload ${name}.`); }
         return false;
       }
     }
@@ -286,9 +286,9 @@
       const name = btn.dataset.file;
       const ok = await ingestOne(name);
       if(ok){
-        window.location.href = "{{ url_for('admin.upload_tiles') }}?message="+encodeURIComponent(`Ingested ${name}.`)+"&success=1";
+        window.location.href = "{{ url_for('admin.upload_tiles') }}?message="+encodeURIComponent(`Uploaded ${name}.`)+"&success=1";
       } else {
-        alert(`Failed to ingest ${name}. See server logs for details.`);
+        alert(`Failed to upload ${name}. See server logs for details.`);
         window.location.reload();
       }
     });
@@ -316,9 +316,9 @@
         if(!ok) allOk = false;
       }
       if(allOk){
-        window.location.href = "{{ url_for('admin.upload_tiles') }}?message="+encodeURIComponent('New files ingested.')+"&success=1";
+        window.location.href = "{{ url_for('admin.upload_tiles') }}?message="+encodeURIComponent('New files uploaded.')+"&success=1";
       } else {
-        alert('Some ingests failed. See server logs for details.');
+        alert('Some uploads failed. See server logs for details.');
         window.location.reload();
       }
     });

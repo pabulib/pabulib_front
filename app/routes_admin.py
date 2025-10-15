@@ -599,7 +599,7 @@ def upload_tiles_ingest():
         return redirect(
             url_for(
                 "admin.upload_tiles",
-                message=f"Failed to ingest {name}: {e}",
+                message=f"Failed to upload {name}: {e}",
                 success=0,
             )
         )
@@ -689,11 +689,11 @@ def upload_tiles_ingest():
     except Exception as e:
         logger.exception("DB error while ingesting %s", name)
         if request.headers.get("X-Requested-With") == "fetch" or request.is_json:
-            return jsonify({"ok": False, "error": f"DB error during ingest: {e}"}), 500
+            return jsonify({"ok": False, "error": f"DB error during upload: {e}"}), 500
         return redirect(
             url_for(
                 "admin.upload_tiles",
-                message=f"Failed to ingest {name}: {e}",
+                message=f"Failed to upload {name}: {e}",
                 success=0,
             )
         )
@@ -705,11 +705,11 @@ def upload_tiles_ingest():
 
     # If called via fetch, return JSON ok; otherwise redirect with a message
     if request.headers.get("X-Requested-With") == "fetch" or request.is_json:
-        return jsonify({"ok": True, "message": f"Ingested {name}."})
+        return jsonify({"ok": True, "message": f"Uploaded {name}."})
     return redirect(
         url_for(
             "admin.upload_tiles",
-            message=f"Ingested {name}.",
+            message=f"Uploaded {name}.",
             success=1,
         )
     )
