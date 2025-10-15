@@ -906,16 +906,8 @@ def admin_replace_file():
             )
         )
 
-    # Check for conflicts with the parsed data (excluding the file being replaced)
-    group_key = _build_group_key(
-        tile_preview.get("country") or "",
-        tile_preview.get("unit") or "",
-        tile_preview.get("instance") or "",
-        tile_preview.get("subunit") or "",
-    )
-
     with get_session() as s:
-        # Check if another current file has same webpage_name or group_key (excluding the one being replaced)
+        # Check if another current file has same webpage_name (excluding the one being replaced)
         conflicts = []
         webpage_val = (tile_preview.get("webpage_name") or "").strip()
         if webpage_val:
@@ -930,19 +922,6 @@ def admin_replace_file():
             )
             if webpage_conflict:
                 conflicts.append(f"webpage_name '{webpage_val}'")
-
-        if group_key:
-            group_conflict = (
-                s.query(PBFile.id)
-                .filter(
-                    PBFile.group_key == group_key,
-                    PBFile.is_current == True,
-                    PBFile.id != existing_rec.id,
-                )  # noqa: E712
-                .first()
-            )
-            if group_conflict:
-                conflicts.append(f"group_key '{group_key}'")
 
     if conflicts and not confirm:
         if request.headers.get("X-Requested-With") == "fetch":
@@ -1030,6 +1009,13 @@ def admin_replace_file():
     tile = tile_preview
     stat = target.stat()
     file_mtime = datetime.utcfromtimestamp(stat.st_mtime)
+    # Compute group_key for the new record (for grouping/display); identity is by webpage_name
+    group_key = _build_group_key(
+        tile.get("country") or "",
+        tile.get("unit") or "",
+        tile.get("instance") or "",
+        tile.get("subunit") or "",
+    )
 
     with get_session() as s:
         # Mark old record as not current and update its path to archived location
