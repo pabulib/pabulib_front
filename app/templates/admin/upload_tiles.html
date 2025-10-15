@@ -60,12 +60,23 @@
           </div>
 
           <!-- Right group: selected label (left) + stacked actions (right) -->
-          <div class="shrink-0 flex items-start gap-3">
-            <span id="tmpSelectedLabel" class="mt-2 text-sm text-slate-600 whitespace-nowrap">Selected: <span id="tmpSelected">0</span></span>
-            <div class="flex flex-col items-end gap-2">
-              <button id="uploadSelectedBtn" type="button" class="w-48 px-3 py-2 rounded-md bg-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed">Upload</button>
-              <button type="button" id="downloadSelected" class="w-48 px-3 py-2 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed">Download</button>
-              <button type="button" id="deleteSelected" class="w-48 px-3 py-2 rounded-md border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed">Delete</button>
+          <div class="shrink-0 flex items-center gap-3">
+            <!-- Responsive action group: horizontal on sm+, stacked on xs -->
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-0">
+              <div class="inline-flex rounded-md shadow-sm ring-1 ring-slate-300 overflow-hidden divide-y sm:divide-y-0 sm:divide-x divide-slate-200">
+                <button id="uploadSelectedBtn" type="button" title="Upload selected" class="inline-flex items-center gap-2 px-3 py-2 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path d="M12 3a.75.75 0 0 1 .75.75V14a.75.75 0 0 1-1.5 0V3.75A.75.75 0 0 1 12 3Z"/><path d="M7.72 8.47a.75.75 0 0 1 1.06 0L12 11.69l3.22-3.22a.75.75 0 1 1 1.06 1.06l-3.75 3.75a1.5 1.5 0 0 1-2.12 0L7.72 9.53a.75.75 0 0 1 0-1.06Z"/><path d="M6.75 18A3.75 3.75 0 0 1 10.5 14.25h3A3.75 3.75 0 0 1 17.25 18v1.5H6.75V18Z"/></svg>
+                  <span id="uploadLabel" class="hidden sm:inline">Upload</span>
+                </button>
+                <button type="button" id="downloadSelected" title="Download selected" class="inline-flex items-center gap-2 px-3 py-2 bg-white text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path d="M12 3.75a.75.75 0 0 1 .75.75v9.44l2.47-2.47a.75.75 0 1 1 1.06 1.06l-3.75 3.75a1.5 1.5 0 0 1-2.12 0L6.66 12.53a.75.75 0 0 1 1.06-1.06l2.53 2.53V4.5a.75.75 0 0 1 .75-.75Z"/><path d="M6.75 18A3.75 3.75 0 0 1 10.5 14.25h3A3.75 3.75 0 0 1 17.25 18v1.5H6.75V18Z"/></svg>
+                  <span id="downloadLabel" class="hidden sm:inline">Download</span>
+                </button>
+                <button type="button" id="deleteSelected" title="Delete selected" class="inline-flex items-center gap-2 px-3 py-2 bg-red-100 text-red-800 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path d="M9 3.75A1.5 1.5 0 0 1 10.5 2.25h3A1.5 1.5 0 0 1 15 3.75V4.5h3.75a.75.75 0 0 1 0 1.5H5.25a.75.75 0 0 1 0-1.5H9V3.75Z"/><path fill-rule="evenodd" d="M6.75 6.75h10.5l-.69 11.087A3 3 0 0 1 13.57 20.7H10.43a3 3 0 0 1-2.99-2.863L6.75 6.75Zm4.5 3a.75.75 0 0 0-1.5 0v6a.75.75 0 1 0 1.5 0v-6Zm3 0a.75.75 0 0 0-1.5 0v6a.75.75 0 1 0 1.5 0v-6Z" clip-rule="evenodd"/></svg>
+                  <span id="deleteLabel" class="hidden sm:inline">Delete</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -153,8 +164,10 @@
   const uploadSelectedBtn = document.getElementById('uploadSelectedBtn');
   const deleteSelected = document.getElementById('deleteSelected');
   const downloadSelected = document.getElementById('downloadSelected');
-  const selectedCountEl = document.getElementById('tmpSelected');
-  const selectedLabel = document.getElementById('tmpSelectedLabel');
+  const uploadLabel = document.getElementById('uploadLabel');
+  const downloadLabel = document.getElementById('downloadLabel');
+  const deleteLabel = document.getElementById('deleteLabel');
+  // Removed explicit Selected: X label from UI; keep internal count only if needed.
   // const replaceWithSelected = document.getElementById('replaceWithSelected');
   const total = tiles.length;
 
@@ -228,21 +241,13 @@
   function updateUploadSelectedButton(){
     const boxes = checkedBoxes();
     const n = boxes.length;
-    if(uploadSelectedBtn){
-      // Keep concise label; optionally append count when > 0
-      uploadSelectedBtn.textContent = n > 0 ? `Upload ${n}` : 'Upload';
-      uploadSelectedBtn.disabled = n === 0;
-    }
-    if(deleteSelected){
-      deleteSelected.textContent = n > 0 ? `Delete ${n}` : 'Delete';
-      deleteSelected.disabled = n === 0;
-    }
-    if(downloadSelected){
-      downloadSelected.textContent = n > 0 ? `Download ${n}` : 'Download';
-      downloadSelected.disabled = n === 0;
-    }
-    if(selectedCountEl){ selectedCountEl.textContent = String(n); }
-    // keep label visible as per request, but show 0 when nothing selected
+    if(uploadSelectedBtn){ uploadSelectedBtn.disabled = n === 0; }
+    if(deleteSelected){ deleteSelected.disabled = n === 0; }
+    if(downloadSelected){ downloadSelected.disabled = n === 0; }
+    if(uploadLabel){ uploadLabel.textContent = n > 0 ? `Upload ${n}` : 'Upload'; }
+    if(deleteLabel){ deleteLabel.textContent = n > 0 ? `Delete ${n}` : 'Delete'; }
+    if(downloadLabel){ downloadLabel.textContent = n > 0 ? `Download ${n}` : 'Download'; }
+    // No external label to update
   }
 
   async function postAction(url, name){
