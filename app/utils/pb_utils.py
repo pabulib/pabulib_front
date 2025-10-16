@@ -9,6 +9,44 @@ from typing import Any, Dict, List, Optional, Tuple
 from .load_pb_file import parse_pb_lines
 
 
+def parse_comments_from_meta(meta: Dict[str, Any]) -> List[str]:
+    """Extract processed comments from META['comment'].
+
+    Format: a single string possibly containing multiple segments marked with
+    sequential markers like "#1:", "#2:", ... on one or multiple lines.
+    Returns a list of plain comment texts without trailing punctuation.
+    """
+    raw = str(meta.get("comment", "")).strip()
+    if not raw:
+        return []
+    # Normalize to single line to simplify marker search
+    s = raw.replace("\n", " ")
+    parts: List[str] = []
+    expecting = 1
+    while True:
+        marker = f"#{expecting}:"
+        next_marker = f"#{expecting + 1}:"
+        start = s.find(marker)
+        if start == -1:
+            # No marker found. If it's the first expected marker, treat whole
+            # string as a single comment.
+            if expecting == 1 and s:
+                txt = s.strip().strip(";.")
+                if txt:
+                    parts.append(txt)
+            break
+        start_text = start + len(marker)
+        end = s.find(next_marker, start_text)
+        chunk = s[start_text:] if end == -1 else s[start_text:end]
+        txt = chunk.strip().strip(";.")
+        if txt:
+            parts.append(txt)
+        expecting += 1
+        if end == -1:
+            break
+    return parts
+
+
 def workspace_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -84,6 +122,7 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
     )
 
     description = meta.get("description", "")
+    comments = parse_comments_from_meta(meta)
     currency = meta.get("currency", "")
     try:
         num_votes = int(meta.get("num_votes", len(votes)))
@@ -205,6 +244,7 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
         "title": title,
         "webpage_name": webpage_name,
         "description": description,
+        "comments": comments,
         "currency": currency,
         "num_votes_raw": num_votes,
         "num_projects_raw": num_projects,

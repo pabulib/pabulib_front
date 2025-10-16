@@ -414,6 +414,7 @@ def _format_preview_tile(tile: dict) -> dict:
         "rule_raw": tile.get("rule_raw") or "",
         "edition": tile.get("edition") or "",
         "language": tile.get("language") or "",
+        "comments": tile.get("comments") or [],
     }
 
 
