@@ -160,6 +160,24 @@ def _list_public_tmp_tiles() -> list[dict]:
             parsed = _parse_pb_to_tile(p)
             tile_data = _format_preview_tile(parsed)
             tile_data["file_name"] = p.name  # ensure filename is the session one
+            # Determine if this would overwrite an existing current dataset (by webpage_name)
+            try:
+                webpage_name = (tile_data.get("webpage_name") or "").strip()
+                exists_conflict = False
+                if webpage_name:
+                    with get_session() as s:
+                        exists_conflict = (
+                            s.query(PBFile.id)
+                            .filter(
+                                PBFile.webpage_name == webpage_name,
+                                PBFile.is_current == True,  # noqa: E712
+                            )
+                            .first()
+                            is not None
+                        )
+                tile_data["exists_conflict"] = bool(exists_conflict)
+            except Exception:
+                tile_data["exists_conflict"] = False
 
             # Cached validation (reuse and cache to avoid re-validating constantly)
             validation_cache_path = tmp_dir / f".{p.name}.validation.json"
@@ -244,97 +262,130 @@ def upload_upload_batch():
         )
 
     tmp_dir = _public_session_dir()
+    # Optional flag to replace existing session files with same standardized name
+    force_replace_flag = str(request.form.get("force_replace") or "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
     existing = {p.name for p in tmp_dir.glob("*.pb")}
 
     results = []
     saved = 0
-    for f in files:
-        name = (f.filename or "").strip()
-        safe_name = secure_filename(name)
-        if not safe_name or not _is_allowed_ext(safe_name):
-            results.append(
-                {
-                    "ok": False,
-                    "name": name or "(unnamed)",
-                    "msg": "Only .pb files are allowed.",
-                }
-            )
-            continue
+    # Open one DB session to check conflicts efficiently
+    with get_session() as s:
+        for f in files:
+            name = (f.filename or "").strip()
+            safe_name = secure_filename(name)
+            if not safe_name or not _is_allowed_ext(safe_name):
+                results.append(
+                    {
+                        "ok": False,
+                        "name": name or "(unnamed)",
+                        "msg": "Only .pb files are allowed.",
+                    }
+                )
+                continue
 
-        # Save to a temporary unique path first
-        tmp_unique = tmp_dir / f"._incoming_{uuid.uuid4().hex}.pb"
-        try:
-            f.save(str(tmp_unique))
-            # Post-save checks
+            # Save to a temporary unique path first
+            tmp_unique = tmp_dir / f"._incoming_{uuid.uuid4().hex}.pb"
             try:
-                if tmp_unique.stat().st_size > max_bytes:
+                f.save(str(tmp_unique))
+                # Post-save checks
+                try:
+                    if tmp_unique.stat().st_size > max_bytes:
+                        results.append(
+                            {
+                                "ok": False,
+                                "name": name,
+                                "msg": f"File too large (> {max_mb} MB)",
+                            }
+                        )
+                        tmp_unique.unlink(missing_ok=True)
+                        continue
+                except Exception:
+                    pass
+                if not _is_probably_text_file(tmp_unique):
                     results.append(
                         {
                             "ok": False,
                             "name": name,
-                            "msg": f"File too large (> {max_mb} MB)",
+                            "msg": "File does not look like text",
                         }
                     )
                     tmp_unique.unlink(missing_ok=True)
                     continue
-            except Exception:
-                pass
-            if not _is_probably_text_file(tmp_unique):
+
+                # Determine webpage_name to standardize filename
+                try:
+                    t = _parse_pb_to_tile(tmp_unique)
+                    webpage_name = (t.get("webpage_name") or "").strip()
+                except Exception:
+                    webpage_name = ""
+
+                target_name = (
+                    secure_filename(f"{webpage_name}.pb") if webpage_name else safe_name
+                )
+                # Check if this webpage_name already exists in current library (for overwrite alert on client)
+                exists_conflict = False
+                if webpage_name:
+                    try:
+                        exists_conflict = (
+                            s.query(PBFile.id)
+                            .filter(
+                                PBFile.webpage_name == webpage_name,
+                                PBFile.is_current == True,  # noqa: E712
+                            )
+                            .first()
+                            is not None
+                        )
+                    except Exception:
+                        exists_conflict = False
+                if target_name in existing or (tmp_dir / target_name).exists():
+                    if not force_replace_flag:
+                        # Duplicate in this session; reject (client may re-upload with force)
+                        results.append(
+                            {
+                                "ok": False,
+                                "name": name,
+                                "msg": f"Duplicate webpage_name. A file named {target_name} is already uploaded in this session.",
+                                "webpage_name": webpage_name
+                                or target_name.rsplit(".", 1)[0],
+                            }
+                        )
+                        tmp_unique.unlink(missing_ok=True)
+                        continue
+                    # Force replace: allow overwrite atomically
+                    try:
+                        (tmp_dir / target_name).unlink(missing_ok=True)
+                    except Exception:
+                        pass
+
+                dest = tmp_dir / target_name
+                tmp_unique.replace(dest)
+                existing.add(target_name)
+                saved += 1
+                results.append(
+                    {
+                        "ok": True,
+                        "name": target_name,
+                        "webpage_name": webpage_name or target_name.rsplit(".", 1)[0],
+                        "exists_conflict": bool(exists_conflict),
+                        "msg": "Uploaded to session.",
+                    }
+                )
+            except Exception as e:
+                try:
+                    tmp_unique.unlink(missing_ok=True)
+                except Exception:
+                    pass
                 results.append(
                     {
                         "ok": False,
                         "name": name,
-                        "msg": "File does not look like text",
+                        "msg": f"Upload failed: {e.__class__.__name__}: {str(e)}",
                     }
                 )
-                tmp_unique.unlink(missing_ok=True)
-                continue
-
-            # Determine webpage_name to standardize filename
-            try:
-                t = _parse_pb_to_tile(tmp_unique)
-                webpage_name = (t.get("webpage_name") or "").strip()
-            except Exception:
-                webpage_name = ""
-
-            target_name = (
-                secure_filename(f"{webpage_name}.pb") if webpage_name else safe_name
-            )
-            if target_name in existing or (tmp_dir / target_name).exists():
-                # Duplicate in this session; reject
-                results.append(
-                    {
-                        "ok": False,
-                        "name": name,
-                        "msg": f"Duplicate webpage_name. A file named {target_name} is already uploaded in this session.",
-                    }
-                )
-                tmp_unique.unlink(missing_ok=True)
-                continue
-
-            dest = tmp_dir / target_name
-            tmp_unique.replace(dest)
-            existing.add(target_name)
-            saved += 1
-            results.append(
-                {
-                    "ok": True,
-                    "name": target_name,
-                    "msg": "Uploaded to session.",
-                }
-            )
-        except Exception as e:
-            try:
-                tmp_unique.unlink(missing_ok=True)
-            except Exception:
-                pass
-            results.append(
-                {
-                    "ok": False,
-                    "name": name,
-                    "msg": f"Upload failed: {e.__class__.__name__}: {str(e)}",
-                }
-            )
 
     return jsonify(
         {
