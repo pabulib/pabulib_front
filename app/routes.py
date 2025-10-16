@@ -1,13 +1,31 @@
 import io
+import json
+import tempfile
+import uuid
 import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from flask import Blueprint, Response, abort, render_template, request, send_file
+from flask import (
+    Blueprint,
+    Response,
+    abort,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    session,
+    url_for,
+)
+from werkzeug.utils import secure_filename
 
+from .__init__ import limiter
 from .db import get_session
 from .models import PBFile
+from .routes_admin import _format_preview_tile  # reuse tile formatting
+from .routes_admin import _load_upload_settings  # reuse limits
 from .services.pb_service import aggregate_comments_cached as _aggregate_comments_cached
 from .services.pb_service import (
     aggregate_statistics_cached as _aggregate_statistics_cached,
@@ -17,6 +35,11 @@ from .services.pb_service import get_tiles_cached as _get_tiles_cached
 from .utils.file_helpers import is_safe_filename as _is_safe_filename
 from .utils.formatting import format_int as _format_int
 from .utils.load_pb_file import parse_pb_lines
+from .utils.pb_utils import parse_pb_to_tile as _parse_pb_to_tile
+from .utils.upload_security import is_allowed_extension as _is_allowed_ext
+from .utils.upload_security import is_probably_text_file as _is_probably_text_file
+from .utils.upload_security import public_tmp_dir as _public_tmp_dir
+from .utils.validation import count_issues, format_validation_summary, validate_pb_file
 
 bp = Blueprint(
     "main",
@@ -92,6 +115,546 @@ def about_page():
 @bp.route("/contact")
 def contact_page():
     return render_template("contact.html", now=datetime.now())
+
+
+@bp.get("/upload")
+def upload_page():
+    """Public page to validate .pb files and send them for acceptance."""
+    settings = _load_upload_settings()
+    tiles = _list_public_tmp_tiles()
+    return render_template(
+        "upload.html", upload_settings=settings, tiles=tiles, count=len(tiles)
+    )
+
+
+@bp.get("/check")
+def check_page():
+    """Alias path: redirect to /upload to keep a single canonical URL."""
+    return redirect(url_for("main.upload_page"), code=302)
+
+
+def _public_session_dir() -> Path:
+    """Stable temp dir per user session for public uploads."""
+    key = session.get("public_tmp_key")
+    if not key:
+        key = uuid.uuid4().hex
+        session["public_tmp_key"] = key
+    # Base folder for public uploads in temp dir
+    base = Path(tempfile.gettempdir()) / "pabulib_public"
+    base.mkdir(parents=True, exist_ok=True)
+    p = base / key
+    try:
+        p.mkdir(mode=0o700, parents=True, exist_ok=True)
+    except Exception:
+        p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def _list_public_tmp_tiles() -> list[dict]:
+    """Build rich tiles for the public upload session, mirroring admin preview."""
+    tmp_dir = _public_session_dir()
+    tiles: list[dict] = []
+    for p in sorted(tmp_dir.glob("*.pb")):
+        try:
+            # Parse PB to a tile dict and format to preview shape like admin
+            parsed = _parse_pb_to_tile(p)
+            tile_data = _format_preview_tile(parsed)
+            tile_data["file_name"] = p.name  # ensure filename is the session one
+
+            # Cached validation (reuse and cache to avoid re-validating constantly)
+            validation_cache_path = tmp_dir / f".{p.name}.validation.json"
+            validation = None
+            try:
+                if (
+                    validation_cache_path.exists()
+                    and validation_cache_path.stat().st_mtime >= p.stat().st_mtime
+                ):
+                    with open(validation_cache_path, "r") as f:
+                        validation = json.load(f)
+            except Exception:
+                validation = None
+            if validation is None:
+                validation = validate_pb_file(p)
+                try:
+                    with open(validation_cache_path, "w") as f:
+                        json.dump(validation, f)
+                except Exception:
+                    pass
+
+            tile_data["validation"] = validation
+            tile_data["validation_summary"] = format_validation_summary(validation)
+            issue_counts = count_issues(validation)
+            tile_data["error_count"] = issue_counts.get("errors", 0)
+            tile_data["warning_count"] = issue_counts.get("warnings", 0)
+
+            tiles.append(tile_data)
+        except Exception as e:
+            # Provide a minimal error tile with a visible validation error
+            tiles.append(
+                {
+                    "file_name": p.name,
+                    "title": p.stem.replace("_", " "),
+                    "description": "(Failed to parse)",
+                    "num_votes": "—",
+                    "num_projects": "—",
+                    "budget": "—",
+                    "vote_type": "",
+                    "vote_length": "—",
+                    "validation": {
+                        "valid": False,
+                        "errors": None,
+                        "warnings": None,
+                        "error_message": f"Parse error: {e.__class__.__name__}: {str(e)}. File likely corrupted or malformed.",
+                    },
+                    "validation_summary": f"⚠ Parse error: {e.__class__.__name__}: {str(e)}. File likely corrupted.",
+                    "error_count": 0,
+                    "warning_count": 0,
+                }
+            )
+    return tiles
+
+
+@bp.post("/upload/upload")
+@limiter.limit("15/minute; 300/day")
+def upload_upload_batch():
+    """Upload multiple .pb files into the user's session tmp area.
+    Performs security checks and basic de-duplication by webpage_name.
+    Returns JSON with per-file results.
+    """
+    if "files" not in request.files:
+        return jsonify({"ok": False, "error": "No files part"}), 400
+
+    files = request.files.getlist("files")
+    if not files:
+        return jsonify({"ok": False, "error": "No files provided"}), 400
+
+    settings = _load_upload_settings()
+    max_mb = int(settings.get("max_file_mb", 10))
+    max_bytes = max_mb * 1024 * 1024
+    max_batch = int(settings.get("max_batch", 100))
+    if len(files) > max_batch:
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": f"Too many files. Max per upload is {max_batch}.",
+                }
+            ),
+            400,
+        )
+
+    tmp_dir = _public_session_dir()
+    existing = {p.name for p in tmp_dir.glob("*.pb")}
+
+    results = []
+    saved = 0
+    for f in files:
+        name = (f.filename or "").strip()
+        safe_name = secure_filename(name)
+        if not safe_name or not _is_allowed_ext(safe_name):
+            results.append(
+                {
+                    "ok": False,
+                    "name": name or "(unnamed)",
+                    "msg": "Only .pb files are allowed.",
+                }
+            )
+            continue
+
+        # Save to a temporary unique path first
+        tmp_unique = tmp_dir / f"._incoming_{uuid.uuid4().hex}.pb"
+        try:
+            f.save(str(tmp_unique))
+            # Post-save checks
+            try:
+                if tmp_unique.stat().st_size > max_bytes:
+                    results.append(
+                        {
+                            "ok": False,
+                            "name": name,
+                            "msg": f"File too large (> {max_mb} MB)",
+                        }
+                    )
+                    tmp_unique.unlink(missing_ok=True)
+                    continue
+            except Exception:
+                pass
+            if not _is_probably_text_file(tmp_unique):
+                results.append(
+                    {
+                        "ok": False,
+                        "name": name,
+                        "msg": "File does not look like text",
+                    }
+                )
+                tmp_unique.unlink(missing_ok=True)
+                continue
+
+            # Determine webpage_name to standardize filename
+            try:
+                t = _parse_pb_to_tile(tmp_unique)
+                webpage_name = (t.get("webpage_name") or "").strip()
+            except Exception:
+                webpage_name = ""
+
+            target_name = (
+                secure_filename(f"{webpage_name}.pb") if webpage_name else safe_name
+            )
+            if target_name in existing or (tmp_dir / target_name).exists():
+                # Duplicate in this session; reject
+                results.append(
+                    {
+                        "ok": False,
+                        "name": name,
+                        "msg": f"Duplicate webpage_name. A file named {target_name} is already uploaded in this session.",
+                    }
+                )
+                tmp_unique.unlink(missing_ok=True)
+                continue
+
+            dest = tmp_dir / target_name
+            tmp_unique.replace(dest)
+            existing.add(target_name)
+            saved += 1
+            results.append(
+                {
+                    "ok": True,
+                    "name": target_name,
+                    "msg": "Uploaded to session.",
+                }
+            )
+        except Exception as e:
+            try:
+                tmp_unique.unlink(missing_ok=True)
+            except Exception:
+                pass
+            results.append(
+                {
+                    "ok": False,
+                    "name": name,
+                    "msg": f"Upload failed: {e.__class__.__name__}: {str(e)}",
+                }
+            )
+
+    return jsonify(
+        {
+            "ok": True,
+            "saved": saved,
+            "results": results,
+            "existing_count": len(existing),
+        }
+    )
+
+
+@bp.post("/upload/submit_selected")
+@limiter.limit("5/minute; 50/day")
+def upload_submit_selected():
+    """Copy selected valid files from the user's session tmp to the admin tmp with email sidecar."""
+    try:
+        payload = request.get_json(force=True, silent=False) or {}
+    except Exception:
+        payload = {}
+    files = payload.get("files") or []
+    email = (payload.get("email") or "").strip()
+
+    if not email or ("@" not in email or "." not in email.split("@")[-1]):
+        return jsonify({"ok": False, "error": "Valid email required"}), 400
+    if not isinstance(files, list) or not files:
+        return jsonify({"ok": False, "error": "No files selected"}), 400
+
+    # Limit batch size
+    settings = _load_upload_settings()
+    max_batch = int(settings.get("max_batch", 100))
+    if len(files) > max_batch:
+        return (
+            jsonify({"ok": False, "error": f"Too many files. Max is {max_batch}."}),
+            400,
+        )
+
+    tmp_dir = _public_session_dir()
+
+    from .routes_admin import _tmp_upload_dir  # local import to avoid cycles
+
+    admin_tmp = _tmp_upload_dir()
+    saved = 0
+    results = []
+    for name in files:
+        safe = secure_filename(str(name))
+        src = tmp_dir / safe
+        if not safe or not _is_allowed_ext(safe) or not src.exists():
+            results.append({"ok": False, "name": name, "msg": "Not found"})
+            continue
+        # Validate before copying (use cache if available)
+        validation_cache_path = tmp_dir / f".{safe}.validation.json"
+        validation = None
+        if validation_cache_path.exists():
+            try:
+                with open(validation_cache_path, "r") as f:
+                    validation = json.load(f)
+            except Exception:
+                validation = None
+        if validation is None:
+            validation = validate_pb_file(src)
+            try:
+                with open(validation_cache_path, "w") as f:
+                    json.dump(validation, f)
+            except Exception:
+                pass
+        if not validation.get("valid"):
+            results.append(
+                {
+                    "ok": False,
+                    "name": safe,
+                    "msg": "File is not valid; cannot submit",
+                }
+            )
+            continue
+
+        # Compute destination, avoiding collisions by suffixing
+        dest = admin_tmp / safe
+        if dest.exists():
+            stem, suff = dest.stem, dest.suffix
+            i = 1
+            while True:
+                alt = admin_tmp / f"{stem}_{i}{suff}"
+                if not alt.exists():
+                    dest = alt
+                    break
+                i += 1
+        try:
+            # Copy bytes
+            dest.write_bytes(src.read_bytes())
+            # Write sidecar marker with contributor email
+            marker = {"public_submission": True, "email": email}
+            (admin_tmp / f".{dest.name}.public.json").write_text(
+                json.dumps(marker), encoding="utf-8"
+            )
+            # Remove from session tmp
+            try:
+                src.unlink()
+            except Exception:
+                pass
+            try:
+                # remove cached validation if present
+                (tmp_dir / f".{safe}.validation.json").unlink()
+            except Exception:
+                pass
+            saved += 1
+            results.append({"ok": True, "name": dest.name, "msg": "Submitted"})
+        except Exception as e:
+            results.append(
+                {
+                    "ok": False,
+                    "name": safe,
+                    "msg": f"Failed to submit: {e.__class__.__name__}: {str(e)}",
+                }
+            )
+
+    return jsonify({"ok": True, "saved": saved, "results": results})
+
+
+@bp.post("/upload/delete_selected")
+@limiter.limit("15/minute; 300/day")
+def upload_delete_selected():
+    """Delete selected files from the user's session tmp area.
+    Only .pb files in the current session directory are eligible.
+    """
+    try:
+        payload = request.get_json(force=True, silent=False) or {}
+    except Exception:
+        payload = {}
+    files = payload.get("files") or []
+    if not isinstance(files, list) or not files:
+        return jsonify({"ok": False, "error": "No files selected"}), 400
+
+    tmp_dir = _public_session_dir()
+    deleted = 0
+    results = []
+    for name in files:
+        safe = secure_filename(str(name))
+        if not safe or not _is_allowed_ext(safe):
+            results.append({"ok": False, "name": name, "msg": "Invalid name"})
+            continue
+        p = tmp_dir / safe
+        if not p.exists() or not p.is_file():
+            results.append({"ok": False, "name": safe, "msg": "Not found"})
+            continue
+        try:
+            p.unlink()
+            # Remove cached validation if present
+            try:
+                (tmp_dir / f".{safe}.validation.json").unlink()
+            except Exception:
+                pass
+            deleted += 1
+            results.append({"ok": True, "name": safe, "msg": "Deleted"})
+        except Exception as e:
+            results.append(
+                {
+                    "ok": False,
+                    "name": safe,
+                    "msg": f"Failed to delete: {e.__class__.__name__}: {str(e)}",
+                }
+            )
+
+    return jsonify({"ok": True, "deleted": deleted, "results": results})
+
+
+@bp.post("/upload/validate")
+@limiter.limit("10/minute; 200/day")
+def upload_validate():
+    """Validate a single uploaded .pb file (no persistence). Returns JSON."""
+    if "file" not in request.files:
+        return jsonify({"ok": False, "error": "No file part"}), 400
+    f = request.files["file"]
+    email = (request.form.get("email") or "").strip()
+    # Basic email sanity (optional): simple pattern
+    if email and ("@" not in email or "." not in email.split("@")[-1]):
+        return jsonify({"ok": False, "error": "Invalid email"}), 400
+
+    name = (f.filename or "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": "Empty filename"}), 400
+    if not _is_allowed_ext(name):
+        return jsonify({"ok": False, "error": "Only .pb files are allowed"}), 400
+
+    settings = _load_upload_settings()
+    max_bytes = int(settings.get("max_file_mb", 10)) * 1024 * 1024
+    # If content length known, enforce early
+    clen = request.content_length or 0
+    if clen and clen > max_bytes + 1024 * 64:  # small overhead wiggle
+        return jsonify({"ok": False, "error": "File too large"}), 413
+
+    tmp_dir = _public_tmp_dir()
+    tmp_path = tmp_dir / name
+    try:
+        f.save(str(tmp_path))
+        # Post-save checks
+        try:
+            if tmp_path.stat().st_size > max_bytes:
+                return jsonify({"ok": False, "error": "File too large"}), 413
+        except Exception:
+            pass
+        # Ensure it's text-like
+        if not _is_probably_text_file(tmp_path):
+            return jsonify({"ok": False, "error": "File does not look like text"}), 400
+
+        # Validate using existing validator (creates its own sanitized temp and cleans it)
+        validation = validate_pb_file(tmp_path)
+
+        return jsonify(
+            {
+                "ok": True,
+                "validation": validation,
+                "email": email or None,
+            }
+        )
+    finally:
+        # Clean up uploaded file and temp folder
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except Exception:
+            pass
+        try:
+            # Remove the unique folder
+            tmp_dir.rmdir()
+        except Exception:
+            pass
+
+
+@bp.post("/upload/submit")
+@limiter.limit("5/minute; 50/day")
+def upload_submit():
+    """Accept a single valid .pb + email and store it in the admin tmp area with a public marker.
+    This does NOT ingest to the library; admin will see it in /admin/upload with a label.
+    """
+    if "file" not in request.files:
+        return jsonify({"ok": False, "error": "No file part"}), 400
+    f = request.files["file"]
+    email = (request.form.get("email") or "").strip()
+    if not email or ("@" not in email or "." not in email.split("@")[-1]):
+        return jsonify({"ok": False, "error": "Valid email required"}), 400
+    name = (f.filename or "").strip()
+    if not name or not _is_allowed_ext(name):
+        return jsonify({"ok": False, "error": "Only .pb files are allowed"}), 400
+
+    settings = _load_upload_settings()
+    max_bytes = int(settings.get("max_file_mb", 10)) * 1024 * 1024
+
+    tmp_dir = _public_tmp_dir()
+    tmp_path = tmp_dir / name
+    try:
+        f.save(str(tmp_path))
+        # size + text checks
+        try:
+            if tmp_path.stat().st_size > max_bytes:
+                return jsonify({"ok": False, "error": "File too large"}), 413
+        except Exception:
+            pass
+        if not _is_probably_text_file(tmp_path):
+            return jsonify({"ok": False, "error": "File does not look like text"}), 400
+
+        # Validate and only proceed if valid
+        validation = validate_pb_file(tmp_path)
+        if not validation.get("valid"):
+            return (
+                jsonify(
+                    {
+                        "ok": False,
+                        "error": "File is not valid",
+                        "validation": validation,
+                    }
+                ),
+                400,
+            )
+
+        # Copy into admin tmp with a sidecar marker containing email
+        from werkzeug.utils import secure_filename
+
+        from .routes_admin import _tmp_upload_dir  # avoid cycle at top
+
+        admin_tmp = _tmp_upload_dir()
+        safe_name = secure_filename(name)
+        dest = admin_tmp / safe_name
+        # If collision, add a short suffix
+        if dest.exists():
+            stem = dest.stem
+            suffix = dest.suffix
+            i = 1
+            while True:
+                alt = admin_tmp / f"{stem}_{i}{suffix}"
+                if not alt.exists():
+                    dest = alt
+                    break
+                i += 1
+        # Write file
+        content = tmp_path.read_bytes()
+        dest.write_bytes(content)
+        # Write marker file for admin UI (e.g., .<filename>.public.json)
+        import json
+
+        marker = {
+            "public_submission": True,
+            "email": email,
+        }
+        (admin_tmp / f".{dest.name}.public.json").write_text(
+            json.dumps(marker), encoding="utf-8"
+        )
+
+        return jsonify(
+            {"ok": True, "message": "Submitted for acceptance", "name": dest.name}
+        )
+    finally:
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except Exception:
+            pass
+        try:
+            tmp_dir.rmdir()
+        except Exception:
+            pass
 
 
 @bp.route("/comments")

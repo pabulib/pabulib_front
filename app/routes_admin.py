@@ -287,6 +287,24 @@ def _list_tmp_tiles() -> list[dict]:
         try:
             t = _parse_pb_to_tile(p)
             tile_data = _format_preview_tile(t)
+            # Public submission marker
+            try:
+                import json
+
+                marker_path = tmp_dir / f".{p.name}.public.json"
+                if marker_path.exists():
+                    with open(marker_path, "r") as mf:
+                        marker = json.load(mf) or {}
+                    tile_data["public_submission"] = bool(
+                        marker.get("public_submission")
+                    )
+                    tile_data["submitted_email"] = marker.get("email") or ""
+                else:
+                    tile_data["public_submission"] = False
+                    tile_data["submitted_email"] = ""
+            except Exception:
+                tile_data["public_submission"] = False
+                tile_data["submitted_email"] = ""
 
             # Add validation - check for cached validation first
             validation_cache_path = tmp_dir / f".{p.name}.validation.json"
@@ -1033,6 +1051,10 @@ def upload_tiles_delete():
                 validation_cache_path = tmp_dir / f".{name}.validation.json"
                 if validation_cache_path.exists():
                     validation_cache_path.unlink()
+                # Remove public submission sidecar if present
+                public_marker = tmp_dir / f".{name}.public.json"
+                if public_marker.exists():
+                    public_marker.unlink()
                 deleted_count += 1
             except Exception as e:
                 errors.append(f"Failed to delete {name}: {str(e)}")

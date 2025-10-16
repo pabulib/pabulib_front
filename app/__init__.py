@@ -2,11 +2,28 @@ import os
 from datetime import datetime
 
 from flask import Flask, render_template, request
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+# Create limiter at import time so routes can use decorators; init with app later
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=[],
+    storage_uri=os.environ.get("LIMITER_STORAGE_URI", "memory://"),
+)
 
 
 def create_app():
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.environ["SECRET_KEY"]
+
+    # Global request body cap (security): default 10 MB unless overridden
+    try:
+        app.config["MAX_CONTENT_LENGTH"] = (
+            int(os.environ.get("MAX_UPLOAD_MB", "10")) * 1024 * 1024
+        )
+    except Exception:
+        app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 
     # In debug mode, auto-reload templates and avoid static caching
     debug_env = os.environ.get("FLASK_DEBUG", "0").strip() not in {
@@ -21,6 +38,14 @@ def create_app():
             app.jinja_env.auto_reload = True
         except Exception:
             pass
+
+    # Initialize rate limiter (used on public endpoints)
+    try:
+        limiter.init_app(app)
+        app.extensions["limiter"] = limiter
+    except Exception:
+        # If limiter init fails, continue without global limits
+        pass
 
     # Register routes
     from .routes import bp as main_bp

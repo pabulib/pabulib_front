@@ -1,0 +1,260 @@
+{% extends 'base.html' %}
+
+{% block title %}Upload & Check your PB file{% endblock %}
+
+{% block body %}
+<section class="max-w-5xl mx-auto px-4 py-8">
+  <!-- Small banner: tool under active development -->
+  <div class="mb-4 rounded-md border border-yellow-200 bg-yellow-50 text-yellow-900 px-3 py-2 text-sm">
+    <strong>Heads up:</strong> this tool is in active development. Some parts may not work perfectly yet. Thanks for your patience — and if you run into issues, please let us know!
+  </div>
+  <h1 class="text-3xl font-bold text-slate-800 mb-4">Upload &amp; Check your PB file</h1>
+  <div class="text-slate-700 mb-6 space-y-3">
+    <ol class="list-decimal pl-5 space-y-1">
+      <li>Validate your <code>.pb</code> file to check for issues.</li>
+      <li>If your file is valid, you can send it to our admins for acceptance. Approved files will be published on the site.</li>
+    </ol>
+    <p class="text-sm text-slate-600">We only use your email to contact you about your submission.</p>
+
+    <p class="text-sm">
+      Column order isn’t mandatory, but it’s strongly recommended and follows our PB data format. See
+      <a href="https://pabulib.org/format" class="text-indigo-700 underline" target="_blank" rel="noopener">PB data format</a>
+      and the
+      <a href="https://github.com/pabulib/checker/blob/main/pabulib_helpers/fields.py" class="text-indigo-700 underline" target="_blank" rel="noopener">checker field order</a>.
+    </p>
+
+    <p>
+  Our PB Checker is open source: 
+  <a href="https://github.com/pabulib/checker" class="text-indigo-700 underline" target="_blank" rel="noopener">pabulib/checker</a>.
+  We welcome contributions. If you spot a bug or have an improvement in mind, you can open an issue or submit a PR — or just share your thoughts via our email
+  <a href="mailto:pabulib@uj.edu.pl" class="text-indigo-700 underline">pabulib@uj.edu.pl</a>.
+    </p>
+  </div>
+
+  {% include 'partials/upload_how_it_works.html' %}
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div>
+      <label class="block text-sm font-medium mb-1" for="email">Your email (required to submit)</label>
+      <input id="email" type="email" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" placeholder="you@example.org" />
+    </div>
+    <div>
+      <label class="block text-sm font-medium mb-1">Limits</label>
+      <div class="text-sm text-slate-600">Max file size: <strong>{{ (upload_settings.max_file_mb if upload_settings else 10) | int }}</strong> MB</div>
+    </div>
+  </div>
+
+  <div id="dropzone" class="mt-6 border-2 border-dashed border-slate-300 rounded-md p-8 text-center cursor-pointer hover:bg-slate-50">
+    <div class="text-slate-700">Drop .pb files here or click to select</div>
+    <input id="files" type="file" accept=".pb" multiple class="hidden" />
+  </div>
+
+  <!-- Toolbar for selection and submit/delete -->
+  <div class="mt-4 flex items-start gap-4">
+    <div class="flex items-center gap-3">
+      <label class="inline-flex items-center gap-2 text-slate-700">
+        <input id="selectAll" type="checkbox" class="w-4 h-4">
+        <span>Select all</span>
+      </label>
+      <span id="countLabel" class="text-sm text-slate-500"></span>
+    </div>
+    <div class="ml-auto">
+      <div class="flex gap-2">
+        <button id="deleteSelected" type="button" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed">Delete selected</button>
+        <button id="submitSelected" type="button" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">Send selected for acceptance</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tiles list (mirrors admin layout, without admin-only actions) -->
+  <div id="tiles" class="mt-6 space-y-4">
+    {% for t in tiles or [] %}
+      <section class="rounded-lg shadow p-4 tile-preview relative {{ 'bg-emerald-50 ring-2 ring-emerald-200' if t.validation.valid else 'bg-red-50 ring-2 ring-red-200' }}" data-name="{{ t.file_name }}" data-valid="{{ 'true' if t.validation.valid else 'false' }}">
+        <div class="flex items-start gap-4">
+          <input type="checkbox" class="tileChk mt-1.5" />
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-3">
+              <h2 class="text-lg font-semibold text-slate-800 truncate" title="{{ t.title }}">{{ t.title }}</h2>
+              {% if t.experimental %}
+                <span class="text-xs px-2 py-0.5 rounded bg-orange-100 text-orange-700">Experimental</span>
+              {% endif %}
+              {% if t.fully_funded %}
+                <span class="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">Fully funded</span>
+              {% endif %}
+            </div>
+            <div class="text-slate-600 text-sm mt-1">{{ t.description }}</div>
+            <div class="text-slate-500 text-xs mt-1 font-mono break-words">{{ t.file_name }}</div>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-3 text-sm">
+              <div class="text-slate-500"># votes<br><span class="text-slate-800">{{ t.num_votes }}</span></div>
+              <div class="text-slate-500"># projects<br><span class="text-slate-800">{{ t.num_projects }}</span></div>
+              <div class="text-slate-500">Budget<br><span class="text-slate-800">{{ t.budget }}</span></div>
+              <div class="text-slate-500">Vote type<br><span class="text-slate-800">{{ t.vote_type }}</span></div>
+              <div class="text-slate-500">Vote length<br><span class="text-slate-800">{{ t.vote_length }}</span></div>
+            </div>
+          </div>
+
+          {% if t.validation %}
+          <div class="w-64 shrink-0 border-l border-slate-200 pl-4">
+            <div class="text-xs font-medium text-slate-600 mb-2" title="Results produced by the Checker">Validation Report (Checker)</div>
+            <div class="flex items-start gap-2 mb-2">
+              <span class="text-xl {{ 'text-emerald-600' if t.validation.valid else ('text-orange-600' if t.validation.error_message else 'text-red-600') }}">
+                {{ '✓' if t.validation.valid else ('!' if t.validation.error_message else '✗') }}
+              </span>
+              <div class="flex-1 text-xs">
+                {% if t.validation_summary %}
+                  <div class="mb-1">{{ t.validation_summary }}</div>
+                {% endif %}
+                <div class="text-slate-600">Errors: <span class="font-medium">{{ t.error_count or 0 }}</span> • Warnings: <span class="font-medium">{{ t.warning_count or 0 }}</span></div>
+              </div>
+            </div>
+            {% if t.validation.errors or t.validation.warnings %}
+            <button type="button" class="text-xs text-indigo-600 hover:text-indigo-800 underline" onclick="toggleValidationDetails('{{ t.file_name|e }}')">Show details</button>
+            <div id="validation-{{ t.file_name|e }}" class="hidden mt-2 p-2 bg-slate-50 rounded text-xs space-y-2 max-h-48 overflow-y-auto">
+              {% if t.validation.errors %}
+              <div>
+                <div class="font-semibold text-red-700 mb-1">Errors:</div>
+                <ul class="list-disc list-inside space-y-1 text-red-600">
+                  {% for error_type, instances in t.validation.errors.items() %}
+                    {% for instance_id, message in instances.items() %}
+                      <li><span class="font-medium">{{ error_type }}:</span> {{ message }}</li>
+                    {% endfor %}
+                  {% endfor %}
+                </ul>
+              </div>
+              {% endif %}
+              {% if t.validation.warnings %}
+              <div>
+                <div class="font-semibold text-orange-700 mb-1">Warnings:</div>
+                <ul class="list-disc list-inside space-y-1 text-orange-600">
+                  {% for warning_type, instances in t.validation.warnings.items() %}
+                    {% for instance_id, message in instances.items() %}
+                      <li><span class="font-medium">{{ warning_type }}:</span> {{ message }}</li>
+                    {% endfor %}
+                  {% endfor %}
+                </ul>
+              </div>
+              {% endif %}
+            </div>
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+      </section>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  const filesInput = document.getElementById('files');
+  const dz = document.getElementById('dropzone');
+  const tiles = document.getElementById('tiles');
+  const selectAll = document.getElementById('selectAll');
+  const countLabel = document.getElementById('countLabel');
+  const submitSelected = document.getElementById('submitSelected');
+  const deleteSelected = document.getElementById('deleteSelected');
+  const maxMb = parseInt('{{ (upload_settings.max_file_mb if upload_settings else 10) | int }}',10)||10;
+  const maxBatch = parseInt('{{ (upload_settings.max_batch if upload_settings else 100) | int }}',10)||100;
+  const MAX_SIZE = maxMb*1024*1024;
+
+  function pick(){ filesInput && filesInput.click(); }
+  dz.addEventListener('click', pick);
+  ;['dragenter','dragover'].forEach(ev=> dz.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); dz.classList.add('ring','ring-indigo-500'); }));
+  ;['dragleave','drop'].forEach(ev=> dz.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); dz.classList.remove('ring','ring-indigo-500'); }));
+  dz.addEventListener('drop', e=>{ const fs = Array.from(e.dataTransfer.files||[]); if(fs.length) upload(fs); });
+  filesInput.addEventListener('change', e=>{ const fs = Array.from(filesInput.files||[]); if(fs.length) upload(fs); });
+
+  function updateCount(){
+    const allTiles = tiles.querySelectorAll('[data-name]');
+    const checked = Array.from(tiles.querySelectorAll('.tileChk:checked'));
+    const checkedValid = checked.filter(cb => {
+      const tile = cb.closest('[data-name]');
+      return tile && tile.getAttribute('data-valid') === 'true';
+    });
+    countLabel.textContent = `${checked.length}/${allTiles.length} selected (${checkedValid.length} valid)`;
+    submitSelected.disabled = checkedValid.length===0;
+    deleteSelected.disabled = checked.length===0;
+  }
+
+  selectAll.addEventListener('change', ()=>{
+    tiles.querySelectorAll('.tileChk').forEach(cb=>{ cb.checked = selectAll.checked; });
+    updateCount();
+  });
+
+  tiles.addEventListener('change', e=>{
+    if(e.target && e.target.classList.contains('tileChk')){
+      const all = tiles.querySelectorAll('.tileChk');
+      const checked = tiles.querySelectorAll('.tileChk:checked');
+      selectAll.checked = all.length>0 && checked.length===all.length;
+      selectAll.indeterminate = checked.length>0 && checked.length<all.length;
+      updateCount();
+    }
+  });
+
+  async function upload(fs){
+    if(fs.length>maxBatch){ alert(`Too many files. Max is ${maxBatch}.`); return; }
+    const fd = new FormData();
+    for(const f of fs){
+      const n = (f.name||'').toLowerCase();
+      if(!n.endsWith('.pb')){ alert(`Skipping ${f.name}: only .pb files are allowed`); continue; }
+      if(typeof f.size==='number' && f.size>MAX_SIZE){ alert(`Skipping ${f.name}: file too large (> ${maxMb} MB)`); continue; }
+      fd.append('files', f);
+    }
+  const resp = await fetch("{{ url_for('main.upload_upload_batch') }}", { method:'POST', body: fd, headers:{'X-Requested-With':'fetch'} });
+    const data = await resp.json().catch(()=>({ok:false,error:'Invalid server response'}));
+    if(!data.ok){ alert(data.error||'Upload failed'); return; }
+    // Refresh list
+    await refreshTiles();
+  }
+
+  async function refreshTiles(){
+    const html = await fetch(window.location.href, {headers:{'X-Requested-With':'fetch'}}).then(r=>r.text()).catch(()=>null);
+    if(!html) return;
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const newTiles = doc.querySelector('#tiles');
+    if(newTiles){ tiles.innerHTML = newTiles.innerHTML; bindInitial(); }
+  }
+
+  window.toggleValidationDetails = function(fileName){
+    const detailsEl = document.getElementById('validation-' + fileName);
+    if(detailsEl){ detailsEl.classList.toggle('hidden'); }
+  };
+
+  function bindInitial(){
+    updateCount();
+  }
+
+  submitSelected.addEventListener('click', async ()=>{
+    const email = (document.getElementById('email').value||'').trim();
+    if(!email){ alert('Please enter your email to proceed.'); return; }
+    const selValid = Array.from(tiles.querySelectorAll('.tileChk:checked'))
+      .map(cb=> cb.closest('[data-name]'))
+      .filter(tile=> tile && tile.getAttribute('data-valid')==='true')
+      .map(tile=> tile.getAttribute('data-name'));
+    if(selValid.length===0){ alert('Please select at least one valid file to submit.'); return; }
+    submitSelected.disabled = true;
+  const resp = await fetch("{{ url_for('main.upload_submit_selected') }}", { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, files: selValid }) });
+    const data = await resp.json().catch(()=>({ok:false,error:'Invalid server response'}));
+    if(data.ok){ alert(`Submitted ${data.saved} valid file(s) for acceptance.`); await refreshTiles(); }
+    else { alert(data.error||'Submit failed'); }
+    submitSelected.disabled = false;
+  });
+
+  deleteSelected.addEventListener('click', async ()=>{
+    const sel = Array.from(tiles.querySelectorAll('.tileChk:checked')).map(cb=> cb.closest('[data-name]').getAttribute('data-name'));
+    if(sel.length===0){ alert('Please select files to delete.'); return; }
+    if(!confirm(`Delete ${sel.length} selected file(s) from this session?`)) return;
+    deleteSelected.disabled = true;
+  const resp = await fetch("{{ url_for('main.upload_delete_selected') }}", { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ files: sel }) });
+    const data = await resp.json().catch(()=>({ok:false,error:'Invalid server response'}));
+    if(data.ok){ alert(`Deleted ${data.deleted} file(s).`); await refreshTiles(); }
+    else { alert(data.error||'Delete failed'); }
+    deleteSelected.disabled = false;
+  });
+
+  bindInitial();
+})();
+</script>
+{% endblock %}
