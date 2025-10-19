@@ -54,13 +54,33 @@
       </div>
     </div>
 
-    <!-- Vote Distribution -->
+
+    <!-- Approval Histogram -->
     <div class="bg-white rounded-lg shadow-lg p-6">
+      <h3 class="text-xl font-bold text-slate-800 mb-4">Histogram: Number of Approvals per Project</h3>
+      <p class="text-sm text-gray-600 mb-4">Shows how many projects received a given number of approvals</p>
+      <div class="h-96">
+        <canvas id="approvalHistogramChart"></canvas>
+      </div>
+    </div>
+
+
+    <!-- Budget vs Votes Scatter Plot -->
+    <div class="bg-white rounded-lg shadow-lg p-6">
+      <h3 class="text-xl font-bold text-slate-800 mb-4">Project Cost vs Votes Received</h3>
+      <div class="h-96">
+        <canvas id="scatterChart"></canvas>
+      </div>
+    </div>
+
+
+    <!-- Vote Distribution -->
+    <!-- <div class="bg-white rounded-lg shadow-lg p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Vote Distribution by Project</h3>
       <div class="h-96">
         <canvas id="voteChart"></canvas>
       </div>
-    </div>
+    </div> -->
 
     <!-- Project Categories (if available) -->
     {% if project_categories %}
@@ -71,6 +91,7 @@
       </div>
     </div>
     {% endif %}
+
 
     <!-- Voter Demographics (if available) -->
     {% if voter_demographics %}
@@ -95,13 +116,6 @@
     </div>
     {% endif %}
 
-    <!-- Budget vs Votes Scatter Plot -->
-    <div class="bg-white rounded-lg shadow-lg p-6">
-      <h3 class="text-xl font-bold text-slate-800 mb-4">Project Cost vs Votes Received</h3>
-      <div class="h-96">
-        <canvas id="scatterChart"></canvas>
-      </div>
-    </div>
 
     <!-- Top Projects by Votes -->
     <div class="bg-white rounded-lg shadow-lg p-6">
@@ -110,9 +124,10 @@
         <canvas id="topProjectsChart"></canvas>
       </div>
     </div>
+    
 
     <!-- Project Selection Rate -->
-    {% if selection_data %}
+    <!-- {% if selection_data %}
     <div class="bg-white rounded-lg shadow-lg p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Project Selection vs Cost Efficiency</h3>
       <p class="text-sm text-gray-600 mb-4">Selected projects (green) vs not selected (red) by cost and votes</p>
@@ -120,7 +135,7 @@
         <canvas id="selectionChart"></canvas>
       </div>
     </div>
-    {% endif %}
+    {% endif %} -->
 
     <!-- Cost Distribution by Category -->
     {% if category_cost_data %}
@@ -133,7 +148,7 @@
     {% endif %}
 
     <!-- Summary Statistics -->
-    <div class="bg-white rounded-lg shadow-lg p-6">
+    <!-- <div class="bg-white rounded-lg shadow-lg p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Summary Statistics</h3>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div class="text-center">
@@ -149,9 +164,9 @@
           <div class="text-sm text-gray-600">Average Vote Length</div>
         </div>
       </div>
-    </div>
+    </div> -->
 
-    <!-- Correlation Heatmap -->
+    <!-- Correlation Heatmap
     {% if correlation_data %}
     <div class="bg-white rounded-lg shadow-lg p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Project Metrics Correlation</h3>
@@ -160,7 +175,12 @@
         <canvas id="correlationChart"></canvas>
       </div>
     </div>
-    {% endif %}
+    {% endif %} -->
+
+
+    <!-- Extra margin below last plot -->
+    <div style="height: 96px;"></div>
+
 
   </div>
 </section>
@@ -181,6 +201,13 @@ const selectionData = {{ selection_data|tojson if selection_data else 'null' }};
 const categoryCostData = {{ category_cost_data|tojson if category_cost_data else 'null' }};
 const timelineData = {{ timeline_data|tojson if timeline_data else 'null' }};
 const correlationData = {{ correlation_data|tojson if correlation_data else 'null' }};
+
+// Approval Histogram Data
+{% if approval_histogram_data %}
+const approvalHistogramData = {{ approval_histogram_data|tojson | safe }};
+{% else %}
+const approvalHistogramData = null;
+{% endif %}
 
 // Chart configurations
 Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
@@ -220,8 +247,8 @@ try {
         datasets: [{
           label: 'Number of Projects',
           data: bins,
-          backgroundColor: 'rgba(59, 130, 246, 0.6)',
-          borderColor: 'rgba(59, 130, 246, 1)',
+          backgroundColor: 'rgba(251, 191, 36, 0.6)', // swapped color
+          borderColor: 'rgba(251, 191, 36, 1)', // swapped color
           borderWidth: 1
         }]
       },
@@ -238,13 +265,19 @@ try {
           x: {
             title: {
               display: true,
-              text: 'Cost'
+              text: 'Cost',
+              font: {
+                size: 20
+              }
             }
           },
           y: {
             title: {
               display: true,
-              text: 'Number of Projects'
+              text: 'Number of Projects',
+              font: {
+                size: 20
+              }
             }
           }
         }
@@ -286,13 +319,19 @@ try {
           x: {
             title: {
               display: true,
-              text: 'Projects'
+              text: 'Projects',
+              font: {
+                size: 20
+              }
             }
           },
           y: {
             title: {
               display: true,
-              text: 'Number of Votes'
+              text: 'Number of Votes',
+              font: {
+                size: 20
+              }
             }
           }
         }
@@ -382,13 +421,19 @@ try {
           x: {
             title: {
               display: true,
-              text: 'Number of Projects Selected'
+              text: 'Number of Projects Selected',
+              font: {
+                size: 20
+              }
             }
           },
           y: {
             title: {
               display: true,
-              text: 'Number of Voters'
+              text: 'Number of Voters',
+              font: {
+                size: 20
+              }
             }
           }
         }
@@ -440,13 +485,19 @@ try {
           x: {
             title: {
               display: true,
-              text: 'Age Range'
+              text: 'Age Range',
+              font: {
+                size: 20
+              }
             }
           },
           y: {
             title: {
               display: true,
-              text: 'Number of Voters'
+              text: 'Number of Voters',
+              font: {
+                size: 20
+              }
             }
           }
         }
@@ -517,13 +568,19 @@ try {
           x: {
             title: {
               display: true,
-              text: 'Project Cost'
+              text: 'Project Cost',
+              font: {
+                size: 20
+              }
             }
           },
           y: {
             title: {
               display: true,
-              text: 'Votes Received'
+              text: 'Votes Received',
+              font: {
+                size: 20
+              }
             }
           }
         }
@@ -557,14 +614,20 @@ try {
         plugins: {
           title: {
             display: true,
-            text: 'Most Popular Projects by Votes'
+            text: 'Most Popular Projects by Votes',
+              font: {
+                size: 20
+              }
           }
         },
         scales: {
           x: {
             title: {
               display: true,
-              text: 'Number of Votes'
+              text: 'Number of Votes',
+              font: {
+                size: 20
+              }
             }
           }
         }
@@ -609,13 +672,19 @@ try {
           x: {
             title: {
               display: true,
-              text: 'Project Cost'
+              text: 'Project Cost',
+              font: {
+                size: 20
+              }
             }
           },
           y: {
             title: {
               display: true,
-              text: 'Votes Received'
+              text: 'Votes Received',
+              font: {
+                size: 20
+              }
             }
           }
         }
@@ -655,13 +724,19 @@ try {
           x: {
             title: {
               display: true,
-              text: 'Category'
+              text: 'Category',
+              font: {
+                size: 20
+              }
             }
           },
           y: {
             title: {
               display: true,
-              text: 'Average Cost'
+              text: 'Average Cost',
+              font: {
+                size: 20
+              }
             }
           }
         }
@@ -706,7 +781,10 @@ try {
             max: 1,
             title: {
               display: true,
-              text: 'Correlation Coefficient'
+              text: 'Correlation Coefficient',
+              font: {
+                size: 20
+              }
             }
           }
         }
@@ -716,6 +794,83 @@ try {
 } catch (e) {
   console.error('Error rendering correlation chart:', e);
 }
+
+// Approval Histogram
+try {
+  if (approvalHistogramData && approvalHistogramData.labels && approvalHistogramData.counts) {
+    // Always make 20 buckets
+    const numBuckets = 20;
+    const rawLabels = approvalHistogramData.labels.map(Number);
+    const rawCounts = approvalHistogramData.counts;
+    const minApproval = Math.min(...rawLabels);
+    const maxApproval = Math.max(...rawLabels);
+    const bucketSize = Math.max(1, Math.ceil((maxApproval - minApproval + 1) / numBuckets));
+    const bucketLabels = [];
+    const bucketCounts = [];
+    for (let start = minApproval; start <= maxApproval; start += bucketSize) {
+      const end = Math.min(start + bucketSize - 1, maxApproval);
+      bucketLabels.push(`${start}-${end}`);
+      let count = 0;
+      for (let i = 0; i < rawLabels.length; i++) {
+        if (rawLabels[i] >= start && rawLabels[i] <= end) {
+          count += rawCounts[i];
+        }
+      }
+      bucketCounts.push(count);
+    }
+    const ctxApproval = document.getElementById('approvalHistogramChart').getContext('2d');
+    new Chart(ctxApproval, {
+      type: 'bar',
+      data: {
+        labels: bucketLabels,
+        datasets: [{
+          label: 'Number of Projects',
+          data: bucketCounts,
+          backgroundColor: 'rgba(59, 130, 246, 0.6)', // swapped color
+          borderColor: 'rgba(59, 130, 246, 1)', // swapped color
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          title: {
+            display: true,
+            text: `Histogram of Approvals per Project (20 Buckets)`
+          }
+        },
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: 'Number of Approvals (Bucketed)',
+              font: {
+                size: 20
+              }
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: 'Number of Projects',
+              font: {
+                size: 20
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+} catch (e) {
+  console.error('Error rendering approval histogram chart:', e);
+}
 </script>
+
+
+<!-- Footer -->
+
+{% include 'footer.html' %}
 
 {% endblock %}
