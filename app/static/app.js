@@ -202,34 +202,124 @@
     }
   });
 
-  form.addEventListener('submit', (e) => {
-    // add hidden inputs for selected files
-    const prev = form.querySelectorAll('input[name="files"]');
-    prev.forEach(p => p.remove());
+  form.addEventListener('submit', async (e) => {
+    // client-side: start background job instead of direct POST to get progress
+    e.preventDefault();
     const selected = $$('.row-check:checked');
-    if(!selected.length){ e.preventDefault(); return; }
-    
-    // Check if this is a "select all" scenario
+    if(!selected.length){ return; }
+
+    // Build form data matching server expectations
+    const fd = new FormData();
+    selected.forEach(ch => fd.append('files', ch.dataset.file));
     const allFilteredChecks = allFilteredRowChecks();
     const allFilteredSelected = allFilteredChecks.length > 0 && allFilteredChecks.every(ch => ch.checked);
-    const selectAllChecked = selectAll.checked;
-    
-    // If select all is checked and all filtered are selected, it's a select all scenario
-    if (selectAllChecked && allFilteredSelected) {
-      const selectAllInput = document.createElement('input');
-      selectAllInput.type = 'hidden';
-      selectAllInput.name = 'select_all';
-      selectAllInput.value = 'true';
-      form.appendChild(selectAllInput);
+    const selectAllChecked = selectAll.checked && allFilteredSelected;
+    if(selectAllChecked){ fd.append('select_all', 'true'); }
+
+    // Show progress UI
+    const box = document.getElementById('downloadProgress');
+    const bar = document.getElementById('dlBar');
+    const phase = document.getElementById('dlPhase');
+    const text = document.getElementById('dlText');
+    const pct = document.getElementById('dlPercent');
+    const fileCount = document.getElementById('dlFileCount');
+    const curSpan = document.getElementById('dlCurrent');
+    const totSpan = document.getElementById('dlTotal');
+    const nameSpan = document.getElementById('dlFileName');
+    const hint = document.getElementById('dlHint');
+    if(box){
+      box.classList.remove('hidden');
+      try { box.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(_){}
+      if(bar) bar.style.width = '0%';
+      if(pct) pct.textContent = '0%';
+      if(text) text.textContent = 'Preparing download...';
+      if(phase){ phase.textContent = 'Preparing'; phase.className = 'px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700'; }
+      if(fileCount) fileCount.classList.add('hidden');
+      if(nameSpan) nameSpan.classList.add('hidden');
+      if(hint) hint.textContent = 'We are zipping your selection on the server. This can take a moment.';
     }
-    
-    selected.forEach(ch => {
-      const inp = document.createElement('input');
-      inp.type = 'hidden';
-      inp.name = 'files';
-      inp.value = ch.dataset.file;
-      form.appendChild(inp);
-    });
+
+    // Start job
+    let startResp;
+    try{
+      startResp = await fetch('/download-selected/start', { method: 'POST', body: fd });
+    }catch(err){
+      if(box) box.classList.add('hidden');
+      alert('Failed to start download');
+      return;
+    }
+    if(!startResp.ok){
+      if(box) box.classList.add('hidden');
+      try { const data = await startResp.json(); alert(data && data.error ? data.error : 'Failed to start download'); } catch(_){ alert('Failed to start download'); }
+      return;
+    }
+    const startData = await startResp.json();
+    const token = startData.token;
+    const progUrl = startData.progress_url || `/download-selected/progress/${token}`;
+    const fileUrl = startData.file_url || `/download-selected/file/${token}`;
+
+    // Poll progress
+    let tries = 0;
+    const maxTries = 60 * 10; // ~10 minutes @ 1s
+    while(tries < maxTries){
+      tries++;
+      let prog;
+      try{
+        const r = await fetch(progUrl, { cache: 'no-store' });
+        if(!r.ok){ await new Promise(res=>setTimeout(res, 1000)); continue; }
+        prog = await r.json();
+      }catch(_){ await new Promise(res=>setTimeout(res, 1000)); continue; }
+      if(!prog || !prog.ok){ await new Promise(res=>setTimeout(res, 800)); continue; }
+      const d = prog;
+      const total = Number(d.total||0);
+      const current = Number(d.current||0);
+      const percent = Number(d.percent||0);
+      const currentName = d.current_name || '';
+      if(bar) bar.style.width = Math.max(0, Math.min(100, percent)) + '%';
+      if(pct) pct.textContent = Math.max(0, Math.min(100, percent)) + '%';
+      if(phase){ phase.textContent = (d.status === 'ready') ? 'Ready' : 'Zipping'; phase.className = (d.status === 'ready') ? 'px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700' : 'px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700'; }
+      if(text) text.textContent = (d.status === 'ready') ? 'Download ready' : 'Zipping files...';
+      if(fileCount){
+        if(total>0){ fileCount.classList.remove('hidden'); } else { fileCount.classList.add('hidden'); }
+        if(totSpan) totSpan.textContent = String(total);
+        if(curSpan) curSpan.textContent = String(current);
+      }
+      if(nameSpan){
+        if(currentName){
+          nameSpan.classList.remove('hidden');
+          nameSpan.textContent = currentName;
+          nameSpan.title = currentName;
+        } else {
+          nameSpan.classList.add('hidden');
+        }
+      }
+      if(d.error){
+        if(box) box.classList.add('hidden');
+        alert('Error while preparing download: ' + d.error);
+        return;
+      }
+      if(d.done){
+        // Trigger file download
+        try{
+          if(bar) bar.style.width = '100%';
+          if(pct) pct.textContent = '100%';
+          if(text) text.textContent = 'Starting download...';
+          const a = document.createElement('a');
+          a.href = fileUrl;
+          a.download = (d.download_name || 'pb_selected.zip');
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        }finally{
+          setTimeout(()=>{ if(box) box.classList.add('hidden'); }, 1000);
+        }
+        return;
+      }
+      await new Promise(res=>setTimeout(res, 1000));
+    }
+    // Timeout
+    if(box) box.classList.add('hidden');
+    alert('Preparing the download is taking too long. Please try again.');
   });
 
   // listeners for controls

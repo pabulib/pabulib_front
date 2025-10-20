@@ -104,6 +104,27 @@
           <button id="downloadBtn" class="primary" type="submit" disabled>Download selected</button>
         </header>
 
+        <!-- Download progress (hidden by default) -->
+        <div id="downloadProgress" class="hidden mt-4">
+          <div class="bg-slate-100 rounded-full h-2.5 overflow-hidden">
+            <div id="dlBar" class="bg-indigo-600 h-full transition-all duration-300 ease-out" style="width: 0%"></div>
+          </div>
+          <div class="mt-2 text-sm text-slate-600 text-center">
+            <div class="flex items-center justify-center gap-2">
+              <span id="dlPhase" class="px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">Preparing</span>
+              <span id="dlText">Preparing download...</span>
+              <span id="dlPercent" class="font-medium">0%</span>
+            </div>
+          </div>
+          <div class="text-xs text-slate-500 text-center mt-2 space-y-1">
+            <div id="dlFileCount" class="hidden">
+              Zipping file <span id="dlCurrent">0</span> of <span id="dlTotal">0</span>
+            </div>
+            <div id="dlFileName" class="hidden font-mono text-slate-600 truncate max-w-md mx-auto" title=""></div>
+            <div id="dlHint" class="text-slate-400">We are zipping your selection on the server. This can take a moment.</div>
+          </div>
+        </div>
+
       {% for t in tiles %}
       <section class="tile"
         data-title="{{ t.title|e }}"

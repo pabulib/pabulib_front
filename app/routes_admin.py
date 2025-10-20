@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import tempfile
+import threading
+import uuid
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -1090,6 +1094,202 @@ def upload_tiles_download(name: str):
     if not p.exists() or not p.is_file():
         abort(404)
     return send_file(p, as_attachment=True)
+
+
+# --- Admin background zipping for selected temp files ---
+_ADMIN_ZIP_LOCK = threading.Lock()
+_ADMIN_JOBS: dict[str, dict] = {}
+
+
+def _admin_zip_jobs_dir() -> Path:
+    d = Path(__file__).parent.parent / "cache" / "admin_zip_jobs"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _admin_write_progress(token: str, data: dict) -> None:
+    try:
+        p = _admin_zip_jobs_dir() / f"{token}.json"
+        with p.open("w", encoding="utf-8") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+
+def _admin_read_progress(token: str) -> dict | None:
+    p = _admin_zip_jobs_dir() / f"{token}.json"
+    if not p.exists():
+        return None
+    try:
+        with p.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def _admin_cleanup_jobs(max_age_seconds: int = 60 * 30) -> None:
+    try:
+        now = datetime.utcnow().timestamp()
+        for fp in _admin_zip_jobs_dir().glob("*"):
+            try:
+                if not fp.exists():
+                    continue
+                age = now - fp.stat().st_mtime
+                if age > max_age_seconds:
+                    if fp.is_file():
+                        fp.unlink(missing_ok=True)
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+
+def _admin_build_zip_background(
+    token: str, files: list[Path], download_name: str
+) -> None:
+    try:
+        out_zip = _admin_zip_jobs_dir() / f"{token}.zip"
+        total = max(1, len(files))
+        progress = {
+            "token": token,
+            "total": total,
+            "current": 0,
+            "percent": 0,
+            "status": "starting",
+            "current_name": None,
+            "done": False,
+            "error": None,
+            "download_name": download_name,
+        }
+        _admin_write_progress(token, progress)
+
+        with zipfile.ZipFile(out_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for idx, p in enumerate(files, start=1):
+                name = p.name
+                progress.update(
+                    {
+                        "status": "zipping",
+                        "current_name": name,
+                        "current": idx - 1,
+                        "percent": int(((idx - 1) / total) * 100),
+                    }
+                )
+                _admin_write_progress(token, progress)
+                zf.write(p, arcname=name)
+                progress.update({"current": idx, "percent": int((idx / total) * 100)})
+                _admin_write_progress(token, progress)
+
+        progress.update({"done": True, "status": "ready", "percent": 100})
+        _admin_write_progress(token, progress)
+        with _ADMIN_ZIP_LOCK:
+            _ADMIN_JOBS[token] = {
+                "file_path": str(out_zip),
+                "download_name": download_name,
+            }
+    except Exception as e:
+        progress = {
+            "token": token,
+            "total": len(files),
+            "current": 0,
+            "percent": 0,
+            "status": "error",
+            "current_name": None,
+            "done": False,
+            "error": f"Zip error: {e}",
+            "download_name": download_name,
+        }
+        _admin_write_progress(token, progress)
+
+
+@bp.post("/admin/upload/download-selected/start")
+def upload_tiles_download_selected_start():
+    """Start background zipping for selected temp upload files.
+    JSON body: { files: ["name1.pb", ...] }
+    """
+    _admin_cleanup_jobs()
+    try:
+        payload = request.get_json(silent=True) or {}
+        names = payload.get("files") or []
+        names = [str(n).strip() for n in names if isinstance(n, str) and n.strip()]
+    except Exception:
+        names = []
+    if not names:
+        return jsonify({"ok": False, "error": "No files provided"}), 400
+    tmp = _tmp_upload_dir()
+    files: list[Path] = []
+    for n in names:
+        if not n.endswith(".pb") or "/" in n or ".." in n:
+            continue
+        p = tmp / n
+        if p.exists() and p.is_file():
+            files.append(p)
+    if not files:
+        return jsonify({"ok": False, "error": "Files not found"}), 404
+    token = uuid.uuid4().hex
+    download_name = (
+        f"temp_selected_{len(files)}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.zip"
+    )
+    _admin_write_progress(
+        token,
+        {
+            "token": token,
+            "total": len(files),
+            "current": 0,
+            "percent": 0,
+            "status": "queued",
+            "current_name": None,
+            "done": False,
+            "error": None,
+            "download_name": download_name,
+        },
+    )
+    t = threading.Thread(
+        target=_admin_build_zip_background,
+        args=(token, files, download_name),
+        daemon=True,
+    )
+    t.start()
+    return jsonify(
+        {
+            "ok": True,
+            "token": token,
+            "progress_url": url_for(
+                "admin.upload_tiles_download_progress", token=token
+            ),
+            "file_url": url_for("admin.upload_tiles_download_file", token=token),
+        }
+    )
+
+
+@bp.get("/admin/upload/download-selected/progress/<token>")
+def upload_tiles_download_progress(token: str):
+    data = _admin_read_progress(token)
+    if not data:
+        return jsonify({"ok": False, "error": "Not found"}), 404
+    return jsonify({"ok": True, **data})
+
+
+@bp.get("/admin/upload/download-selected/file/<token>")
+def upload_tiles_download_file(token: str):
+    data = _admin_read_progress(token)
+    if not data or not data.get("done"):
+        abort(404)
+    with _ADMIN_ZIP_LOCK:
+        job = _ADMIN_JOBS.get(token)
+    file_path = None
+    if job and job.get("file_path"):
+        file_path = Path(job["file_path"])
+    else:
+        p = _admin_zip_jobs_dir() / f"{token}.zip"
+        if p.exists():
+            file_path = p
+    if not file_path or not file_path.exists():
+        abort(404)
+    return send_file(
+        file_path,
+        as_attachment=True,
+        download_name=data.get("download_name") or "temp_selected.zip",
+    )
 
 
 @bp.post("/admin/upload/validate")

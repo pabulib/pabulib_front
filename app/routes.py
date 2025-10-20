@@ -1,6 +1,7 @@
 import io
 import json
 import tempfile
+import threading
 import uuid
 import zipfile
 from datetime import datetime
@@ -31,6 +32,153 @@ from .services.pb_service import (
     aggregate_statistics_cached as _aggregate_statistics_cached,
 )
 from .services.pb_service import get_all_current_file_paths, get_current_file_path
+
+# Simple in-memory registry for zip jobs; zip files and progress json live on disk
+_ZIP_JOBS: Dict[str, Dict[str, Any]] = {}
+_ZIP_JOBS_LOCK = threading.Lock()
+
+
+def _zip_jobs_dir() -> Path:
+    d = Path(__file__).parent.parent / "cache" / "zip_jobs"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _write_progress(token: str, data: Dict[str, Any]) -> None:
+    try:
+        p = _zip_jobs_dir() / f"{token}.json"
+        with p.open("w", encoding="utf-8") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+
+def _read_progress(token: str) -> Optional[Dict[str, Any]]:
+    p = _zip_jobs_dir() / f"{token}.json"
+    if not p.exists():
+        return None
+    try:
+        with p.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def _cleanup_old_jobs(max_age_seconds: int = 60 * 30) -> None:
+    # best-effort cleanup of old job artifacts
+    try:
+        now = datetime.utcnow().timestamp()
+        for fp in _zip_jobs_dir().glob("*"):
+            try:
+                if not fp.exists():
+                    continue
+                age = now - fp.stat().st_mtime
+                if age > max_age_seconds:
+                    if fp.is_file():
+                        fp.unlink(missing_ok=True)
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+
+def _build_zip_in_background(
+    token: str,
+    file_pairs: List[Tuple[str, Path]],
+    download_name: str,
+    reuse_file_path: Optional[Path] = None,
+) -> None:
+    """Create the zip in the background and update progress JSON. If reuse_file_path
+    is provided, mark job as done immediately using that existing file."""
+    try:
+        # Immediate completion when a ready-made zip is available
+        if reuse_file_path is not None:
+            progress = {
+                "token": token,
+                "total": len(file_pairs),
+                "current": len(file_pairs),
+                "percent": 100,
+                "status": "ready",
+                "current_name": None,
+                "done": True,
+                "error": None,
+                "download_name": download_name,
+            }
+            _write_progress(token, progress)
+            with _ZIP_JOBS_LOCK:
+                _ZIP_JOBS[token] = {
+                    "file_path": str(reuse_file_path),
+                    "download_name": download_name,
+                }
+            return
+
+        out_zip = _zip_jobs_dir() / f"{token}.zip"
+        total = max(1, len(file_pairs))
+        progress = {
+            "token": token,
+            "total": total,
+            "current": 0,
+            "percent": 0,
+            "status": "starting",
+            "current_name": None,
+            "done": False,
+            "error": None,
+            "download_name": download_name,
+        }
+        _write_progress(token, progress)
+
+        with zipfile.ZipFile(out_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for idx, (arcname, path) in enumerate(file_pairs, start=1):
+                try:
+                    progress.update(
+                        {
+                            "status": "zipping",
+                            "current_name": arcname,
+                            "current": idx - 1,
+                            "percent": int(((idx - 1) / total) * 100),
+                        }
+                    )
+                    _write_progress(token, progress)
+                    # Add file
+                    zf.write(path, arcname=arcname)
+                    progress.update(
+                        {
+                            "current": idx,
+                            "percent": int((idx / total) * 100),
+                        }
+                    )
+                    _write_progress(token, progress)
+                except Exception as e:
+                    progress.update(
+                        {
+                            "status": "error",
+                            "error": f"Failed to add {arcname}: {e}",
+                        }
+                    )
+                    _write_progress(token, progress)
+        # Mark complete
+        progress.update({"done": True, "status": "ready", "percent": 100})
+        _write_progress(token, progress)
+        with _ZIP_JOBS_LOCK:
+            _ZIP_JOBS[token] = {
+                "file_path": str(out_zip),
+                "download_name": download_name,
+            }
+    except Exception as e:
+        progress = {
+            "token": token,
+            "total": len(file_pairs),
+            "current": 0,
+            "percent": 0,
+            "status": "error",
+            "current_name": None,
+            "done": False,
+            "error": f"Zip error: {e}",
+            "download_name": download_name,
+        }
+        _write_progress(token, progress)
+
+
 from .services.pb_service import get_tiles_cached as _get_tiles_cached
 from .utils.file_helpers import is_safe_filename as _is_safe_filename
 from .utils.formatting import format_int as _format_int
@@ -839,6 +987,139 @@ def download_selected():
     )
 
     # No public API endpoints; JSON routes removed
+
+
+@bp.post("/download-selected/start")
+def download_selected_start():
+    """Kick off a background zipping job and return a token to poll progress.
+    Accepts same form data as /download-selected (files=..., select_all=true|false).
+    """
+    _cleanup_old_jobs()
+    names = request.form.getlist("files")
+    select_all = request.form.get("select_all") == "true"
+
+    if not names:
+        return jsonify({"ok": False, "error": "No files selected"}), 400
+
+    # Total current files to verify select_all scenario
+    with get_session() as s:
+        total_current_files = s.query(PBFile).filter(PBFile.is_current == True).count()
+
+    selected_all_current = len(names) == total_current_files and select_all
+
+    file_pairs: List[Tuple[str, Path]] = []
+    reuse_path: Optional[Path] = None
+    download_name = "pb_selected.zip"
+
+    if selected_all_current:
+        # Use or build cached zip of all current files
+        cache_dir = Path(__file__).parent.parent / "cache"
+        cache_dir.mkdir(exist_ok=True)
+        cache_path = cache_dir / "all_pb_files.zip"
+        all_file_pairs = get_all_current_file_paths()
+        if not all_file_pairs:
+            return jsonify({"ok": False, "error": "No current files found"}), 404
+        # validate cache
+        cache_valid = False
+        if cache_path.exists() and cache_path.is_file():
+            cache_mtime = cache_path.stat().st_mtime
+            cache_valid = all(
+                cache_mtime >= path.stat().st_mtime for _, path in all_file_pairs
+            )
+        if cache_valid:
+            # We'll reuse the cached file; no background work needed
+            reuse_path = cache_path
+        else:
+            # Build list to (re)create cache and also serve via token-specific path
+            file_pairs = [(name, path) for name, path in all_file_pairs]
+        download_name = "all_pb_files.zip"
+    else:
+        # Individual file selection
+        for name in names:
+            if "/" in name or ".." in name or not name.endswith(".pb"):
+                continue
+            p = get_current_file_path(name)
+            if p and p.exists() and p.is_file():
+                file_pairs.append((name, p))
+        if not file_pairs:
+            return jsonify({"ok": False, "error": "Selected files not found"}), 404
+        stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        download_name = f"pb_selected_{len(file_pairs)}_{stamp}.zip"
+
+    token = uuid.uuid4().hex
+    # Record initial state
+    _write_progress(
+        token,
+        {
+            "token": token,
+            "total": len(file_pairs),
+            "current": 0,
+            "percent": 0,
+            "status": "queued",
+            "current_name": None,
+            "done": False,
+            "error": None,
+            "download_name": download_name,
+        },
+    )
+
+    # Start background worker
+    t = threading.Thread(
+        target=_build_zip_in_background,
+        args=(
+            token,
+            file_pairs,
+            download_name,
+            reuse_path,
+        ),
+        daemon=True,
+    )
+    t.start()
+
+    return jsonify(
+        {
+            "ok": True,
+            "token": token,
+            "progress_url": url_for("main.download_selected_progress", token=token),
+            "file_url": url_for("main.download_selected_file", token=token),
+        }
+    )
+
+
+@bp.get("/download-selected/progress/<token>")
+def download_selected_progress(token: str):
+    data = _read_progress(token)
+    if not data:
+        return jsonify({"ok": False, "error": "Not found"}), 404
+    return jsonify({"ok": True, **data})
+
+
+@bp.get("/download-selected/file/<token>")
+def download_selected_file(token: str):
+    # Ready when progress says done and file exists
+    data = _read_progress(token)
+    if not data or not data.get("done"):
+        abort(404)
+    # Prefer registered path (background worker sets it)
+    job_data = None
+    with _ZIP_JOBS_LOCK:
+        job_data = _ZIP_JOBS.get(token)
+    file_path: Optional[Path] = None
+    download_name = (
+        data.get("download_name")
+        or (job_data or {}).get("download_name")
+        or "pb_selected.zip"
+    )
+    if job_data and job_data.get("file_path"):
+        file_path = Path(job_data["file_path"])  # type: ignore[index]
+    else:
+        # fallback to token zip
+        p = _zip_jobs_dir() / f"{token}.zip"
+        if p.exists():
+            file_path = p
+    if not file_path or not file_path.exists():
+        abort(404)
+    return send_file(file_path, as_attachment=True, download_name=download_name)
 
 
 def _order_columns(all_keys: List[str], preferred_order: List[str]) -> List[str]:
