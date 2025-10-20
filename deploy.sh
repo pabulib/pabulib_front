@@ -269,6 +269,7 @@ Examples:
     $0 status           # Check status
     $0 logs             # View recent logs
     $0 monitor          # Monitor in real-time
+    $0 restart --build  # Restart services and force rebuild
 
 Logs are saved to: $LOG_DIR
 Backups are saved to: $BACKUP_DIR
@@ -296,6 +297,11 @@ main() {
         restart)
             log "Restarting services..."
             stop_services
+            # If second argument requests a rebuild, rebuild images before starting
+            if [[ "${2:-}" == "--build" || "${2:-}" == "-b" || "${FORCE_REBUILD:-0}" == "1" ]]; then
+                log "Rebuilding images before restart (requested via --build/-b or FORCE_REBUILD=1)..."
+                update_images
+            fi
             start_services
             ;;
         backup)

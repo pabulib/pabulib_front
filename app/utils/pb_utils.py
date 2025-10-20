@@ -238,12 +238,49 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
         "y",
     }
 
-    # Detect if PROJECTS section has both 'latitude' and 'longitude' columns
+    # Detect if PROJECTS section contains usable geographic coordinates.
+    # Be robust to different header casings (e.g., Latitude/LATITUDE) and ensure values are numeric.
     has_geo = False
     try:
         if projects:
+            # Helper: try to coerce a value to float using dot/comma decimal
+            def _to_float(val: Any) -> Optional[float]:
+                try:
+                    if val is None:
+                        return None
+                    s = str(val).strip()
+                    if not s:
+                        return None
+                    # Normalize decimal comma
+                    s = s.replace(",", ".")
+                    return float(s)
+                except Exception:
+                    return None
+
+            # For each project, detect latitude/longitude keys case-insensitively
             for p in projects.values():
-                if "latitude" in p and "longitude" in p:
+                if not isinstance(p, dict):
+                    continue
+                lower_map = {str(k).strip().lower(): v for k, v in p.items()}
+                # Common variants
+                cand_lat_keys = ("latitude", "lat")
+                cand_lon_keys = ("longitude", "lon", "long")
+                lat_val = None
+                lon_val = None
+                for lk in cand_lat_keys:
+                    if lk in lower_map:
+                        lat_val = _to_float(lower_map[lk])
+                        if lat_val is not None:
+                            break
+                for lk in cand_lon_keys:
+                    if lk in lower_map:
+                        lon_val = _to_float(lower_map[lk])
+                        if lon_val is not None:
+                            break
+                if lat_val is None or lon_val is None:
+                    continue
+                # Basic sanity bounds check for lat/lon
+                if -90.0 <= lat_val <= 90.0 and -180.0 <= lon_val <= 180.0:
                     has_geo = True
                     break
     except Exception:
