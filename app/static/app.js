@@ -392,6 +392,7 @@
     if(!filtersPanel) return;
     ensureBackdrop().classList.add('show');
     filtersPanel.classList.add('drawer-open');
+    filtersPanel.setAttribute('aria-hidden','false');
     // prevent body scroll under drawer
     document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
@@ -401,6 +402,7 @@
     if(!filtersPanel) return;
     if(filtersBackdrop) filtersBackdrop.classList.remove('show');
     filtersPanel.classList.remove('drawer-open');
+    filtersPanel.setAttribute('aria-hidden','true');
     document.documentElement.style.overflow = '';
     document.body.style.overflow = '';
     if(openFiltersBtn) openFiltersBtn.setAttribute('aria-expanded','false');

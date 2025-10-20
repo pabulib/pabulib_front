@@ -32,7 +32,7 @@
     {% block head %}{% endblock %}
   </head>
   <body class="{% block bodyClass %} bg-slate-50{% endblock %}">
-  <nav id="mainNav" class="bg-slate-900 text-white px-4 sticky top-0 z-50 h-16 flex items-center shadow-sm">
+  <nav id="mainNav" class="bg-slate-900 text-white px-4 sticky top-0 z-50 h-16 flex items-center shadow-sm w-full">
       <!-- Mobile hamburger -->
       <button id="navToggle" class="md:hidden inline-flex items-center justify-center p-2 rounded-md text-slate-300 hover:text-white hover:bg-slate-700 focus:outline-none" aria-controls="navLinks" aria-expanded="false" aria-label="Toggle navigation">
         <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -44,7 +44,7 @@
   <!-- Spacer only on small screens so the hamburger doesn't collide; hidden on desktop to keep links centered -->
   <div class="flex-1 md:hidden"></div>
       <!-- Links -->
-      <div id="navLinks" class="hidden fixed left-0 right-0 top-16 bg-slate-900 border-t border-slate-800 shadow-lg md:shadow-none md:border-0 md:static md:flex md:space-x-6 mx-auto md:bg-transparent z-10">
+  <div id="navLinks" class="hidden fixed left-0 right-0 top-16 bg-slate-900 border-t border-slate-800 shadow-lg md:shadow-none md:border-0 md:static md:flex md:space-x-6 md:justify-center mx-auto md:bg-transparent z-10">
         <a href="{{ url_for('main.home') }}" class="block px-3 py-3 md:py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.home') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Search</a>
         <a href="{{ url_for('main.format_page') }}" class="block px-3 py-3 md:py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.format_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Data format</a>
         <a href="{{ url_for('main.statistics_page') }}" class="block px-3 py-3 md:py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.statistics_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Statistics</a>
