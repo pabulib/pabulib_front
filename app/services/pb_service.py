@@ -82,6 +82,7 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 PBFile.language,
                 PBFile.instance,
                 PBFile.subunit,
+                PBFile.has_geo,
             )
             .filter(PBFile.is_current == True)  # noqa: E712
             .order_by(
@@ -118,6 +119,7 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
             language,
             instance,
             subunit,
+            has_geo,
         ) = r
         tiles.append(
             {
@@ -156,6 +158,7 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 "country_raw": country or "",
                 "unit_raw": unit or "",
                 "instance_raw": instance or "",
+                "has_geo": bool(has_geo),
             }
         )
 

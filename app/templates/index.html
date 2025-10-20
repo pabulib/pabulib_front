@@ -79,9 +79,14 @@
           </select>
         </div>
         <div class="field">
-          <label>Exclude from results</label>
-          <label class="checkbox"><input id="excludeFully" type="checkbox"> Fully funded projects</label>
-          <label class="checkbox"><input id="excludeExperimental" type="checkbox"> Experimental datasets</label>
+          <label>Show datasets with</label>
+          <label class="checkbox"><input id="requireGeo" type="checkbox"> Project coordinates</label>
+        </div>
+
+        <div class="field">
+          <label>Exclude datasets if</label>
+          <label class="checkbox"><input id="excludeFully" type="checkbox"> Fully funded</label>
+          <label class="checkbox"><input id="excludeExperimental" type="checkbox"> Experimental</label>
         </div>
 
         <div class="field">
@@ -116,7 +121,8 @@
         data-vlen="{{ '%.3f' % t.vote_length_raw if t.vote_length_raw is not none else '' }}"
         data-fully="{{ '1' if t.fully_funded else '0' }}"
         data-experimental="{{ '1' if t.experimental else '0' }}"
-        data-quality="{{ '%.6f' % t.quality }}"
+  data-quality="{{ '%.6f' % t.quality }}"
+  data-geo="{{ '1' if t.has_geo else '0' }}"
          {% if t.num_selected_projects_raw is not none %}data-selected="{{ t.num_selected_projects_raw }}"{% endif %}
          data-rule="{{ t.rule_raw }}"
          data-edition="{{ t.edition }}"

@@ -922,6 +922,7 @@ def upload_tiles_ingest():
     edition = tile.get("edition") or None
     language = tile.get("language") or None
     quality = float(tile.get("quality") or 0.0)
+    has_geo = bool(tile.get("has_geo") or False)
 
     group_key = _build_group_key(
         country or "",
@@ -970,6 +971,7 @@ def upload_tiles_ingest():
                 edition=edition,
                 language=language,
                 quality=quality,
+                has_geo=has_geo,
                 file_mtime=file_mtime,
                 ingested_at=datetime.utcnow(),
                 is_current=True,
@@ -1703,6 +1705,7 @@ def admin_replace_file():
             edition=tile.get("edition"),
             language=tile.get("language"),
             quality=float(tile.get("quality") or 0.0),
+            has_geo=bool(tile.get("has_geo") or False),
             file_mtime=file_mtime,
             ingested_at=datetime.utcnow(),
             is_current=True,

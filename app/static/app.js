@@ -24,6 +24,7 @@
   const filterType = $('#filterType');
   const excludeFully = $('#excludeFully');
   const excludeExperimental = $('#excludeExperimental');
+  const requireGeo = $('#requireGeo');
   const filtersClear = document.getElementById('filtersClear');
   const filtersPanel = document.getElementById('filtersPanel');
   const openFiltersBtn = document.getElementById('openFilters');
@@ -119,6 +120,7 @@
       if(type && normalize(t.dataset.type) !== type) { t.hidden=true; return; }
       if(excludeFully.checked && t.dataset.fully === '1') { t.hidden=true; return; }
       if(excludeExperimental.checked && t.dataset.experimental === '1') { t.hidden=true; return; }
+      if(requireGeo && requireGeo.checked && t.dataset.geo !== '1') { t.hidden=true; return; }
       t.hidden = false;
       visible++;
     });
@@ -237,7 +239,7 @@
     clearTimeout(tHandle); tHandle = setTimeout(()=>{ updateSelectStates(); filter(); }, 100);
   }
 
-  [input, filterCountry, filterCity, filterYear, votesMin, votesMax, projectsMin, projectsMax, lenMin, lenMax, filterType, excludeFully, excludeExperimental]
+  [input, filterCountry, filterCity, filterYear, votesMin, votesMax, projectsMin, projectsMax, lenMin, lenMax, filterType, excludeFully, excludeExperimental, requireGeo]
     .forEach(el => el.addEventListener('input', debounced));
   orderBy.addEventListener('change', ()=>{ sortTiles(); visibleCount = 0; revealNext(); });
   orderDir.addEventListener('click', ()=>{
@@ -271,6 +273,7 @@
       filterType.value='';
       excludeFully.checked=false;
       excludeExperimental.checked=false;
+  if(requireGeo) requireGeo.checked=false;
       updateSelectStates();
       filter();
       input.focus();

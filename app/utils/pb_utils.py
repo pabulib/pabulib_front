@@ -238,6 +238,17 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
         "y",
     }
 
+    # Detect if PROJECTS section has both 'latitude' and 'longitude' columns
+    has_geo = False
+    try:
+        if projects:
+            for p in projects.values():
+                if "latitude" in p and "longitude" in p:
+                    has_geo = True
+                    break
+    except Exception:
+        has_geo = False
+
     return {
         "file_name": pb_path.name,
         "path": str(pb_path),
@@ -263,4 +274,5 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
         "rule_raw": rule_raw,
         "edition": edition,
         "language": language,
+        "has_geo": has_geo,
     }

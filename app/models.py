@@ -64,6 +64,9 @@ class PBFile(Base):
     language: Mapped[Optional[str]] = mapped_column(String(32))
     quality: Mapped[Optional[float]] = mapped_column()
 
+    # Geo info
+    has_geo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+
     # Versioning & timestamps
     file_mtime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     ingested_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
