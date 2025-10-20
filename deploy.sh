@@ -13,6 +13,26 @@ LOG_DIR="/home/pabulib/logs"
 BACKUP_DIR="/home/pabulib/backups"
 COMPOSE_PROJECT_NAME="pabulib"
 
+# Detect docker compose command and provide a helper wrapper
+COMPOSE_CMD=""
+dc() {
+    # Wrapper around docker compose/docker-compose with project files and name
+    if [ -z "${COMPOSE_CMD}" ]; then
+        if docker compose version >/dev/null 2>&1; then
+            COMPOSE_CMD="docker compose"
+        elif command -v docker-compose >/dev/null 2>&1; then
+            COMPOSE_CMD="docker-compose"
+        else
+            error "Docker Compose is not installed or not in PATH"
+            exit 1
+        fi
+    fi
+    ${COMPOSE_CMD} \
+        -f "${PROJECT_DIR}/docker-compose.yml" \
+        -f "${PROJECT_DIR}/docker-compose.prod.yml" \
+        -p "${COMPOSE_PROJECT_NAME}" "$@"
+}
+
 # Load environment variables
 if [ -f "$PROJECT_DIR/.env" ]; then
     set -a  # automatically export all variables
@@ -57,7 +77,12 @@ setup_directories() {
     chmod 755 "$PROJECT_DIR/pb_files" "$PROJECT_DIR/pb_files_depreciated"
     
     # Ensure current user owns the directories (fixes tee permission issues)
-    sudo chown -R $(whoami):$(whoami) "$LOG_DIR" "$BACKUP_DIR"
+    # Avoid sudo; warn if not writable
+    for d in "$LOG_DIR" "$BACKUP_DIR"; do
+        if [ ! -w "$d" ]; then
+            warning "Directory $d is not writable by $(whoami). You may need to adjust permissions or ownership."
+        fi
+    done
     chown -R $(whoami):$(whoami) "$PROJECT_DIR/pb_files" "$PROJECT_DIR/pb_files_depreciated" 2>/dev/null || true
     
     success "Directories created successfully"
@@ -72,10 +97,15 @@ check_prerequisites() {
         exit 1
     fi
     
-    if ! command -v sudo docker compose &> /dev/null; then
-        error "Docker Compose is not installed or not in PATH"
+    # Check that Docker is usable without sudo (user in docker group)
+    if ! docker info >/dev/null 2>&1; then
+        error "Docker is not accessible without sudo. Ensure your user is in the 'docker' group and re-login."
+        echo "Hint: sudo usermod -aG docker $(whoami) && newgrp docker"
         exit 1
     fi
+
+    # Initialize compose command via wrapper; will error out with helpful message if missing
+    dc version >/dev/null 2>&1 || true
     
     if [ ! -f "$PROJECT_DIR/.env" ]; then
         error ".env file not found in $PROJECT_DIR"
@@ -92,13 +122,13 @@ check_prerequisites() {
 
 # Backup current deployment (if exists)
 backup_deployment() {
-    if sudo docker compose -f "$PROJECT_DIR/docker-compose.yml" -f "$PROJECT_DIR/docker-compose.prod.yml" -p "$COMPOSE_PROJECT_NAME" ps -q &> /dev/null; then
+    if containers=$(dc ps -q 2>/dev/null) && [ -n "${containers}" ]; then
         log "Creating backup of current deployment..."
         
         BACKUP_FILE="$BACKUP_DIR/deployment_backup_$(date +'%Y%m%d_%H%M%S').tar.gz"
         
         # Export database using application user credentials
-        sudo docker compose -f "$PROJECT_DIR/docker-compose.yml" -f "$PROJECT_DIR/docker-compose.prod.yml" -p "$COMPOSE_PROJECT_NAME" exec -T db sh -c "MYSQL_PWD=\"$MYSQL_PASSWORD\" mysqldump -u \"$MYSQL_USER\" --databases \"$MYSQL_DATABASE\"" > "$BACKUP_DIR/db_backup_$(date +'%Y%m%d_%H%M%S').sql" 2>/dev/null || warning "Database backup failed"
+        dc exec -T db sh -c "MYSQL_PWD=\"$MYSQL_PASSWORD\" mysqldump -u \"$MYSQL_USER\" --databases \"$MYSQL_DATABASE\"" > "$BACKUP_DIR/db_backup_$(date +'%Y%m%d_%H%M%S').sql" 2>/dev/null || warning "Database backup failed"
         
         # Backup pb_files
         tar -czf "$BACKUP_FILE" -C "/home/pabulib" pb_files pb_files_depreciated 2>/dev/null || warning "Files backup failed"
@@ -114,7 +144,7 @@ stop_services() {
     cd "$PROJECT_DIR"
     
     # Stop with both compose files to ensure everything stops
-    sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" down --remove-orphans 2>/dev/null || true
+    dc down --remove-orphans 2>/dev/null || true
     
     success "Services stopped"
 }
@@ -126,10 +156,10 @@ update_images() {
     cd "$PROJECT_DIR"
     
     # Pull latest base images
-    sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml pull 2>&1 | tee -a "$LOG_DIR/deploy_$(date +'%Y%m%d').log"
+    dc pull 2>&1 | tee -a "$LOG_DIR/deploy_$(date +'%Y%m%d').log"
     
     # Build application image
-    sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache web 2>&1 | tee -a "$LOG_DIR/deploy_$(date +'%Y%m%d').log"
+    dc build --no-cache web 2>&1 | tee -a "$LOG_DIR/deploy_$(date +'%Y%m%d').log"
     
     success "Images updated successfully"
 }
@@ -141,19 +171,19 @@ start_services() {
     cd "$PROJECT_DIR"
     
     # Start services in production mode
-    sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" up -d 2>&1 | tee -a "$LOG_DIR/deploy_$(date +'%Y%m%d').log"
+    dc up -d 2>&1 | tee -a "$LOG_DIR/deploy_$(date +'%Y%m%d').log"
     
     # Wait for services to be ready
     log "Waiting for services to be ready..."
     sleep 10
     
     # Check if services are running
-    if sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" ps | grep -q "Up"; then
+    if dc ps | grep -q "Up"; then
         success "Services started successfully"
         
         # Show running services
         log "Running services:"
-        sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" ps
+        dc ps
         
         # Test HTTP redirect
         log "Testing HTTP to HTTPS redirect..."
@@ -165,7 +195,7 @@ start_services() {
         
     else
         error "Some services failed to start"
-        sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" ps
+        dc ps
         exit 1
     fi
 }
@@ -174,14 +204,14 @@ start_services() {
 show_logs() {
     log "Showing recent logs..."
     cd "$PROJECT_DIR"
-    sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" logs --tail=50
+    dc logs --tail=50
 }
 
 # Monitor function
 monitor() {
     log "Monitoring services (Ctrl+C to stop)..."
     cd "$PROJECT_DIR"
-    sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" logs -f
+    dc logs -f
 }
 
 # Cleanup old logs and backups
@@ -231,11 +261,12 @@ deploy() {
 status() {
     log "📊 Service Status:"
     cd "$PROJECT_DIR"
-    sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -p "$COMPOSE_PROJECT_NAME" ps
+    dc ps
     
     log ""
     log "🌐 Port Status:"
-    ss -tlnp | grep -E ":80\s|:443\s|:3306\s" || log "No services listening on expected ports"
+    # Avoid requiring root by skipping process names (-p)
+    ss -tln | grep -E ":80\s|:443\s|:3306\s" || log "No services listening on expected ports"
     
     log ""
     log "💾 Disk Usage:"
@@ -270,6 +301,10 @@ Examples:
     $0 logs             # View recent logs
     $0 monitor          # Monitor in real-time
     $0 restart --build  # Restart services and force rebuild
+
+Notes:
+    - This script does not require sudo. Ensure your user is in the 'docker' group.
+      Add with: sudo usermod -aG docker $(whoami) && newgrp docker
 
 Logs are saved to: $LOG_DIR
 Backups are saved to: $BACKUP_DIR
