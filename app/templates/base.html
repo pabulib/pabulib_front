@@ -33,17 +33,27 @@
   </head>
   <body class="{% block bodyClass %} bg-slate-50{% endblock %}">
   <nav id="mainNav" class="bg-slate-900 text-white px-4 sticky top-0 z-50 h-16 flex items-center shadow-sm">
-      <div class="flex-none w-0"></div>
-      <div class="flex space-x-6 mx-auto relative z-10">
-        <a href="{{ url_for('main.home') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.home') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Search</a>
-        <a href="{{ url_for('main.format_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.format_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Data format</a>
-        <a href="{{ url_for('main.statistics_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.statistics_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Statistics</a>
-        <a href="{{ url_for('main.comments_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.comments_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Comments</a>
-        <a href="{{ url_for('main.tools_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.tools_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Tools</a>
-        <a href="{{ url_for('main.upload_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.endpoint == 'main.upload_page' else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Upload &amp; Check</a>
-        <a href="{{ url_for('main.publications_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.publications_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Publications</a>
-        <a href="{{ url_for('main.about_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.about_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">About</a>
-        <a href="{{ url_for('main.contact_page') }}" class="px-3 py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.contact_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Contact</a>
+      <!-- Mobile hamburger -->
+      <button id="navToggle" class="md:hidden inline-flex items-center justify-center p-2 rounded-md text-slate-300 hover:text-white hover:bg-slate-700 focus:outline-none" aria-controls="navLinks" aria-expanded="false" aria-label="Toggle navigation">
+        <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+  <!-- Spacer only on small screens so the hamburger doesn't collide; hidden on desktop to keep links centered -->
+  <div class="flex-1 md:hidden"></div>
+      <!-- Links -->
+      <div id="navLinks" class="hidden fixed left-0 right-0 top-16 bg-slate-900 border-t border-slate-800 shadow-lg md:shadow-none md:border-0 md:static md:flex md:space-x-6 mx-auto md:bg-transparent z-10">
+        <a href="{{ url_for('main.home') }}" class="block px-3 py-3 md:py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.home') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Search</a>
+        <a href="{{ url_for('main.format_page') }}" class="block px-3 py-3 md:py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.format_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Data format</a>
+        <a href="{{ url_for('main.statistics_page') }}" class="block px-3 py-3 md:py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.statistics_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Statistics</a>
+        <a href="{{ url_for('main.comments_page') }}" class="block px-3 py-3 md:py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.comments_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Comments</a>
+        <a href="{{ url_for('main.tools_page') }}" class="block px-3 py-3 md:py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.tools_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Tools</a>
+        <a href="{{ url_for('main.upload_page') }}" class="block px-3 py-3 md:py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.endpoint == 'main.upload_page' else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Upload &amp; Check</a>
+        <a href="{{ url_for('main.publications_page') }}" class="block px-3 py-3 md:py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.publications_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Publications</a>
+        <a href="{{ url_for('main.about_page') }}" class="block px-3 py-3 md:py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.about_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">About</a>
+        <a href="{{ url_for('main.contact_page') }}" class="block px-3 py-3 md:py-2 rounded-md text-lg font-medium transition-colors {{ 'bg-indigo-800 text-white' if request.path == url_for('main.contact_page') else 'text-slate-300 hover:bg-slate-700 hover:text-white' }}">Contact</a>
       </div>
     </nav>
     
@@ -56,6 +66,44 @@
         const setAdminTop = () => { adminNav.style.top = mainNav.offsetHeight + 'px'; };
         setAdminTop();
         window.addEventListener('resize', setAdminTop);
+      });
+    </script>
+
+    <!-- Mobile nav toggling -->
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const navToggle = document.getElementById('navToggle');
+        const navLinks = document.getElementById('navLinks');
+        if (!navToggle || !navLinks) return;
+
+        function closeNav(){
+          if (window.innerWidth < 768) {
+            navLinks.classList.add('hidden');
+          }
+          navToggle.setAttribute('aria-expanded','false');
+        }
+        function openNav(){
+          navLinks.classList.remove('hidden');
+          navToggle.setAttribute('aria-expanded','true');
+        }
+        navToggle.addEventListener('click', (e)=>{
+          e.stopPropagation();
+          if(navLinks.classList.contains('hidden')) openNav(); else closeNav();
+        });
+        document.addEventListener('click', (e)=>{
+          if (window.innerWidth >= 768) return; // desktop always visible via md:flex
+          if (!navLinks.contains(e.target) && !navToggle.contains(e.target)) {
+            closeNav();
+          }
+        });
+        window.addEventListener('resize', ()=>{
+          if(window.innerWidth >= 768){
+            navLinks.classList.remove('hidden');
+            navToggle.setAttribute('aria-expanded','false');
+          } else {
+            navLinks.classList.add('hidden');
+          }
+        });
       });
     </script>
 

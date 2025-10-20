@@ -25,6 +25,10 @@
   const excludeFully = $('#excludeFully');
   const excludeExperimental = $('#excludeExperimental');
   const filtersClear = document.getElementById('filtersClear');
+  const filtersPanel = document.getElementById('filtersPanel');
+  const openFiltersBtn = document.getElementById('openFilters');
+  const closeFiltersBtn = document.getElementById('closeFilters');
+  let filtersBackdrop = null;
 
   function normalize(s){ return (s||'').toString().toLowerCase(); }
 
@@ -374,4 +378,46 @@
     scheduleMiniHide();
   }, true);
   window.addEventListener('scroll', ()=>{ if(mini) mini.classList.remove('show'); }, {passive:true});
+
+  // Mobile Filters Drawer ---------------------------------------------------
+  function ensureBackdrop(){
+    if (filtersBackdrop) return filtersBackdrop;
+    filtersBackdrop = document.createElement('div');
+    filtersBackdrop.className = 'filters-backdrop';
+    document.body.appendChild(filtersBackdrop);
+    filtersBackdrop.addEventListener('click', closeDrawer);
+    return filtersBackdrop;
+  }
+  function openDrawer(){
+    if(!filtersPanel) return;
+    ensureBackdrop().classList.add('show');
+    filtersPanel.classList.add('drawer-open');
+    // prevent body scroll under drawer
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    if(openFiltersBtn) openFiltersBtn.setAttribute('aria-expanded','true');
+  }
+  function closeDrawer(){
+    if(!filtersPanel) return;
+    if(filtersBackdrop) filtersBackdrop.classList.remove('show');
+    filtersPanel.classList.remove('drawer-open');
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
+    if(openFiltersBtn) openFiltersBtn.setAttribute('aria-expanded','false');
+  }
+  if(openFiltersBtn && filtersPanel){
+    openFiltersBtn.addEventListener('click', (e)=>{
+      e.preventDefault();
+      if(filtersPanel.classList.contains('drawer-open')) closeDrawer(); else openDrawer();
+    });
+    if(closeFiltersBtn){ closeFiltersBtn.addEventListener('click', closeDrawer); }
+    // close drawer on Escape
+    document.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape') closeDrawer();
+    });
+    // On desktop resize, make sure drawer isn't open state interfering
+    window.addEventListener('resize', ()=>{
+      if(window.innerWidth > 900) closeDrawer();
+    });
+  }
 })();
