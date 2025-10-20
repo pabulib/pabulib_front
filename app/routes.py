@@ -1160,6 +1160,19 @@ def visualize_file(filename: str):
 
         top_projects_data = {"labels": project_names, "votes": project_votes}
 
+    # Approval histogram: number of approvals per project
+    approval_counts = list(vote_counts_per_project.values())
+    approval_histogram = {}
+    for count in approval_counts:
+        approval_histogram[count] = approval_histogram.get(count, 0) + 1
+    approval_histogram = dict(sorted(approval_histogram.items()))
+    approval_histogram_data = None
+    if approval_histogram:
+        approval_histogram_data = {
+            "labels": [str(k) for k in approval_histogram.keys()],
+            "counts": [approval_histogram[k] for k in approval_histogram.keys()],
+        }
+
     # Project selection analysis (cost vs votes scatter)
     selection_data = None
     selected_projects = set()
@@ -1405,6 +1418,7 @@ def visualize_file(filename: str):
         timeline_data=timeline_data,
         summary_stats=summary_stats,
         correlation_data=correlation_data,
+        approval_histogram_data=approval_histogram_data,
         project_categories=category_data is not None,
         voter_demographics=demographic_data is not None,
     )
