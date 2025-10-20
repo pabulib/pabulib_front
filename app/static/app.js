@@ -208,13 +208,44 @@
     const selected = $$('.row-check:checked');
     if(!selected.length){ return; }
 
-    // Build form data matching server expectations
+    // Build form data; prefer exclude-mode when selection is large
     const fd = new FormData();
-    selected.forEach(ch => fd.append('files', ch.dataset.file));
     const allFilteredChecks = allFilteredRowChecks();
     const allFilteredSelected = allFilteredChecks.length > 0 && allFilteredChecks.every(ch => ch.checked);
     const selectAllChecked = selectAll.checked && allFilteredSelected;
-    if(selectAllChecked){ fd.append('select_all', 'true'); }
+    // Determine if any filters are active (query text or filter controls)
+    const anyFiltersActive = (
+      (input && input.value.trim() !== '') ||
+      (filterCountry && filterCountry.value) ||
+      (filterCity && filterCity.value) ||
+      (filterYear && filterYear.value) ||
+      (votesMin && votesMin.value) || (votesMax && votesMax.value) ||
+      (projectsMin && projectsMin.value) || (projectsMax && projectsMax.value) ||
+      (lenMin && lenMin.value) || (lenMax && lenMax.value) ||
+      (filterType && filterType.value) ||
+      (excludeFully && excludeFully.checked) ||
+      (excludeExperimental && excludeExperimental.checked) ||
+      (requireGeo && requireGeo.checked)
+    );
+
+    if (selectAllChecked && !anyFiltersActive) {
+      // True global select-all with no filters: let server use cache or full set
+      fd.append('select_all', 'true');
+    } else {
+      // If user selected most of the filtered list, send exclude list instead to keep request tiny
+      const totalFiltered = allFilteredChecks.length;
+      const selectedCount = selected.length;
+      const excluded = allFilteredChecks.filter(ch => !ch.checked);
+      // Use exclude-mode when excluded are fewer than selected and total is reasonably large
+  const useExclude = !anyFiltersActive && excluded.length > 0 && excluded.length < selectedCount && totalFiltered >= 50;
+      if (useExclude) {
+        fd.append('select_all', 'true');
+        excluded.forEach(ch => fd.append('exclude', ch.dataset.file));
+      } else {
+        // Normal mode: send selected names
+        selected.forEach(ch => fd.append('files', ch.dataset.file));
+      }
+    }
 
     // Show progress UI
     const box = document.getElementById('downloadProgress');
@@ -242,7 +273,11 @@
     // Start job
     let startResp;
     try{
-      startResp = await fetch('/download-selected/start', { method: 'POST', body: fd });
+  const allFilteredChecks = allFilteredRowChecks();
+  const allFilteredSelected = allFilteredChecks.length > 0 && allFilteredChecks.every(ch => ch.checked);
+  const selectAllChecked = selectAll.checked && allFilteredSelected;
+  const qs = selectAllChecked ? '?select_all=true' : '';
+      startResp = await fetch('/download-selected/start' + qs, { method: 'POST', body: fd });
     }catch(err){
       if(box) box.classList.add('hidden');
       alert('Failed to start download');

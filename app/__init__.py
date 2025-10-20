@@ -17,7 +17,9 @@ def create_app():
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.environ["SECRET_KEY"]
 
-    # Global request body cap (security): default 10 MB unless overridden
+    # Global request body cap (security): default 10 MB unless overridden.
+    # Note: We provide a targeted handler to allow download-start endpoints
+    # to proceed without needing to read large request bodies (see routes).
     try:
         app.config["MAX_CONTENT_LENGTH"] = (
             int(os.environ.get("MAX_UPLOAD_MB", "10")) * 1024 * 1024

@@ -20,6 +20,7 @@ from flask import (
     session,
     url_for,
 )
+from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 
 from .__init__ import limiter
@@ -996,16 +997,29 @@ def download_selected_start():
     """
     _cleanup_old_jobs()
     names = request.form.getlist("files")
-    select_all = request.form.get("select_all") == "true"
+    # Allow select_all via form or query string for robustness
+    select_all = (request.form.get("select_all") == "true") or (
+        request.args.get("select_all") == "true"
+    )
+    # Optional exclude-mode: select_all=true with a small list of files to exclude
+    excludes = set(request.form.getlist("exclude"))
 
-    if not names:
+    # If select_all is not set and no explicit names provided, reject.
+    # Allow select_all=true to proceed even when names list is empty ("all" or exclude-mode).
+    if not select_all and not names:
         return jsonify({"ok": False, "error": "No files selected"}), 400
 
     # Total current files to verify select_all scenario
     with get_session() as s:
         total_current_files = s.query(PBFile).filter(PBFile.is_current == True).count()
 
-    selected_all_current = len(names) == total_current_files and select_all
+    # Consider it a true "all current" request when select_all is set with no excludes
+    # and either all names were provided or names list is empty (client opted not to send large body).
+    selected_all_current = (
+        select_all
+        and not excludes
+        and (len(names) == total_current_files or len(names) == 0)
+    )
 
     file_pairs: List[Tuple[str, Path]] = []
     reuse_path: Optional[Path] = None
@@ -1034,17 +1048,35 @@ def download_selected_start():
             file_pairs = [(name, path) for name, path in all_file_pairs]
         download_name = "all_pb_files.zip"
     else:
-        # Individual file selection
-        for name in names:
-            if "/" in name or ".." in name or not name.endswith(".pb"):
-                continue
-            p = get_current_file_path(name)
-            if p and p.exists() and p.is_file():
-                file_pairs.append((name, p))
-        if not file_pairs:
-            return jsonify({"ok": False, "error": "Selected files not found"}), 404
-        stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        download_name = f"pb_selected_{len(file_pairs)}_{stamp}.zip"
+        # Either: exclude-mode (select all minus excludes) OR explicit list of names
+        if select_all and excludes:
+            # Build from all current minus excluded names
+            all_file_pairs = get_all_current_file_paths()
+            # Only keep those whose arcname is NOT excluded
+            file_pairs = [
+                (name, path) for (name, path) in all_file_pairs if name not in excludes
+            ]
+            if not file_pairs:
+                return (
+                    jsonify(
+                        {"ok": False, "error": "No files remaining after exclusions"}
+                    ),
+                    404,
+                )
+            stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            download_name = f"pb_selected_{len(file_pairs)}_{stamp}.zip"
+        else:
+            # Individual file selection from provided names
+            for name in names:
+                if "/" in name or ".." in name or not name.endswith(".pb"):
+                    continue
+                p = get_current_file_path(name)
+                if p and p.exists() and p.is_file():
+                    file_pairs.append((name, p))
+            if not file_pairs:
+                return jsonify({"ok": False, "error": "Selected files not found"}), 404
+            stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            download_name = f"pb_selected_{len(file_pairs)}_{stamp}.zip"
 
     token = uuid.uuid4().hex
     # Record initial state
@@ -1084,6 +1116,94 @@ def download_selected_start():
             "file_url": url_for("main.download_selected_file", token=token),
         }
     )
+
+
+@bp.errorhandler(RequestEntityTooLarge)
+def handle_large_request(e):
+    """Allow initiating large download jobs without requiring a large POST body.
+
+    If the client hits MAX_CONTENT_LENGTH while posting many filenames for
+    /download-selected/start, they can pass select_all=true in the query string
+    to indicate intention to download all current files. We then kick off the
+    same background job as if select all was chosen, without reading the body.
+    """
+    # Only handle for the specific endpoint
+    if request.path.rstrip("/") == "/download-selected/start":
+        select_all = (request.args.get("select_all") or "").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+        if select_all:
+            # Mirror the select-all branch from download_selected_start
+            _cleanup_old_jobs()
+            # Compute all current file pairs
+            all_file_pairs = get_all_current_file_paths()
+            if not all_file_pairs:
+                return jsonify({"ok": False, "error": "No current files found"}), 404
+            # Use or refresh cache
+            cache_dir = Path(__file__).parent.parent / "cache"
+            cache_dir.mkdir(exist_ok=True)
+            cache_path = cache_dir / "all_pb_files.zip"
+            cache_valid = False
+            if cache_path.exists() and cache_path.is_file():
+                try:
+                    cache_mtime = cache_path.stat().st_mtime
+                    cache_valid = all(
+                        cache_mtime >= path.stat().st_mtime
+                        for _, path in all_file_pairs
+                    )
+                except Exception:
+                    cache_valid = False
+            token = uuid.uuid4().hex
+            download_name = "all_pb_files.zip"
+            _write_progress(
+                token,
+                {
+                    "token": token,
+                    "total": len(all_file_pairs),
+                    "current": len(all_file_pairs) if cache_valid else 0,
+                    "percent": 100 if cache_valid else 0,
+                    "status": "ready" if cache_valid else "queued",
+                    "current_name": None,
+                    "done": bool(cache_valid),
+                    "error": None,
+                    "download_name": download_name,
+                },
+            )
+            if cache_valid:
+                with _ZIP_JOBS_LOCK:
+                    _ZIP_JOBS[token] = {
+                        "file_path": str(cache_path),
+                        "download_name": download_name,
+                    }
+            else:
+                # Start background builder to create the all-files zip
+                t = threading.Thread(
+                    target=_build_zip_in_background,
+                    args=(
+                        token,
+                        [(name, path) for name, path in all_file_pairs],
+                        download_name,
+                        None,
+                    ),
+                    daemon=True,
+                )
+                t.start()
+            return jsonify(
+                {
+                    "ok": True,
+                    "token": token,
+                    "progress_url": url_for(
+                        "main.download_selected_progress", token=token
+                    ),
+                    "file_url": url_for("main.download_selected_file", token=token),
+                }
+            )
+    # Default: return the standard 413 JSON for API clients
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify({"ok": False, "error": "Request too large"}), 413
+    return ("Request Entity Too Large", 413)
 
 
 @bp.get("/download-selected/progress/<token>")
@@ -1458,11 +1578,17 @@ def visualize_file(filename: str):
     selection_data = None
     selected_projects = set()
 
-    # Determine which projects were selected (if selection data available)
-    if scores_in_projects:
-        for proj_id, score_data in scores_in_projects.items():
-            if score_data.get("selected", False) or score_data.get("winner", False):
+    # Determine which projects were selected by inspecting project fields
+    # Some datasets include a 'selected' column in the PROJECTS section.
+    for proj_id, proj in projects.items():
+        selected_val = proj.get("selected")
+        if isinstance(selected_val, str):
+            sv = selected_val.strip().lower()
+            if sv in {"1", "true", "yes", "y"}:
                 selected_projects.add(proj_id)
+        elif selected_val:
+            # Any non-empty, non-string truthy value
+            selected_projects.add(proj_id)
 
     if selected_projects or project_costs:
         selected_points = []
