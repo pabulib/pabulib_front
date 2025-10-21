@@ -49,23 +49,44 @@
 
   // Disable options that are not compatible with current selections across selects (exclusive filters)
   function updateSelectStates(){
+    const q = normalize(input && input.value);
     const selCountry = normalize(filterCountry.value);
     const selCity = normalize(filterCity.value);
     const selYear = (filterYear.value || '');
     const selType = normalize(filterType.value);
 
+    // Helper that mirrors the main filter() predicate, but allows excluding a specific key
+    function tilePasses(t, excludeKey){
+      // text search
+      if(q){
+        const hay = [t.dataset.title, t.dataset.webpage, t.dataset.desc, t.dataset.file].map(normalize).join(' ');
+        if(!hay.includes(q)) return false;
+      }
+      // select-based filters (skip the one we're evaluating options for)
+      if(excludeKey !== 'country' && selCountry && normalize(t.dataset.country) !== selCountry) return false;
+      if(excludeKey !== 'city' && selCity && normalize(t.dataset.city) !== selCity) return false;
+      if(excludeKey !== 'year' && selYear && (t.dataset.year !== selYear)) return false;
+      if(excludeKey !== 'type' && selType && normalize(t.dataset.type) !== selType) return false;
+      // numeric ranges
+      if(!passesNumeric(t.dataset.votes || 0, votesMin, votesMax)) return false;
+      if(!passesNumeric(t.dataset.projects || 0, projectsMin, projectsMax)) return false;
+      if(!passesNumeric(t.dataset.vlen || NaN, lenMin, lenMax)) return false;
+      // include/exclude checkboxes
+      if(excludeFully.checked && t.dataset.fully === '1') return false;
+      if(excludeExperimental.checked && t.dataset.experimental === '1') return false;
+      if(requireGeo && requireGeo.checked && t.dataset.geo !== '1') return false;
+      if(requireTarget && requireTarget.checked && t.dataset.target !== '1') return false;
+      if(requireCategory && requireCategory.checked && t.dataset.category !== '1') return false;
+      return true;
+    }
+
     function eligibleTiles(excludeKey){
-      return tiles.filter(t => {
-        if(excludeKey !== 'country' && selCountry && normalize(t.dataset.country) !== selCountry) return false;
-        if(excludeKey !== 'city' && selCity && normalize(t.dataset.city) !== selCity) return false;
-        if(excludeKey !== 'year' && selYear && (t.dataset.year !== selYear)) return false;
-        if(excludeKey !== 'type' && selType && normalize(t.dataset.type) !== selType) return false;
-        return true;
-      });
+      return tiles.filter(t => tilePasses(t, excludeKey));
     }
 
     function disableOptions(selectEl, key){
       if(!selectEl) return;
+      const currentValue = selectEl.value;
       const allowed = new Set(
         eligibleTiles(key).map(t => {
           if(key === 'country') return t.dataset.country || '';
@@ -77,6 +98,8 @@
       );
       Array.from(selectEl.options).forEach(opt => {
         if(opt.value === ''){ opt.disabled = false; return; }
+        // Keep currently selected option enabled to avoid trapping the user
+        if(opt.value === currentValue){ opt.disabled = false; return; }
         // For type select we compare normalized because its options are predefined
         if(key === 'type'){
           opt.disabled = !Array.from(allowed).some(v => normalize(v) === normalize(opt.value));
