@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import tempfile
@@ -1102,7 +1103,8 @@ _ADMIN_JOBS: dict[str, dict] = {}
 
 
 def _admin_zip_jobs_dir() -> Path:
-    d = Path(__file__).parent.parent / "cache" / "admin_zip_jobs"
+    # Keep admin zipping job artifacts out of the repo; place in system temp
+    d = Path(tempfile.gettempdir()) / "pabulib_admin_zip_jobs"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -2064,3 +2066,318 @@ def admin_delete_deleted_file(file_id: int):
             success=1 if removed else 0,
         )
     )
+
+
+# ----------------------- Export all PB files (ZIP) ---------------------------
+
+
+def _cache_dir() -> Path:
+    """Return the workspace cache directory used for exports, creating it if needed."""
+    d = Path(__file__).resolve().parents[1] / "cache"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+@bp.get("/admin/export")
+def admin_export_index():
+    """Render the export page with a form to generate a ZIP of all pb_files."""
+    # Provide a suggested default name
+    default_name = "all_pb_files.zip"
+    cache = _cache_dir()
+    # Find all zips under cache/ (search recursively) and compute metadata
+    latest_path: Optional[Path] = None
+    zips: list[dict] = []
+    for p in cache.rglob("*.zip"):
+        try:
+            if not p.is_file():
+                continue
+            # Track latest by mtime
+            if latest_path is None or p.stat().st_mtime > latest_path.stat().st_mtime:
+                latest_path = p
+
+            # relpath within cache
+            try:
+                rel = p.relative_to(cache)
+            except Exception:
+                rel = Path(p.name)
+
+            # Parse timestamp from first path part if pattern like 20241015T143022Z
+            ts_str = None
+            try:
+                parts = list(rel.parts)
+                for part in parts:
+                    if re.match(r"^\d{8}T\d{6}Z$", part or ""):
+                        ts_str = part
+                        break
+            except Exception:
+                ts_str = None
+            zipped_at: Optional[datetime] = None
+            if ts_str:
+                try:
+                    zipped_at = datetime.strptime(ts_str, "%Y%m%dT%H%M%SZ")
+                except Exception:
+                    zipped_at = None
+            # fallback to file mtime
+            if zipped_at is None:
+                try:
+                    zipped_at = datetime.utcfromtimestamp(p.stat().st_mtime)
+                except Exception:
+                    zipped_at = None
+
+            # Count files inside the zip (non-directories)
+            file_count = None
+            try:
+                with zipfile.ZipFile(p, mode="r") as zf:
+                    file_count = sum(1 for info in zf.infolist() if not info.is_dir())
+            except Exception:
+                file_count = None
+
+            zips.append(
+                {
+                    "name": p.name,
+                    "relpath": str(rel).replace("\\", "/"),
+                    "zipped_at": zipped_at,  # datetime | None
+                    "file_count": file_count,  # int | None
+                    "size_bytes": p.stat().st_size if p.exists() else None,
+                }
+            )
+        except Exception:
+            continue
+
+    # Sort zips by zipped_at/mtime desc
+    def _zip_sort_key(item: dict):
+        dt = item.get("zipped_at")
+        return dt or datetime.min
+
+    zips.sort(key=_zip_sort_key, reverse=True)
+
+    latest_rel = None
+    latest_name = None
+    if latest_path:
+        try:
+            latest_rel = str(latest_path.relative_to(cache)).replace("\\", "/")
+            latest_name = latest_path.name
+        except Exception:
+            latest_rel = latest_path.name
+            latest_name = latest_path.name
+
+    return render_template(
+        "admin/export_all.html",
+        default_name=default_name,
+        latest_rel=latest_rel,
+        latest_name=latest_name,
+        export_zips=zips,
+    )
+
+
+@bp.post("/admin/export")
+def admin_export_create():
+    """Create a ZIP file containing all files from pb_files directory.
+
+    Accepts form or JSON with optional 'name' (must end with .zip). If missing,
+    uses 'all_pb_files.zip'. Saves into cache/<timestamp>/ and returns a link to download.
+    Only a timestamped file is created (no root-level duplicate in cache/).
+    """
+    # Determine desired zip name
+    name = None
+    if request.is_json:
+        payload = request.get_json(silent=True) or {}
+        name = (payload.get("name") or "").strip()
+    else:
+        name = (request.form.get("name") or "").strip()
+
+    if not name:
+        name = "all_pb_files.zip"
+
+    # sanitize and validate
+    name = secure_filename(name)
+    if not name.lower().endswith(".zip"):
+        name = f"{name}.zip"
+    if not name or "/" in name or ".." in name:
+        return (
+            jsonify({"ok": False, "error": "Invalid zip name"})
+            if request.is_json
+            else redirect(
+                url_for(
+                    "admin.admin_export_index",
+                    message="Invalid zip name.",
+                    success=0,
+                )
+            )
+        )
+
+    pb_dir = _pb_folder()
+    if not pb_dir.exists() or not pb_dir.is_dir():
+        err = "pb_files folder not found"
+        if request.is_json:
+            return jsonify({"ok": False, "error": err}), 404
+        return redirect(url_for("admin.admin_export_index", message=err, success=0))
+
+    # Gather all .pb files in pb_files
+    files: list[Path] = [p for p in sorted(pb_dir.glob("*.pb")) if p.is_file()]
+    if not files:
+        err = "No .pb files found in pb_files"
+        if request.is_json:
+            return jsonify({"ok": False, "error": err}), 404
+        return redirect(url_for("admin.admin_export_index", message=err, success=0))
+
+    # create timestamped subdir so multiple exports are preserved
+    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    out_dir = _cache_dir() / ts
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_zip = out_dir / name
+
+    try:
+        with zipfile.ZipFile(out_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for p in files:
+                zf.write(p, arcname=p.name)
+    except Exception as e:
+        current_app.logger.exception("Failed to create export zip")
+        if request.is_json:
+            return jsonify({"ok": False, "error": f"Failed to zip: {e}"}), 500
+        return redirect(
+            url_for(
+                "admin.admin_export_index",
+                message=f"Failed to zip: {e}",
+                success=0,
+            )
+        )
+
+    # Success: return JSON with download URL or redirect with message
+    # download relpath relative to cache: <ts>/<name>
+    relpath = f"{ts}/{name}"
+    dl_url = url_for("admin.admin_export_download", relpath=relpath)
+    if request.is_json:
+        return jsonify({"ok": True, "file": name, "url": dl_url})
+    return redirect(
+        url_for(
+            "admin.admin_export_index",
+            message=f"ZIP created: {name}",
+            success=1,
+            relpath=relpath,
+        )
+    )
+
+
+@bp.get("/admin/export/download/<path:relpath>")
+def admin_export_download(relpath: str):
+    """Serve a previously created zip from cache/ by relative path (e.g. <ts>/name.zip)."""
+    if not relpath or ".." in relpath:
+        abort(400)
+    cache = _cache_dir()
+    target = (cache / relpath).resolve()
+    # Ensure the resolved target is inside cache dir
+    try:
+        if not str(target).startswith(str(cache.resolve())):
+            abort(400)
+    except Exception:
+        abort(400)
+
+    if not target.exists() or not target.is_file() or not target.name.endswith(".zip"):
+        abort(404)
+    return send_file(target, as_attachment=True, download_name=target.name)
+
+
+@bp.post("/admin/export/delete")
+def admin_export_delete():
+    """Delete a previously created zip from cache/ by relative path.
+
+    Accepts form or JSON with 'relpath'. Returns JSON if requested; otherwise redirects back.
+    """
+    # Extract relpath
+    if request.is_json:
+        payload = request.get_json(silent=True) or {}
+        relpath = (payload.get("relpath") or "").strip()
+    else:
+        relpath = (request.form.get("relpath") or "").strip()
+
+    if not relpath or ".." in relpath:
+        if request.is_json:
+            return jsonify({"ok": False, "error": "Invalid path"}), 400
+        return redirect(
+            url_for(
+                "admin.admin_export_index",
+                message="Invalid path",
+                success=0,
+            )
+        )
+
+    cache = _cache_dir()
+    try:
+        target = (cache / relpath).resolve()
+    except Exception:
+        target = cache / relpath
+
+    # Ensure inside cache and is a .zip
+    try:
+        if not str(target).startswith(str(cache.resolve())):
+            raise ValueError("Path escapes cache")
+    except Exception:
+        if request.is_json:
+            return jsonify({"ok": False, "error": "Invalid path"}), 400
+        return redirect(
+            url_for(
+                "admin.admin_export_index",
+                message="Invalid path",
+                success=0,
+            )
+        )
+
+    if (
+        (not target.exists())
+        or (not target.is_file())
+        or (not target.name.endswith(".zip"))
+    ):
+        if request.is_json:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        return redirect(
+            url_for(
+                "admin.admin_export_index",
+                message="ZIP not found",
+                success=0,
+            )
+        )
+
+    # Try to delete the zip and its parent folder if empty
+    try:
+        parent_dir = target.parent
+        try:
+            target.unlink()
+        except Exception:
+            # Attempt to make writable then unlink
+            try:
+                os.chmod(target, 0o600)
+                target.unlink()
+            except Exception:
+                raise
+        # Cleanup parent dir if it's within cache and empty
+        try:
+            if parent_dir != cache and parent_dir.exists():
+                # Only remove if inside cache and not the cache root
+                if str(parent_dir.resolve()).startswith(str(cache.resolve())):
+                    # Remove dir if empty
+                    try:
+                        parent_dir.rmdir()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        if request.is_json:
+            return jsonify({"ok": True, "deleted": True})
+        return redirect(
+            url_for(
+                "admin.admin_export_index",
+                message="ZIP deleted",
+                success=1,
+            )
+        )
+    except Exception as e:
+        if request.is_json:
+            return jsonify({"ok": False, "error": str(e)}), 500
+        return redirect(
+            url_for(
+                "admin.admin_export_index",
+                message=f"Failed to delete: {e}",
+                success=0,
+            )
+        )

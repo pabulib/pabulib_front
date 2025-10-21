@@ -40,7 +40,8 @@ _ZIP_JOBS_LOCK = threading.Lock()
 
 
 def _zip_jobs_dir() -> Path:
-    d = Path(__file__).parent.parent / "cache" / "zip_jobs"
+    # Store transient job artifacts in system temp instead of project cache
+    d = Path(tempfile.gettempdir()) / "pabulib_zip_jobs"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -917,52 +918,66 @@ def download(filename: str):
 @bp.post("/download-selected")
 def download_selected():
     names = request.form.getlist("files")
-    select_all = request.form.get("select_all") == "true"
+    # Allow select_all via form or query for symmetry with background route
+    select_all = (request.form.get("select_all") == "true") or (
+        request.args.get("select_all") == "true"
+    )
 
-    if not names:
-        abort(400, description="No files selected")
+    # If select_all=true but no explicit names posted, treat as all current
+    if not names and select_all:
+        names = []  # explicit empty list signals select-all branch below
 
     # Get total count of current files to compare with selected count
     with get_session() as s:
         total_current_files = s.query(PBFile).filter(PBFile.is_current == True).count()
 
-    # Check if user selected ALL current files (not just clicked select all after filtering)
-    selected_all_current = len(names) == total_current_files and select_all
+    # Check if user selected ALL current files
+    # Consider select_all=true with no names as "all" as well (JS may omit names)
+    selected_all_current = select_all and (
+        len(names) == total_current_files or len(names) == 0
+    )
 
     if selected_all_current:
-        # User selected ALL current files - try to use cached all_pb_files.zip
+        # User selected ALL current files - prefer newest timestamped export zip
         cache_dir = Path(__file__).parent.parent / "cache"
-        cache_dir.mkdir(exist_ok=True)  # Create cache directory if it doesn't exist
-        cache_path = cache_dir / "all_pb_files.zip"
+        cache_dir.mkdir(exist_ok=True)  # Ensure cache directory exists
 
+        # 1) Prefer the newest timestamped export zip: cache/<ts>/all_pb_files.zip
+        latest_export: Optional[Path] = None
+        try:
+            for p in cache_dir.rglob("all_pb_files.zip"):
+                # Only consider files under a subdirectory (timestamped)
+                if p.parent == cache_dir:
+                    continue
+                if not p.is_file():
+                    continue
+                if (
+                    latest_export is None
+                    or p.stat().st_mtime > latest_export.stat().st_mtime
+                ):
+                    latest_export = p
+        except Exception:
+            latest_export = None
+        if latest_export is not None:
+            return send_file(
+                latest_export, as_attachment=True, download_name=latest_export.name
+            )
+
+        # 2) No timestamped export found; build a fresh timestamped export now
         all_file_pairs = get_all_current_file_paths()
         if not all_file_pairs:
             abort(404, description="No current files found")
-
-        # Check if cache is valid (exists and is newer than all source files)
-        cache_valid = False
-        if cache_path.exists() and cache_path.is_file():
-            cache_mtime = cache_path.stat().st_mtime
-            cache_valid = all(
-                cache_mtime >= path.stat().st_mtime for _, path in all_file_pairs
-            )
-
-        if cache_valid:
-            # Return the cached zip file
-            return send_file(
-                cache_path, as_attachment=True, download_name="all_pb_files.zip"
-            )
-        else:
-            # Create new zip file
-            with zipfile.ZipFile(
-                cache_path, mode="w", compression=zipfile.ZIP_DEFLATED
-            ) as zf:
-                for file_name, file_path in all_file_pairs:
-                    zf.write(file_path, arcname=file_name)
-
-            return send_file(
-                cache_path, as_attachment=True, download_name="all_pb_files.zip"
-            )
+        ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        out_dir = cache_dir / ts
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        out_zip = out_dir / "all_pb_files.zip"
+        with zipfile.ZipFile(out_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for file_name, file_path in all_file_pairs:
+                zf.write(file_path, arcname=file_name)
+        return send_file(out_zip, as_attachment=True, download_name=out_zip.name)
 
     # Original logic for individual file selection
     files = []
@@ -1026,25 +1041,31 @@ def download_selected_start():
     download_name = "pb_selected.zip"
 
     if selected_all_current:
-        # Use or build cached zip of all current files
+        # Prefer the newest timestamped export zip under cache/<ts>/all_pb_files.zip
         cache_dir = Path(__file__).parent.parent / "cache"
         cache_dir.mkdir(exist_ok=True)
-        cache_path = cache_dir / "all_pb_files.zip"
         all_file_pairs = get_all_current_file_paths()
         if not all_file_pairs:
             return jsonify({"ok": False, "error": "No current files found"}), 404
-        # validate cache
-        cache_valid = False
-        if cache_path.exists() and cache_path.is_file():
-            cache_mtime = cache_path.stat().st_mtime
-            cache_valid = all(
-                cache_mtime >= path.stat().st_mtime for _, path in all_file_pairs
-            )
-        if cache_valid:
-            # We'll reuse the cached file; no background work needed
-            reuse_path = cache_path
+        # 1) Try newest timestamped export first
+        latest_export: Optional[Path] = None
+        try:
+            for p in cache_dir.rglob("all_pb_files.zip"):
+                if p.parent == cache_dir:
+                    continue  # skip canonical root file
+                if not p.is_file():
+                    continue
+                if (
+                    latest_export is None
+                    or p.stat().st_mtime > latest_export.stat().st_mtime
+                ):
+                    latest_export = p
+        except Exception:
+            latest_export = None
+        if latest_export is not None:
+            reuse_path = latest_export
         else:
-            # Build list to (re)create cache and also serve via token-specific path
+            # 2) Build on the fly (do not use root-level canonical cache)
             file_pairs = [(name, path) for name, path in all_file_pairs]
         download_name = "all_pb_files.zip"
     else:
@@ -1144,40 +1165,64 @@ def handle_large_request(e):
             # Use or refresh cache
             cache_dir = Path(__file__).parent.parent / "cache"
             cache_dir.mkdir(exist_ok=True)
-            cache_path = cache_dir / "all_pb_files.zip"
-            cache_valid = False
-            if cache_path.exists() and cache_path.is_file():
-                try:
-                    cache_mtime = cache_path.stat().st_mtime
-                    cache_valid = all(
-                        cache_mtime >= path.stat().st_mtime
-                        for _, path in all_file_pairs
-                    )
-                except Exception:
-                    cache_valid = False
+            # First, prefer newest timestamped export
+            latest_export: Optional[Path] = None
+            try:
+                for p in cache_dir.rglob("all_pb_files.zip"):
+                    if p.parent == cache_dir:
+                        continue
+                    if not p.is_file():
+                        continue
+                    if (
+                        latest_export is None
+                        or p.stat().st_mtime > latest_export.stat().st_mtime
+                    ):
+                        latest_export = p
+            except Exception:
+                latest_export = None
             token = uuid.uuid4().hex
             download_name = "all_pb_files.zip"
-            _write_progress(
-                token,
-                {
-                    "token": token,
-                    "total": len(all_file_pairs),
-                    "current": len(all_file_pairs) if cache_valid else 0,
-                    "percent": 100 if cache_valid else 0,
-                    "status": "ready" if cache_valid else "queued",
-                    "current_name": None,
-                    "done": bool(cache_valid),
-                    "error": None,
-                    "download_name": download_name,
-                },
-            )
-            if cache_valid:
+            if latest_export is not None:
+                _write_progress(
+                    token,
+                    {
+                        "token": token,
+                        "total": len(all_file_pairs),
+                        "current": len(all_file_pairs),
+                        "percent": 100,
+                        "status": "ready",
+                        "current_name": None,
+                        "done": True,
+                        "error": None,
+                        "download_name": download_name,
+                    },
+                )
                 with _ZIP_JOBS_LOCK:
                     _ZIP_JOBS[token] = {
-                        "file_path": str(cache_path),
+                        "file_path": str(latest_export),
                         "download_name": download_name,
                     }
             else:
+                # No timestamped export found; queue a fresh build (no canonical cache fallback)
+                _write_progress(
+                    token,
+                    {
+                        "token": token,
+                        "total": len(all_file_pairs),
+                        "current": 0,
+                        "percent": 0,
+                        "status": "queued",
+                        "current_name": None,
+                        "done": False,
+                        "error": None,
+                        "download_name": download_name,
+                    },
+                )
+                with _ZIP_JOBS_LOCK:
+                    _ZIP_JOBS[token] = {
+                        "file_path": None,
+                        "download_name": download_name,
+                    }
                 # Start background builder to create the all-files zip
                 t = threading.Thread(
                     target=_build_zip_in_background,

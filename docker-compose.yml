@@ -64,6 +64,8 @@ services:
       - ${PB_FILES_DIR:-./pb_files}:/app/pb_files
       # Archive (depreciated) files folder
       - ${PB_FILES_DEPRECIATED_DIR:-./pb_files_depreciated}:/app/pb_files_depreciated
+      # Cache folder for exports and admin zip jobs
+      - ./cache:/app/cache
     entrypoint: ["scripts/entrypoint.sh"]
 
 volumes:

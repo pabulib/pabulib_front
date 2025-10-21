@@ -17,6 +17,10 @@
              class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors {{ 'bg-slate-900 text-white' if request.path == url_for('admin.admin_deleted') else 'text-slate-700 hover:bg-slate-100' }}">
             Deleted
           </a>
+          <a href="{{ url_for('admin.admin_export_index') }}"
+             class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors {{ 'bg-slate-900 text-white' if request.path == url_for('admin.admin_export_index') else 'text-slate-700 hover:bg-slate-100' }}">
+            Export
+          </a>
           {# Future tabs can be added here, e.g.:
           <a href="#" class="px-3 py-1.5 rounded-md text-sm font-medium text-slate-400 cursor-not-allowed">Users (soon)</a>
           #}
