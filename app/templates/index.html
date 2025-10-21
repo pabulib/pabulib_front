@@ -161,15 +161,24 @@
         <div class="tile-header">
           <input class="row-check" type="checkbox" data-file="{{ t.file_name|e }}" />
           <h2>{{ t.title|replace('_', ' ') }}</h2>
-          <div class="badges">
-            <span class="qs" title="QS = (avg vote length)³ × (projects)² × (votes). Higher is better.">QS {{ t.quality_short }}</span>
+          <div class="labels">
             {% if t.experimental %}
             <span class="tag exp" title="Dataset marked as experimental">Experimental</span>
             {% endif %}
             {% if t.fully_funded %}
             <span class="tag funded" title="All selected projects are funded">Fully funded</span>
             {% endif %}
+            {% if t.has_geo %}
+            <span class="tag geo" title="Dataset includes project coordinates">Coordinates</span>
+            {% endif %}
+            {% if t.has_category %}
+            <span class="tag category" title="Dataset includes project categories">Categories</span>
+            {% endif %}
+            {% if t.has_target %}
+            <span class="tag target" title="Dataset includes project targets">Targets</span>
+            {% endif %}
           </div>
+          <span class="qs" title="QS = (avg vote length)³ × (projects)² × (votes). Higher is better.">QS {{ t.quality_short }}</span>
           <a class="doc" href="{{ url_for('main.preview_file', filename=t.file_name) }}" title="Preview"></a>
           <a class="visualization" href="{{ url_for('main.visualize_file', filename=t.file_name) }}" title="Visualize"></a>
           <a class="download" href="{{ url_for('main.download', filename=t.file_name) }}" title="Download"></a>
