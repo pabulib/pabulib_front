@@ -28,6 +28,7 @@ from sqlalchemy.exc import OperationalError
 
 from app.db import Base, engine, get_session
 from app.models import PBComment, PBFile, RefreshState
+from app.services import export_service
 from app.utils.load_pb_file import parse_pb_lines
 from app.utils.pb_utils import (
     build_group_key,
@@ -272,6 +273,13 @@ def refresh(full: bool = False) -> Dict[str, Any]:
             )
 
     save_refresh_timestamp("pb", now)
+
+    # After a refresh, rebuild global ZIP if the set changed
+    try:
+        export_service.build_if_changed()
+    except Exception:
+        # Non-fatal in CLI context
+        pass
 
     return {
         "processed": processed,

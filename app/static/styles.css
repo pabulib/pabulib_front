@@ -19,7 +19,7 @@ html{overflow-x:hidden}
 .nav .item{color:#cfe6fa;text-decoration:none;padding:6px 10px;border-radius:6px}
 .nav .item:hover{background:rgba(255,255,255,.12);color:#fff}
 .nav .item.active{background:#0b6ec5;color:#fff}
-.layout{display:grid;grid-template-columns:280px 1fr;gap:32px;max-width:1300px;margin:16px auto;padding:0 16px}
+.layout{display:grid;grid-template-columns:280px 1fr;gap:32px;max-width:1300px;margin:16px auto;padding:0 24px}
 .page-spacer{height:8px}
 .sidebar{
   background:#fff;
@@ -346,6 +346,14 @@ html{overflow-x:hidden}
   .mobile-meta > div{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
   .mobile-meta span{font-size:11px;color:#64748b}
   .mobile-meta strong{font-size:14px;color:#0f172a}
+}
+
+/* Slightly wider gutters on larger screens without affecting mobile */
+@media (min-width:1200px){
+  .layout{ padding:0 32px; }
+}
+@media (min-width:1536px){
+  .layout{ padding:0 40px; }
 }
 
 /* Semi-transparent backdrop for the filter drawer */

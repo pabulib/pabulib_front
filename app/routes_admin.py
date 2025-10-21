@@ -29,7 +29,7 @@ from werkzeug.utils import secure_filename
 
 from .db import get_session
 from .models import AdminUser, PBFile
-from .services import pb_service
+from .services import export_service, pb_service
 from .utils.formatting import format_budget as _format_budget
 from .utils.formatting import format_int as _format_int
 from .utils.formatting import format_vote_length as _format_vote_length
@@ -1001,6 +1001,12 @@ def upload_tiles_ingest():
     except Exception:
         pass
 
+    # Trigger rebuild of all_pb_files.zip in background if the set changed
+    try:
+        export_service.trigger_build_if_changed_background()
+    except Exception:
+        pass
+
     # If called via fetch, return JSON ok; otherwise redirect with a message
     if request.headers.get("X-Requested-With") == "fetch" or request.is_json:
         return jsonify({"ok": True, "message": f"Uploaded {name}."})
@@ -1588,6 +1594,11 @@ def admin_delete_file():
         pb_service.invalidate_caches()
     except Exception:
         pass
+    # Trigger rebuild of all_pb_files.zip in background if the set changed
+    try:
+        export_service.trigger_build_if_changed_background()
+    except Exception:
+        pass
     if request.headers.get("X-Requested-With") == "fetch":
         if errors:
             return jsonify(
@@ -1681,6 +1692,11 @@ def admin_delete_files_bulk():
                 deleted_names += 1
     try:
         pb_service.invalidate_caches()
+    except Exception:
+        pass
+    # Trigger rebuild of all_pb_files.zip in background if the set changed
+    try:
+        export_service.trigger_build_if_changed_background()
     except Exception:
         pass
     return jsonify({"ok": True, "deleted": deleted_names, "errors": errors})
@@ -1918,6 +1934,11 @@ def admin_replace_file():
 
     try:
         pb_service.invalidate_caches()
+    except Exception:
+        pass
+    # Trigger rebuild of all_pb_files.zip in background if the set changed
+    try:
+        export_service.trigger_build_if_changed_background()
     except Exception:
         pass
 
