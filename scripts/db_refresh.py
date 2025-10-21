@@ -157,6 +157,8 @@ def ingest_file(p: Path) -> tuple[PBFile, list[str]]:
         language=tile.get("language"),
         quality=tile.get("quality"),
         has_geo=bool(tile.get("has_geo") or False),
+        has_category=bool(tile.get("has_category") or False),
+        has_target=bool(tile.get("has_target") or False),
         file_mtime=mtime,
         ingested_at=datetime.utcnow(),
         is_current=True,

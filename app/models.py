@@ -66,6 +66,9 @@ class PBFile(Base):
 
     # Geo info
     has_geo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    # Project metadata flags
+    has_target: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    has_category: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
     # Versioning & timestamps
     file_mtime: Mapped[datetime] = mapped_column(DateTime, nullable=False)

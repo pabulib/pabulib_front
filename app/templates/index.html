@@ -81,6 +81,8 @@
         <div class="field">
           <label>Show datasets with</label>
           <label class="checkbox"><input id="requireGeo" type="checkbox"> Project coordinates</label>
+          <label class="checkbox"><input id="requireTarget" type="checkbox"> Project targets</label>
+          <label class="checkbox"><input id="requireCategory" type="checkbox"> Project categories</label>
         </div>
 
         <div class="field">
@@ -149,6 +151,8 @@
         data-experimental="{{ '1' if t.experimental else '0' }}"
   data-quality="{{ '%.6f' % t.quality }}"
   data-geo="{{ '1' if t.has_geo else '0' }}"
+  data-target="{{ '1' if t.has_target else '0' }}"
+  data-category="{{ '1' if t.has_category else '0' }}"
          {% if t.num_selected_projects_raw is not none %}data-selected="{{ t.num_selected_projects_raw }}"{% endif %}
          data-rule="{{ t.rule_raw }}"
          data-edition="{{ t.edition }}"

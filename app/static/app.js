@@ -25,6 +25,8 @@
   const excludeFully = $('#excludeFully');
   const excludeExperimental = $('#excludeExperimental');
   const requireGeo = $('#requireGeo');
+  const requireTarget = $('#requireTarget');
+  const requireCategory = $('#requireCategory');
   const filtersClear = document.getElementById('filtersClear');
   const filtersPanel = document.getElementById('filtersPanel');
   const openFiltersBtn = document.getElementById('openFilters');
@@ -121,6 +123,8 @@
       if(excludeFully.checked && t.dataset.fully === '1') { t.hidden=true; return; }
       if(excludeExperimental.checked && t.dataset.experimental === '1') { t.hidden=true; return; }
       if(requireGeo && requireGeo.checked && t.dataset.geo !== '1') { t.hidden=true; return; }
+      if(requireTarget && requireTarget.checked && t.dataset.target !== '1') { t.hidden=true; return; }
+      if(requireCategory && requireCategory.checked && t.dataset.category !== '1') { t.hidden=true; return; }
       t.hidden = false;
       visible++;
     });
@@ -225,7 +229,9 @@
       (filterType && filterType.value) ||
       (excludeFully && excludeFully.checked) ||
       (excludeExperimental && excludeExperimental.checked) ||
-      (requireGeo && requireGeo.checked)
+      (requireGeo && requireGeo.checked) ||
+      (requireTarget && requireTarget.checked) ||
+      (requireCategory && requireCategory.checked)
     );
 
     if (selectAllChecked && !anyFiltersActive) {
@@ -364,7 +370,7 @@
     clearTimeout(tHandle); tHandle = setTimeout(()=>{ updateSelectStates(); filter(); }, 100);
   }
 
-  [input, filterCountry, filterCity, filterYear, votesMin, votesMax, projectsMin, projectsMax, lenMin, lenMax, filterType, excludeFully, excludeExperimental, requireGeo]
+  [input, filterCountry, filterCity, filterYear, votesMin, votesMax, projectsMin, projectsMax, lenMin, lenMax, filterType, excludeFully, excludeExperimental, requireGeo, requireTarget, requireCategory]
     .forEach(el => el.addEventListener('input', debounced));
   orderBy.addEventListener('change', ()=>{ sortTiles(); visibleCount = 0; revealNext(); });
   orderDir.addEventListener('click', ()=>{
@@ -398,7 +404,9 @@
       filterType.value='';
       excludeFully.checked=false;
       excludeExperimental.checked=false;
-  if(requireGeo) requireGeo.checked=false;
+      if(requireGeo) requireGeo.checked=false;
+      if(requireTarget) requireTarget.checked=false;
+      if(requireCategory) requireCategory.checked=false;
       updateSelectStates();
       filter();
       input.focus();

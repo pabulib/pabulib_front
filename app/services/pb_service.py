@@ -83,6 +83,8 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 PBFile.instance,
                 PBFile.subunit,
                 PBFile.has_geo,
+                PBFile.has_category,
+                PBFile.has_target,
             )
             .filter(PBFile.is_current == True)  # noqa: E712
             .order_by(
@@ -120,6 +122,8 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
             instance,
             subunit,
             has_geo,
+            has_category,
+            has_target,
         ) = r
         tiles.append(
             {
@@ -159,6 +163,8 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 "unit_raw": unit or "",
                 "instance_raw": instance or "",
                 "has_geo": bool(has_geo),
+                "has_category": bool(has_category),
+                "has_target": bool(has_target),
             }
         )
 

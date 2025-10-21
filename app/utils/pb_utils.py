@@ -241,6 +241,8 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
     # Detect if PROJECTS section contains usable geographic coordinates.
     # Be robust to different header casings (e.g., Latitude/LATITUDE) and ensure values are numeric.
     has_geo = False
+    has_category = False
+    has_target = False
     try:
         if projects:
             # Helper: try to coerce a value to float using dot/comma decimal
@@ -277,14 +279,47 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
                         lon_val = _to_float(lower_map[lk])
                         if lon_val is not None:
                             break
-                if lat_val is None or lon_val is None:
-                    continue
-                # Basic sanity bounds check for lat/lon
-                if -90.0 <= lat_val <= 90.0 and -180.0 <= lon_val <= 180.0:
-                    has_geo = True
+                # Basic sanity bounds check for lat/lon (only if both present)
+                if lat_val is not None and lon_val is not None:
+                    if -90.0 <= lat_val <= 90.0 and -180.0 <= lon_val <= 180.0:
+                        has_geo = True
+                # Detect category/target presence (comma-separated or lists)
+                if not has_category:
+                    for ck in ("category", "categories"):
+                        if ck in lower_map:
+                            val = lower_map[ck]
+                            if isinstance(val, list):
+                                if any(str(x).strip() for x in val):
+                                    has_category = True
+                                    break
+                            else:
+                                s = str(val).strip()
+                                if s:
+                                    # Check at least one non-empty token
+                                    if any(part.strip() for part in s.split(",")):
+                                        has_category = True
+                                        break
+                if not has_target:
+                    for tk in ("target", "targets"):
+                        if tk in lower_map:
+                            val = lower_map[tk]
+                            if isinstance(val, list):
+                                if any(str(x).strip() for x in val):
+                                    has_target = True
+                                    break
+                            else:
+                                s = str(val).strip()
+                                if s:
+                                    if any(part.strip() for part in s.split(",")):
+                                        has_target = True
+                                        break
+                # If all flags are detected we can stop scanning further projects
+                if has_geo and has_category and has_target:
                     break
     except Exception:
         has_geo = False
+        has_category = False
+        has_target = False
 
     return {
         "file_name": pb_path.name,
@@ -312,4 +347,6 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
         "edition": edition,
         "language": language,
         "has_geo": has_geo,
+        "has_category": has_category,
+        "has_target": has_target,
     }
