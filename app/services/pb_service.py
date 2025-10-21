@@ -488,3 +488,75 @@ def get_current_file_path(filename: str) -> Optional[Path]:
     except Exception:
         return None
     return None
+
+
+def get_comment_usages(include_inactive: bool = True) -> List[Dict[str, Any]]:
+    """Return flat list of comment usages with file context for admin UI.
+
+    Each item contains:
+    - text: Comment text
+    - idx: 1-based index within the file's META section
+    - is_active: Whether the comment is active (comment belongs to current file version)
+    - file_name: PB filename
+    - country, unit, instance, subunit, year
+    - is_current: Whether the file is the current one for its group
+    - ingested_at: Timestamp the file was ingested
+    """
+    try:
+        with get_session() as s:
+            q = s.query(
+                PBComment.text,
+                PBComment.idx,
+                PBComment.is_active,
+                PBFile.file_name,
+                PBFile.country,
+                PBFile.unit,
+                PBFile.instance,
+                PBFile.subunit,
+                PBFile.year,
+                PBFile.is_current,
+                PBFile.ingested_at,
+            ).join(PBFile, PBFile.id == PBComment.file_id)
+            if not include_inactive:
+                q = q.filter(PBComment.is_active == True)  # noqa: E712
+            rows = q.order_by(
+                PBComment.is_active.desc(),
+                PBComment.text.asc(),
+                PBFile.country.asc(),
+                PBFile.unit.asc(),
+                PBFile.instance.asc(),
+                PBFile.file_name.asc(),
+            ).all()
+
+            out: List[Dict[str, Any]] = []
+            for (
+                text,
+                idx,
+                is_active,
+                file_name,
+                country,
+                unit,
+                instance,
+                subunit,
+                year,
+                is_current,
+                ingested_at,
+            ) in rows:
+                out.append(
+                    {
+                        "text": text or "",
+                        "idx": int(idx or 0),
+                        "is_active": bool(is_active),
+                        "file_name": file_name or "",
+                        "country": country or "",
+                        "unit": unit or "",
+                        "instance": instance or "",
+                        "subunit": subunit or "",
+                        "year": year,
+                        "is_current": bool(is_current),
+                        "ingested_at": ingested_at,
+                    }
+                )
+            return out
+    except Exception:
+        return []

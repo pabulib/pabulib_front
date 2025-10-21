@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+
+{% block bodyClass %}admin{% endblock %}
+{% block title %}Admin Comments{% endblock %}
+
+{% block body %}
+{% include 'admin/_navbar.html' %}
+<section class="max-w-7xl mx-auto px-4">
+  <div class="w-full bg-white rounded-lg shadow-lg p-8 mt-8">
+    <div class="flex items-baseline justify-between mb-6">
+      <h1 class="text-3xl font-bold text-slate-800">Admin – Comments usage</h1>
+      <div class="text-sm text-slate-500 flex items-center gap-3">
+        <span>Total: <strong>{{ total }}</strong></span>
+        {% if not active_only %}
+          <span class="ml-2 text-green-700">Active: <strong>{{ active_count }}</strong></span>
+          <span class="ml-2 text-slate-500">Inactive: <strong>{{ inactive_count }}</strong></span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="mb-4 flex items-center gap-3">
+      <form method="get" class="flex items-center gap-3">
+        <label class="inline-flex items-center gap-2 text-slate-700">
+          <input type="checkbox" name="active" value="1" {% if active_only %}checked{% endif %} onchange="this.form.submit()">
+          <span>Show active only</span>
+        </label>
+        <input id="searchBox" type="text" placeholder="Search text or file…" class="w-80 px-3 py-2 rounded-md border border-slate-300 focus:ring-2 focus:ring-indigo-500" oninput="filterTable()">
+      </form>
+    </div>
+
+    <div class="overflow-auto">
+      <table id="commentsTable" class="min-w-full border border-slate-200 text-sm">
+        <thead class="bg-slate-50 text-slate-600">
+          <tr>
+            <th class="px-3 py-2 text-left border-b border-slate-200">Status</th>
+            <th class="px-3 py-2 text-left border-b border-slate-200">Comment</th>
+            <th class="px-3 py-2 text-left border-b border-slate-200">#</th>
+            <th class="px-3 py-2 text-left border-b border-slate-200">File</th>
+            <th class="px-3 py-2 text-left border-b border-slate-200">Country</th>
+            <th class="px-3 py-2 text-left border-b border-slate-200">Unit</th>
+            <th class="px-3 py-2 text-left border-b border-slate-200">Instance</th>
+            <th class="px-3 py-2 text-left border-b border-slate-200">Year</th>
+            <th class="px-3 py-2 text-left border-b border-slate-200">Ingested</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr class="border-b border-slate-100">
+            <td class="px-3 py-2 whitespace-nowrap">
+              {% if r.is_active %}
+                <span class="inline-flex items-center gap-1 text-green-700">
+                  <span class="w-2 h-2 rounded-full bg-green-500"></span> active
+                </span>
+              {% else %}
+                <span class="inline-flex items-center gap-1 text-slate-500">
+                  <span class="w-2 h-2 rounded-full bg-slate-400"></span> inactive
+                </span>
+              {% endif %}
+            </td>
+            <td class="px-3 py-2 max-w-3xl">
+              <div class="text-slate-800">{{ r.text }}</div>
+            </td>
+            <td class="px-3 py-2">{{ r.idx }}</td>
+            <td class="px-3 py-2 font-mono text-xs">{{ r.file_name }}</td>
+            <td class="px-3 py-2">{{ r.country }}</td>
+            <td class="px-3 py-2">{{ r.unit }}</td>
+            <td class="px-3 py-2">{{ r.instance }}</td>
+            <td class="px-3 py-2">{{ r.year if r.year is not none else '—' }}</td>
+            <td class="px-3 py-2 whitespace-nowrap">{{ r.ingested_at.strftime('%Y-%m-%d') if r.ingested_at else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<script>
+function filterTable() {
+  const q = document.getElementById('searchBox').value.toLowerCase();
+  const rows = document.querySelectorAll('#commentsTable tbody tr');
+  rows.forEach(tr => {
+    const text = tr.children[1].innerText.toLowerCase();
+    const file = tr.children[3].innerText.toLowerCase();
+    tr.style.display = (text.includes(q) || file.includes(q)) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

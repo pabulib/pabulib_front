@@ -28,8 +28,9 @@ from werkzeug.security import check_password_hash
 from werkzeug.utils import secure_filename
 
 from .db import get_session
-from .models import AdminUser, PBFile
+from .models import AdminUser, PBComment, PBFile
 from .services import export_service, pb_service
+from .services.pb_service import get_comment_usages as _get_comment_usages
 from .utils.formatting import format_budget as _format_budget
 from .utils.formatting import format_int as _format_int
 from .utils.formatting import format_vote_length as _format_vote_length
@@ -255,6 +256,27 @@ def admin_deleted():
         count=len(files),
         message=msg,
         success=success,
+    )
+
+
+@bp.route("/admin/comments")
+def admin_comments():
+    # Optional filter: only active comments
+    active_only = request.args.get("active") in {"1", "true", "True"}
+    rows = _get_comment_usages(include_inactive=not active_only)
+    total = len(rows)
+    active_count = (
+        sum(1 for r in rows if r.get("is_active")) if not active_only else total
+    )
+    inactive_count = total - active_count if not active_only else 0
+
+    return render_template(
+        "admin/comments.html",
+        rows=rows,
+        total=total,
+        active_only=active_only,
+        active_count=active_count,
+        inactive_count=inactive_count,
     )
 
 
@@ -984,6 +1006,31 @@ def upload_tiles_ingest():
                 group_key=group_key,
             )
             s.add(rec)
+            s.flush()  # ensure rec.id is available
+
+            # Insert comments for the new record (active)
+            try:
+                comments = tile.get("comments") or []
+                for idx_c, text in enumerate(comments, start=1):
+                    if not text:
+                        continue
+                    s.add(
+                        PBComment(
+                            file_id=rec.id, idx=idx_c, text=str(text), is_active=True
+                        )
+                    )
+            except Exception:
+                # Do not fail the upload if comment insert has an issue
+                pass
+
+            # Deactivate comments from the previous current version (if any)
+            if prev:
+                try:
+                    s.query(PBComment).filter(PBComment.file_id == prev.id).update(
+                        {PBComment.is_active: False}, synchronize_session=False
+                    )
+                except Exception:
+                    pass
     except Exception as e:
         logger.exception("DB error while ingesting %s", name)
         if request.headers.get("X-Requested-With") == "fetch" or request.is_json:
@@ -1583,6 +1630,13 @@ def admin_delete_file():
                 if archived:
                     rec.path = archived
                 deleted_records += 1
+                # Deactivate comments associated with this record
+                try:
+                    s.query(PBComment).filter(PBComment.file_id == rec.id).update(
+                        {PBComment.is_active: False}, synchronize_session=False
+                    )
+                except Exception:
+                    pass
             except Exception as e:
                 current_app.logger.exception(
                     "Archival failed during single delete for %s (id=%s)",
@@ -1688,6 +1742,13 @@ def admin_delete_files_bulk():
                     name_had_success = True
                 except Exception as e:
                     errors.append({"name": name, "error": f"Failed to update DB: {e}"})
+                # Deactivate comments for each record being deleted
+                try:
+                    s.query(PBComment).filter(PBComment.file_id == rec.id).update(
+                        {PBComment.is_active: False}, synchronize_session=False
+                    )
+                except Exception:
+                    pass
             if name_had_success:
                 deleted_names += 1
     try:
@@ -1931,6 +1992,29 @@ def admin_replace_file():
             group_key=group_key or "",
         )
         s.add(new_rec)
+        s.flush()
+
+        # Insert comments for the replacement record (active)
+        try:
+            comments = tile.get("comments") or []
+            for idx_c, text in enumerate(comments, start=1):
+                if not text:
+                    continue
+                s.add(
+                    PBComment(
+                        file_id=new_rec.id, idx=idx_c, text=str(text), is_active=True
+                    )
+                )
+        except Exception:
+            pass
+
+        # Deactivate comments for the old record
+        try:
+            s.query(PBComment).filter(PBComment.file_id == existing_rec.id).update(
+                {PBComment.is_active: False}, synchronize_session=False
+            )
+        except Exception:
+            pass
 
     try:
         pb_service.invalidate_caches()

@@ -17,6 +17,10 @@
              class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors {{ 'bg-slate-900 text-white' if request.path == url_for('admin.admin_deleted') else 'text-slate-700 hover:bg-slate-100' }}">
             Deleted
           </a>
+          <a href="{{ url_for('admin.admin_comments') }}"
+             class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors {{ 'bg-slate-900 text-white' if request.path == url_for('admin.admin_comments') else 'text-slate-700 hover:bg-slate-100' }}">
+            Comments
+          </a>
           <a href="{{ url_for('admin.admin_export_index') }}"
              class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors {{ 'bg-slate-900 text-white' if request.path == url_for('admin.admin_export_index') else 'text-slate-700 hover:bg-slate-100' }}">
             Export
