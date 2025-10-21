@@ -959,9 +959,10 @@ def download_selected():
         except Exception:
             latest_export = None
         if latest_export is not None:
-            return send_file(
-                latest_export, as_attachment=True, download_name=latest_export.name
-            )
+            # Add current timestamp to the download name at time of download
+            ts_download = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            dl_name = f"all_pb_files_{ts_download}.zip"
+            return send_file(latest_export, as_attachment=True, download_name=dl_name)
 
         # 2) No timestamped export found; build a fresh timestamped export now
         all_file_pairs = get_all_current_file_paths()
@@ -977,7 +978,9 @@ def download_selected():
         with zipfile.ZipFile(out_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
             for file_name, file_path in all_file_pairs:
                 zf.write(file_path, arcname=file_name)
-        return send_file(out_zip, as_attachment=True, download_name=out_zip.name)
+        ts_download = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        dl_name = f"all_pb_files_{ts_download}.zip"
+        return send_file(out_zip, as_attachment=True, download_name=dl_name)
 
     # Original logic for individual file selection
     files = []
@@ -1067,7 +1070,10 @@ def download_selected_start():
         else:
             # 2) Build on the fly (do not use root-level canonical cache)
             file_pairs = [(name, path) for name, path in all_file_pairs]
-        download_name = "all_pb_files.zip"
+        # Use current timestamp in the suggested download name for the 'all' download
+        download_name = (
+            f"all_pb_files_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.zip"
+        )
     else:
         # Either: exclude-mode (select all minus excludes) OR explicit list of names
         if select_all and excludes:
@@ -1181,7 +1187,9 @@ def handle_large_request(e):
             except Exception:
                 latest_export = None
             token = uuid.uuid4().hex
-            download_name = "all_pb_files.zip"
+            download_name = (
+                f"all_pb_files_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.zip"
+            )
             if latest_export is not None:
                 _write_progress(
                     token,
