@@ -185,6 +185,7 @@ from .services.pb_service import get_tiles_cached as _get_tiles_cached
 from .utils.file_helpers import is_safe_filename as _is_safe_filename
 from .utils.formatting import format_int as _format_int
 from .utils.load_pb_file import parse_pb_lines
+from .utils.pb_utils import parse_comments_from_meta as _parse_comments_from_meta
 from .utils.pb_utils import parse_pb_to_tile as _parse_pb_to_tile
 from .utils.upload_security import is_allowed_extension as _is_allowed_ext
 from .utils.upload_security import is_probably_text_file as _is_probably_text_file
@@ -1328,7 +1329,18 @@ def preview_file(filename: str):
         abort(400, description=f"Failed to parse file: {e}")
 
     # Prepare META as list of (key, value) sorted with some preferred keys on top
-    meta_items = list(meta.items())
+    # Ensure comments are split using the same logic as elsewhere (#n: ...)
+    meta_processed: Dict[str, Any] = dict(meta)
+    try:
+        _comments = _parse_comments_from_meta(meta)
+        if _comments:
+            meta_processed["comment"] = [
+                f"#{i+1}: {txt}" for i, txt in enumerate(_comments)
+            ]
+    except Exception:
+        # Fallback: leave original comment value as-is
+        pass
+    meta_items = list(meta_processed.items())
     preferred_meta = [
         "country",
         "unit",

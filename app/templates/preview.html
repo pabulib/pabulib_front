@@ -51,7 +51,18 @@
           {% for k, v in meta_items %}
             <tr>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ k }}</td>
-              <td class="px-6 py-4 text-sm text-gray-700">{{ v }}</td>
+              <td class="px-6 py-4 text-sm text-gray-700">
+                {# Render comments as multiple lines when preprocessed into a list #}
+                {% if k == 'comment' and v and (v is sequence) and not (v is string) %}
+                  <div class="space-y-1">
+                    {% for c in v %}
+                      <div class="break-words">{{ c }}</div>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  {{ v }}
+                {% endif %}
+              </td>
             </tr>
           {% endfor %}
           </tbody>
