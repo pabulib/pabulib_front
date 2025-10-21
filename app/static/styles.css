@@ -370,45 +370,45 @@ html{overflow-x:hidden}
 
 /* Tiny collapsible note under filters */
 .micro-note{
-  margin-top:6px;
+  margin-top:4px;
   background:#f8f9fb;
   border:1px solid #e2e8f0;
-  border-radius:5px;
-  padding:4px 8px;
+  border-radius:4px;
+  padding:3px 6px;
 }
 .micro-note summary{
   cursor:pointer;
   color:#065aa0;
-  font-size:10px;
+  font-size:9px;
   font-weight:600;
   list-style:none;
   display:flex;
   align-items:center;
-  gap:3px;
+  gap:2px;
 }
 .micro-note summary::before{
   content:"ℹ️";
-  font-size:11px;
+  font-size:10px;
 }
 .micro-note summary::-webkit-details-marker{
   display:none;
 }
 .micro-note div{
-  font-size:10px;
+  font-size:9px;
   color:var(--muted);
-  margin-top:4px;
+  margin-top:3px;
   line-height:1.2;
 }
 .micro-note .formula{
   font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; 
   color:#2b3a55;
   background:#fff;
-  padding:2px 4px;
+  padding:2px 3px;
   border-radius:2px;
   border:1px solid #e2e8f0;
   display:inline-block;
   margin-top:2px;
-  font-size:9px;
+  font-size:8px;
 }
 
 /* Minimal utility classes for content pages */
