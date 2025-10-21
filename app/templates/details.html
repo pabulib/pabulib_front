@@ -1,0 +1,189 @@
+{% extends 'base.html' %}
+
+{% block bodyClass %}details{% endblock %}
+{% block title %}Pabulib – Details{% endblock %}
+
+{% block body %}
+<section class="max-w-5xl mx-auto px-4">
+  <div class="flex justify-center">
+    <div class="w-full max-w-5xl bg-white rounded-lg shadow-lg p-8 mt-8 mb-32">
+      <div class="flex items-baseline justify-between mb-6">
+        <h1 class="text-3xl font-bold text-slate-800">Details</h1>
+        <div class="text-sm text-gray-500">Explore comments, categories and targets used across the library</div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex items-center gap-2 mb-6">
+        {% set tabs = [
+          {'id':'comments','label':'Comments','desc':'from META.comment, split by #n:'},
+          {'id':'categories','label':'Categories','desc':'from PROJECTS.category/categories'},
+          {'id':'targets','label':'Targets','desc':'from PROJECTS.target/targets'},
+        ] %}
+        {% for t in tabs %}
+          <a href="{{ url_for('main.details_page') }}?tab={{ t.id }}" class="px-3 py-1.5 rounded-md text-sm border transition-colors {{ 'bg-indigo-600 text-white border-indigo-600' if tab==t.id else 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50' }}">{{ t.label }}</a>
+        {% endfor %}
+        <span class="ml-3 text-xs text-gray-500">
+          {% if tab=='comments' %}{{ total_comments }} items{% elif tab=='categories' %}{{ total_categories }} items{% else %}{{ total_targets }} items{% endif %}
+        </span>
+      </div>
+
+      {% if tab=='comments' %}
+        {% set rows = rows_comments %}
+        {% set groups_country = groups_comments_country %}
+        {% set groups_country_unit = groups_comments_country_unit %}
+        {% set groups_country_unit_instance = groups_comments_country_unit_instance %}
+        <p class="text-gray-600 mb-4">Parsed from META key <code class="bg-gray-100 px-2 py-1 rounded text-sm">comment</code> using pattern <code class="bg-gray-100 px-2 py-1 rounded text-sm">#n:</code> segments. Showing how many PB files share each comment.</p>
+      {% elif tab=='categories' %}
+        {% set rows = rows_categories %}
+        {% set groups_country = groups_categories_country %}
+        {% set groups_country_unit = groups_categories_country_unit %}
+        {% set groups_country_unit_instance = groups_categories_country_unit_instance %}
+        <p class="text-gray-600 mb-4">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">PROJECTS.category/categories</code> (comma-separated or lists). Grouped by distinct token per file.</p>
+      {% else %}
+        {% set rows = rows_targets %}
+        {% set groups_country = groups_targets_country %}
+        {% set groups_country_unit = groups_targets_country_unit %}
+        {% set groups_country_unit_instance = groups_targets_country_unit_instance %}
+        <p class="text-gray-600 mb-4">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">PROJECTS.target/targets</code> (comma-separated or lists). Grouped by distinct token per file.</p>
+      {% endif %}
+
+      <div class="overflow-x-auto">
+        <table class="min-w-full bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-b border-gray-200" style="width:45%">{{ 'Comment' if tab=='comments' else ( 'Category' if tab=='categories' else 'Target' ) }}</th>
+              <th class="px-4 py-4 text-center text-sm font-semibold text-gray-700 border-b border-gray-200" style="width:10%"># files</th>
+              <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-b border-gray-200" style="width:45%">
+                <div class="flex items-center gap-3">
+                  <span>Files</span>
+                  <label class="flex items-center gap-2 text-xs font-normal text-gray-500">
+                    Group by
+                    <select id="groupMode" class="text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-700">
+                      <option value="none">None</option>
+                      <option value="country">Country</option>
+                      <option value="country_unit" selected>Country + Unit</option>
+                      <option value="country_unit_instance">Country + Unit + Instance</option>
+                    </select>
+                  </label>
+                </div>
+              </th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200">
+            {% for label, count, files in rows %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-sm text-gray-900">{{ label }}</td>
+              <td class="px-4 py-4 text-center">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800">{{ count }}</span>
+              </td>
+              <td class="px-6 py-4">
+                {% set preview = files[:5] %}
+                <div class="files-cell">
+                  <div class="file-list text-sm"
+                    data-files='{{ files|tojson|e }}'
+                    data-groups-country='{{ (groups_country.get(label) or [])|tojson|e }}'
+                    data-groups-country-unit='{{ (groups_country_unit.get(label) or [])|tojson|e }}'
+                    data-groups-country-unit-instance='{{ (groups_country_unit_instance.get(label) or [])|tojson|e }}'
+                    data-expanded="0"></div>
+                  {% if files|length > preview|length %}
+                    <button type="button" class="mt-2 px-3 py-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 btn-expand" aria-label="Show all files" aria-expanded="false">+ Show more</button>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+// Expand/collapse and grouping behavior (reused from comments)
+(function(){
+  const PREVIEW_COUNT = 5;
+  function getGroupMode(){ const el = document.getElementById('groupMode'); return el ? el.value : 'none'; }
+  function renderFilesFlat(container, files, expanded){
+    if(expanded){
+      container.innerHTML = files.map(f => `<span class="file-item">${f}</span>`).join('');
+      container.dataset.expanded = '1';
+    } else {
+      const rest = Math.max(files.length - PREVIEW_COUNT, 0);
+      const preview = files.slice(0, PREVIEW_COUNT).map(f => `<span class="file-item">${f}</span>`).join('');
+      const more = rest > 0 ? `<span class="more-count text-muted">+ ${rest} more</span>` : '';
+      container.innerHTML = preview + more;
+      container.dataset.expanded = '0';
+    }
+  }
+  function renderFilesGrouped(container, groups, expanded){
+    let html = '';
+    const toRender = expanded ? groups : groups.slice(0, 3);
+    toRender.forEach(g => {
+      const list = (expanded ? g.files : g.files.slice(0, Math.max(2, Math.ceil(PREVIEW_COUNT/Math.max(1, toRender.length)))));
+      html += `<div class="group">
+        <div class="group-head"><span class="group-label">${g.label || '—'}</span><span class="group-count">${g.count}</span></div>
+        <div class="group-files">${list.map(f=>`<span class=\"file-item\">${f}</span>`).join('')}</div>
+      </div>`;
+    });
+    if(!expanded){
+      const restGroups = Math.max(groups.length - toRender.length, 0);
+      if(restGroups > 0){ html += `<span class="more-count text-muted">+ ${restGroups} more groups</span>`; }
+    }
+    container.innerHTML = html;
+    container.dataset.expanded = expanded ? '1' : '0';
+  }
+  function render(container, expanded){
+    let files = [], groups = [];
+    try{ files = JSON.parse(container.getAttribute('data-files')||'[]') || []; }catch(e){ files=[]; }
+    const mode = getGroupMode();
+    if(mode === 'country'){
+      try{ groups = JSON.parse(container.getAttribute('data-groups-country')||'[]') || []; }catch(e){ groups=[]; }
+    }else if(mode === 'country_unit'){
+      try{ groups = JSON.parse(container.getAttribute('data-groups-country-unit')||'[]') || []; }catch(e){ groups=[]; }
+    }else if(mode === 'country_unit_instance'){
+      try{ groups = JSON.parse(container.getAttribute('data-groups-country-unit-instance')||'[]') || []; }catch(e){ groups=[]; }
+    }else{
+      groups = [];
+    }
+    const grouped = (mode !== 'none') && groups && groups.length;
+    if(grouped){ renderFilesGrouped(container, groups, expanded); } else { renderFilesFlat(container, files, expanded); }
+  }
+  document.querySelectorAll('.file-list').forEach(el => render(el, false));
+  addEventListener('change', (e)=>{
+    if(e.target && e.target.id === 'groupMode'){
+      document.querySelectorAll('.file-list').forEach(el => {
+        const expanded = el.dataset.expanded === '1';
+        render(el, expanded);
+      });
+    }
+  });
+  addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-expand');
+    if (!btn) return;
+    const wrap = btn.closest('.files-cell');
+    const container = wrap && wrap.querySelector('.file-list');
+    if (!container) return;
+    const expanded = container.dataset.expanded === '1';
+    render(container, !expanded);
+    const nowExpanded = container.dataset.expanded === '1';
+    btn.textContent = nowExpanded ? '-' : '+';
+    btn.setAttribute('aria-label', nowExpanded ? 'Show fewer files' : 'Show all files');
+    btn.setAttribute('aria-expanded', nowExpanded ? 'true' : 'false');
+  });
+})();
+</script>
+
+<style>
+.files-cell { display: flex; flex-direction: column; align-items: flex-start; max-width: 100%; }
+.file-list { display: block; max-width: 100%; line-height: 1.4; }
+.file-item { display: inline-block; margin-right: 8px; margin-bottom: 4px; padding: 2px 8px; background: #f3f4f6; border-radius: 4px; font-size: 12px; color: #374151; border: 1px solid #e5e7eb; }
+.more-count { display: block; margin-top: 4px; font-size: 12px; color: #6b7280; font-style: italic; }
+.group { margin-bottom: 12px; padding: 8px; background: #f9fafb; border-radius: 6px; border: 1px solid #e5e7eb; }
+.group-head { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #4b5563; margin-bottom: 6px; font-weight: 500; }
+.group-label { font-weight: 600; color: #374151; }
+.group-count { background: #dbeafe; color: #1e40af; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 500; }
+.group-files { margin-left: 0; }
+</style>
+{% include 'footer.html' %}
+{% endblock %}

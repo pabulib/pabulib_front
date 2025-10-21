@@ -28,10 +28,14 @@ from .db import get_session
 from .models import PBFile
 from .routes_admin import _format_preview_tile  # reuse tile formatting
 from .routes_admin import _load_upload_settings  # reuse limits
+from .services.pb_service import (
+    aggregate_categories_cached as _aggregate_categories_cached,
+)
 from .services.pb_service import aggregate_comments_cached as _aggregate_comments_cached
 from .services.pb_service import (
     aggregate_statistics_cached as _aggregate_statistics_cached,
 )
+from .services.pb_service import aggregate_targets_cached as _aggregate_targets_cached
 from .services.pb_service import get_all_current_file_paths, get_current_file_path
 
 # Simple in-memory registry for zip jobs; zip files and progress json live on disk
@@ -875,6 +879,61 @@ def comments_page():
         groups_by_comment_country_unit=groups_by_comment_country_unit,
         groups_by_comment_country_unit_instance=groups_by_comment_country_unit_instance,
         total=len(rows),
+    )
+
+
+@bp.route("/details")
+def details_page():
+    tab = (request.args.get("tab") or "comments").strip().lower()
+    if tab not in {"comments", "categories", "targets"}:
+        tab = "comments"
+
+    # Always compute all three so tab switch is instant without extra calls
+    (
+        _map_cmt,
+        rows_comments,
+        groups_comments_country,
+        groups_comments_country_unit,
+        groups_comments_country_unit_instance,
+    ) = _aggregate_comments_cached()
+
+    (
+        _map_cat,
+        rows_categories,
+        groups_categories_country,
+        groups_categories_country_unit,
+        groups_categories_country_unit_instance,
+    ) = _aggregate_categories_cached()
+
+    (
+        _map_tgt,
+        rows_targets,
+        groups_targets_country,
+        groups_targets_country_unit,
+        groups_targets_country_unit_instance,
+    ) = _aggregate_targets_cached()
+
+    return render_template(
+        "details.html",
+        tab=tab,
+        # comments
+        rows_comments=rows_comments,
+        groups_comments_country=groups_comments_country,
+        groups_comments_country_unit=groups_comments_country_unit,
+        groups_comments_country_unit_instance=groups_comments_country_unit_instance,
+        total_comments=len(rows_comments),
+        # categories
+        rows_categories=rows_categories,
+        groups_categories_country=groups_categories_country,
+        groups_categories_country_unit=groups_categories_country_unit,
+        groups_categories_country_unit_instance=groups_categories_country_unit_instance,
+        total_categories=len(rows_categories),
+        # targets
+        rows_targets=rows_targets,
+        groups_targets_country=groups_targets_country,
+        groups_targets_country_unit=groups_targets_country_unit,
+        groups_targets_country_unit_instance=groups_targets_country_unit_instance,
+        total_targets=len(rows_targets),
     )
 
 

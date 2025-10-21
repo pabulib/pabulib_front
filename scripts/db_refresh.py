@@ -27,7 +27,7 @@ from typing import Any, Dict, List
 from sqlalchemy.exc import OperationalError
 
 from app.db import Base, engine, get_session
-from app.models import PBComment, PBFile, RefreshState
+from app.models import PBCategory, PBComment, PBFile, PBTarget, RefreshState
 from app.services import export_service
 from app.services.pb_service import invalidate_caches as _invalidate_pb_caches
 from app.utils.load_pb_file import parse_pb_lines
@@ -122,7 +122,11 @@ def save_refresh_timestamp(kind: str, when: datetime) -> None:
         rs.last_completed_at = when
 
 
-def ingest_file(p: Path) -> tuple[PBFile, list[str]]:
+def ingest_file(
+    p: Path,
+) -> tuple[
+    PBFile, list[str], dict[str, int], dict[str, int], dict[str, str], dict[str, str]
+]:
     lines = read_file_lines(p)
     meta, projects, votes, _vip, _sip = parse_pb_lines(lines)
     tile = parse_pb_to_tile(p)
@@ -165,7 +169,12 @@ def ingest_file(p: Path) -> tuple[PBFile, list[str]]:
         group_key=group_key,
     )
     comments = _parse_comments_from_meta(meta)
-    return record, comments
+    # Extract per-file category/target token counts from tile (computed in parse_pb_to_tile)
+    cat_counts: dict[str, int] = tile.get("categories_counts") or {}
+    tgt_counts: dict[str, int] = tile.get("targets_counts") or {}
+    cat_display: dict[str, str] = tile.get("categories_display") or {}
+    tgt_display: dict[str, str] = tile.get("targets_display") or {}
+    return record, comments, cat_counts, tgt_counts, cat_display, tgt_display
 
 
 def mark_group_current(s, group_key: str) -> None:
@@ -215,7 +224,9 @@ def refresh(full: bool = False) -> Dict[str, Any]:
                 continue
             try:
                 print(f"[LOAD] {idx}/{total} {p.name}", flush=True)
-                rec, comments = ingest_file(p)
+                rec, comments, cat_counts, tgt_counts, cat_disp, tgt_disp = ingest_file(
+                    p
+                )
                 # Link supersedes when same group exists current
                 prev: PBFile | None = (
                     s.query(PBFile)
@@ -233,11 +244,43 @@ def refresh(full: bool = False) -> Dict[str, Any]:
                     s.add(
                         PBComment(file_id=rec.id, idx=idx_c, text=text, is_active=True)
                     )
+                # Insert categories/targets for this version (default active)
+                for norm, cnt in (cat_counts or {}).items():
+                    norm_str = str(norm).strip().lower()
+                    if norm_str:
+                        display = (cat_disp or {}).get(norm_str, norm_str)
+                        s.add(
+                            PBCategory(
+                                file_id=rec.id,
+                                value=str(display),
+                                norm=norm_str,
+                                count_in_file=int(cnt or 1),
+                                is_active=True,
+                            )
+                        )
+                for norm, cnt in (tgt_counts or {}).items():
+                    norm_str = str(norm).strip().lower()
+                    if norm_str:
+                        display = (tgt_disp or {}).get(norm_str, norm_str)
+                        s.add(
+                            PBTarget(
+                                file_id=rec.id,
+                                value=str(display),
+                                norm=norm_str,
+                                count_in_file=int(cnt or 1),
+                                is_active=True,
+                            )
+                        )
                 groups_touched.add(rec.group_key)
                 processed += 1
                 print(f"[OK]   {idx}/{total} {p.name}", flush=True)
             except Exception as e:
                 failed += 1
+                # Ensure session is usable for next iterations
+                try:
+                    s.rollback()
+                except Exception:
+                    pass
                 print(f"[ERR]  {idx}/{total} {p.name} -> {e}", flush=True)
 
         # Enforce current per touched group
@@ -260,6 +303,14 @@ def refresh(full: bool = False) -> Dict[str, Any]:
                         {PBComment.is_active: bool(f.is_current)},
                         synchronize_session=False,
                     )
+                    s.query(PBCategory).filter(PBCategory.file_id == f.id).update(
+                        {PBCategory.is_active: bool(f.is_current)},
+                        synchronize_session=False,
+                    )
+                    s.query(PBTarget).filter(PBTarget.file_id == f.id).update(
+                        {PBTarget.is_active: bool(f.is_current)},
+                        synchronize_session=False,
+                    )
 
         # Deactivate current files (and comments) whose source files disappeared
         present_names = {p.name for p in files}
@@ -273,6 +324,12 @@ def refresh(full: bool = False) -> Dict[str, Any]:
             mf.is_current = False
             s.query(PBComment).filter(PBComment.file_id == mf.id).update(
                 {PBComment.is_active: False}, synchronize_session=False
+            )
+            s.query(PBCategory).filter(PBCategory.file_id == mf.id).update(
+                {PBCategory.is_active: False}, synchronize_session=False
+            )
+            s.query(PBTarget).filter(PBTarget.file_id == mf.id).update(
+                {PBTarget.is_active: False}, synchronize_session=False
             )
 
     save_refresh_timestamp("pb", now)

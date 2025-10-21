@@ -243,6 +243,13 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
     has_geo = False
     has_category = False
     has_target = False
+    # Collect unique category/target tokens and their counts per file
+    # Use normalized keys (lowercased, trimmed) for uniqueness per file to avoid duplicates like
+    # "Groen en Duurzaamheid" vs "groen en duurzaamheid".
+    category_counts: dict[str, int] = {}
+    category_display: dict[str, str] = {}
+    target_counts: dict[str, int] = {}
+    target_display: dict[str, str] = {}
     try:
         if projects:
             # Helper: try to coerce a value to float using dot/comma decimal
@@ -283,39 +290,43 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
                 if lat_val is not None and lon_val is not None:
                     if -90.0 <= lat_val <= 90.0 and -180.0 <= lon_val <= 180.0:
                         has_geo = True
-                # Detect category/target presence (comma-separated or lists)
-                if not has_category:
-                    for ck in ("category", "categories"):
-                        if ck in lower_map:
-                            val = lower_map[ck]
-                            if isinstance(val, list):
-                                if any(str(x).strip() for x in val):
-                                    has_category = True
-                                    break
-                            else:
-                                s = str(val).strip()
-                                if s:
-                                    # Check at least one non-empty token
-                                    if any(part.strip() for part in s.split(",")):
-                                        has_category = True
-                                        break
-                if not has_target:
-                    for tk in ("target", "targets"):
-                        if tk in lower_map:
-                            val = lower_map[tk]
-                            if isinstance(val, list):
-                                if any(str(x).strip() for x in val):
-                                    has_target = True
-                                    break
-                            else:
-                                s = str(val).strip()
-                                if s:
-                                    if any(part.strip() for part in s.split(",")):
-                                        has_target = True
-                                        break
+                # Detect category/target presence and collect tokens (comma-separated or lists)
+                for ck in ("category", "categories"):
+                    if ck in lower_map:
+                        val = lower_map[ck]
+                        tokens: list[str] = []
+                        if isinstance(val, list):
+                            tokens = [str(x).strip() for x in val if str(x).strip()]
+                        else:
+                            s = str(val).strip()
+                            if s:
+                                tokens = [t.strip() for t in s.split(",") if t.strip()]
+                        for t in tokens:
+                            has_category = True
+                            norm = t.lower()
+                            if norm not in category_display:
+                                category_display[norm] = t
+                            category_counts[norm] = category_counts.get(norm, 0) + 1
+                for tk in ("target", "targets"):
+                    if tk in lower_map:
+                        val = lower_map[tk]
+                        tokens: list[str] = []
+                        if isinstance(val, list):
+                            tokens = [str(x).strip() for x in val if str(x).strip()]
+                        else:
+                            s = str(val).strip()
+                            if s:
+                                tokens = [t.strip() for t in s.split(",") if t.strip()]
+                        for t in tokens:
+                            has_target = True
+                            norm = t.lower()
+                            if norm not in target_display:
+                                target_display[norm] = t
+                            target_counts[norm] = target_counts.get(norm, 0) + 1
                 # If all flags are detected we can stop scanning further projects
                 if has_geo and has_category and has_target:
-                    break
+                    # don't break early anymore; we want full token sets across projects
+                    pass
     except Exception:
         has_geo = False
         has_category = False
@@ -349,4 +360,13 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
         "has_geo": has_geo,
         "has_category": has_category,
         "has_target": has_target,
+        # Provide collected tokens for ingestion/aggregation.
+        # categories/targets arrays are human-friendly display values (first seen per norm).
+        "categories": sorted(category_display.values(), key=lambda s: s.lower()),
+        "targets": sorted(target_display.values(), key=lambda s: s.lower()),
+        # counts keyed by normalized token; display maps normalized -> representative value
+        "categories_counts": category_counts,
+        "targets_counts": target_counts,
+        "categories_display": category_display,
+        "targets_display": target_display,
     }

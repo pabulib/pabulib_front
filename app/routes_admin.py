@@ -28,7 +28,7 @@ from werkzeug.security import check_password_hash
 from werkzeug.utils import secure_filename
 
 from .db import get_session
-from .models import AdminUser, PBComment, PBFile
+from .models import AdminUser, PBCategory, PBComment, PBFile, PBTarget
 from .services import export_service, pb_service
 from .services.pb_service import get_comment_usages as _get_comment_usages
 from .utils.formatting import format_budget as _format_budget
@@ -1027,11 +1027,63 @@ def upload_tiles_ingest():
                 # Do not fail the upload if comment insert has an issue
                 pass
 
+            # Insert categories/targets for the new record (active)
+            try:
+                # categories: counts keyed by normalized token; use display map for value
+                cat_counts = tile.get("categories_counts") or {}
+                cat_disp = tile.get("categories_display") or {}
+                for norm, cnt in cat_counts.items():
+                    norm_str = str(norm).strip().lower()
+                    if not norm_str:
+                        continue
+                    display = cat_disp.get(norm_str, norm_str)
+                    s.add(
+                        PBCategory(
+                            file_id=rec.id,
+                            value=str(display),
+                            norm=norm_str,
+                            count_in_file=int(cnt or 1),
+                            is_active=True,
+                        )
+                    )
+                # targets
+                tgt_counts = tile.get("targets_counts") or {}
+                tgt_disp = tile.get("targets_display") or {}
+                for norm, cnt in tgt_counts.items():
+                    norm_str = str(norm).strip().lower()
+                    if not norm_str:
+                        continue
+                    display = tgt_disp.get(norm_str, norm_str)
+                    s.add(
+                        PBTarget(
+                            file_id=rec.id,
+                            value=str(display),
+                            norm=norm_str,
+                            count_in_file=int(cnt or 1),
+                            is_active=True,
+                        )
+                    )
+            except Exception:
+                # non-fatal if categories/targets fail to insert
+                pass
+
             # Deactivate comments from the previous current version (if any)
             if prev:
                 try:
                     s.query(PBComment).filter(PBComment.file_id == prev.id).update(
                         {PBComment.is_active: False}, synchronize_session=False
+                    )
+                except Exception:
+                    pass
+                try:
+                    s.query(PBCategory).filter(PBCategory.file_id == prev.id).update(
+                        {PBCategory.is_active: False}, synchronize_session=False
+                    )
+                except Exception:
+                    pass
+                try:
+                    s.query(PBTarget).filter(PBTarget.file_id == prev.id).update(
+                        {PBTarget.is_active: False}, synchronize_session=False
                     )
                 except Exception:
                     pass
@@ -2014,10 +2066,60 @@ def admin_replace_file():
         except Exception:
             pass
 
+        # Insert categories/targets for the replacement record (active)
+        try:
+            cat_counts = tile.get("categories_counts") or {}
+            cat_disp = tile.get("categories_display") or {}
+            for norm, cnt in cat_counts.items():
+                norm_str = str(norm).strip().lower()
+                if not norm_str:
+                    continue
+                display = cat_disp.get(norm_str, norm_str)
+                s.add(
+                    PBCategory(
+                        file_id=new_rec.id,
+                        value=str(display),
+                        norm=norm_str,
+                        count_in_file=int(cnt or 1),
+                        is_active=True,
+                    )
+                )
+            tgt_counts = tile.get("targets_counts") or {}
+            tgt_disp = tile.get("targets_display") or {}
+            for norm, cnt in tgt_counts.items():
+                norm_str = str(norm).strip().lower()
+                if not norm_str:
+                    continue
+                display = tgt_disp.get(norm_str, norm_str)
+                s.add(
+                    PBTarget(
+                        file_id=new_rec.id,
+                        value=str(display),
+                        norm=norm_str,
+                        count_in_file=int(cnt or 1),
+                        is_active=True,
+                    )
+                )
+        except Exception:
+            pass
+
         # Deactivate comments for the old record
         try:
             s.query(PBComment).filter(PBComment.file_id == existing_rec.id).update(
                 {PBComment.is_active: False}, synchronize_session=False
+            )
+        except Exception:
+            pass
+        # Deactivate categories/targets for the old record
+        try:
+            s.query(PBCategory).filter(PBCategory.file_id == existing_rec.id).update(
+                {PBCategory.is_active: False}, synchronize_session=False
+            )
+        except Exception:
+            pass
+        try:
+            s.query(PBTarget).filter(PBTarget.file_id == existing_rec.id).update(
+                {PBTarget.is_active: False}, synchronize_session=False
             )
         except Exception:
             pass

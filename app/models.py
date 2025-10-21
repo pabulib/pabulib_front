@@ -118,6 +118,45 @@ class PBComment(Base):
     )
 
 
+class PBCategory(Base):
+    __tablename__ = "pb_categories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    file_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("pb_files.id"), index=True, nullable=False
+    )
+    # Original token as found in PROJECTS (preserve case for display)
+    value: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Normalized key for grouping/case-insensitive comparisons
+    norm: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    # How many projects in this file had this category (optional; for info)
+    count_in_file: Mapped[int] = mapped_column(Integer, default=1)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+    __table_args__ = (
+        UniqueConstraint("file_id", "norm", name="uq_pb_categories_file_norm"),
+        Index("ix_pb_categories_norm_prefix", "norm", mysql_length=191),
+    )
+
+
+class PBTarget(Base):
+    __tablename__ = "pb_targets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    file_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("pb_files.id"), index=True, nullable=False
+    )
+    value: Mapped[str] = mapped_column(String(255), nullable=False)
+    norm: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    count_in_file: Mapped[int] = mapped_column(Integer, default=1)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+    __table_args__ = (
+        UniqueConstraint("file_id", "norm", name="uq_pb_targets_file_norm"),
+        Index("ix_pb_targets_norm_prefix", "norm", mysql_length=191),
+    )
+
+
 class RefreshState(Base):
     __tablename__ = "refresh_state"
 

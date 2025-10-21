@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..db import get_session
-from ..models import PBComment, PBFile, RefreshState
+from ..models import PBCategory, PBComment, PBFile, PBTarget, RefreshState
 from ..utils.formatting import (
     format_budget,
     format_int,
@@ -30,6 +30,24 @@ _COMMENTS_CACHE: Optional[
     ]
 ] = None
 _STATS_CACHE: Optional[Tuple[Dict[str, Any], Dict[str, Any]]] = None
+_CATEGORIES_CACHE: Optional[
+    Tuple[
+        Dict[str, List[str]],
+        List[Tuple[str, int, List[str]]],
+        Dict[str, List[Dict[str, Any]]],
+        Dict[str, List[Dict[str, Any]]],
+        Dict[str, List[Dict[str, Any]]],
+    ]
+] = None
+_TARGETS_CACHE: Optional[
+    Tuple[
+        Dict[str, List[str]],
+        List[Tuple[str, int, List[str]]],
+        Dict[str, List[Dict[str, Any]]],
+        Dict[str, List[Dict[str, Any]]],
+        Dict[str, List[Dict[str, Any]]],
+    ]
+] = None
 
 
 def _db_signature() -> Optional[str]:
@@ -46,10 +64,12 @@ def _db_signature() -> Optional[str]:
 
 
 def invalidate_caches() -> None:
-    global _TILES_CACHE, _COMMENTS_CACHE, _STATS_CACHE
+    global _TILES_CACHE, _COMMENTS_CACHE, _STATS_CACHE, _CATEGORIES_CACHE, _TARGETS_CACHE
     _TILES_CACHE = None
     _COMMENTS_CACHE = None
     _STATS_CACHE = None
+    _CATEGORIES_CACHE = None
+    _TARGETS_CACHE = None
 
 
 def get_tiles_cached() -> List[Dict[str, Any]]:
@@ -279,6 +299,148 @@ def aggregate_comments_cached() -> Tuple[
     except Exception:
         pass
     return _COMMENTS_CACHE
+
+
+def _aggregate_label_cached(
+    kind: str,
+) -> Tuple[
+    Dict[str, List[str]],
+    List[Tuple[str, int, List[str]]],
+    Dict[str, List[Dict[str, Any]]],
+    Dict[str, List[Dict[str, Any]]],
+    Dict[str, List[Dict[str, Any]]],
+]:
+    """Generic aggregator for categories/targets.
+
+    kind: 'category' or 'target'
+    Returns same tuple shape as aggregate_comments_cached.
+    """
+    global _CATEGORIES_CACHE, _TARGETS_CACHE
+    table = PBCategory if kind == "category" else PBTarget
+    global_cache = _CATEGORIES_CACHE if kind == "category" else _TARGETS_CACHE
+    db_sig = _db_signature()
+    if global_cache is not None and getattr(global_cache, "_db_sig", None) == db_sig:
+        return global_cache
+
+    with get_session() as s:
+        q = (
+            s.query(
+                table.norm,  # use normalized label for grouping
+                table.value,  # original for display (pick one later)
+                PBFile.file_name,
+                PBFile.country,
+                PBFile.unit,
+                PBFile.instance,
+            )
+            .join(PBFile, PBFile.id == table.file_id)
+            .filter(PBFile.is_current == True)  # noqa: E712
+            .filter(table.is_active == True)  # type: ignore  # noqa: E712
+        )
+        rows = q.all()
+
+    # We will map by norm; store one display variant per norm (first seen)
+    display_for_norm: Dict[str, str] = {}
+    mapping: Dict[str, List[str]] = {}
+    groups_temp_country: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    groups_temp_country_unit: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    groups_temp_country_unit_instance: Dict[str, Dict[str, Dict[str, Any]]] = {}
+
+    for norm, value, fname, country, unit, instance in rows:
+        key = (norm or "").strip().lower()
+        if not key:
+            continue
+        if key not in display_for_norm:
+            display_for_norm[key] = value or key
+        mapping.setdefault(key, []).append(fname)
+        country = (country or "").strip()
+        unit = (unit or "").strip()
+        instance = (instance or "").strip()
+        if country:
+            cm_c = groups_temp_country.setdefault(key, {})
+            key_c = country.lower()
+            bucket_c = cm_c.setdefault(key_c, {"label": country, "files": []})
+            bucket_c["files"].append(fname)
+        if country or unit:
+            cm_cu = groups_temp_country_unit.setdefault(key, {})
+            key_cu = f"{country.lower()}::{unit.lower()}"
+            label_cu = f"{country} – {unit}".strip(" –") if (country or unit) else "—"
+            bucket_cu = cm_cu.setdefault(key_cu, {"label": label_cu, "files": []})
+            bucket_cu["files"].append(fname)
+        if country or unit or instance:
+            cm_cui = groups_temp_country_unit_instance.setdefault(key, {})
+            key_cui = f"{country.lower()}::{unit.lower()}::{instance.lower()}"
+            label_cui = (
+                f"{country} – {unit} – {instance}".strip(" –")
+                if (country or unit or instance)
+                else "—"
+            )
+            bucket_cui = cm_cui.setdefault(key_cui, {"label": label_cui, "files": []})
+            bucket_cui["files"].append(fname)
+
+    rows_list: List[Tuple[str, int, List[str]]] = []
+    for norm_key, flist in mapping.items():
+        display = display_for_norm.get(norm_key, norm_key)
+        rows_list.append((display, len(flist), sorted(flist)))
+    rows_list.sort(key=lambda t: (-t[1], t[0].lower()))
+
+    def finalize_groups(
+        src: Dict[str, Dict[str, Dict[str, Any]]],
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        out: Dict[str, List[Dict[str, Any]]] = {}
+        for norm_key, by_key in src.items():
+            items: List[Dict[str, Any]] = []
+            for _k, v in by_key.items():
+                files_list = sorted(v.get("files", []))
+                items.append(
+                    {
+                        "label": v.get("label", "—"),
+                        "count": len(files_list),
+                        "files": files_list,
+                    }
+                )
+            items.sort(
+                key=lambda d: (-int(d.get("count", 0)), str(d.get("label", "")).lower())
+            )
+            out[display_for_norm.get(norm_key, norm_key)] = items
+        return out
+
+    result = (
+        {display_for_norm.get(k, k): v for k, v in mapping.items()},
+        rows_list,
+        finalize_groups(groups_temp_country),
+        finalize_groups(groups_temp_country_unit),
+        finalize_groups(groups_temp_country_unit_instance),
+    )
+    try:
+        setattr(result, "_db_sig", db_sig)  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    if kind == "category":
+        _CATEGORIES_CACHE = result
+        return _CATEGORIES_CACHE
+    else:
+        _TARGETS_CACHE = result
+        return _TARGETS_CACHE
+
+
+def aggregate_categories_cached() -> Tuple[
+    Dict[str, List[str]],
+    List[Tuple[str, int, List[str]]],
+    Dict[str, List[Dict[str, Any]]],
+    Dict[str, List[Dict[str, Any]]],
+    Dict[str, List[Dict[str, Any]]],
+]:
+    return _aggregate_label_cached("category")
+
+
+def aggregate_targets_cached() -> Tuple[
+    Dict[str, List[str]],
+    List[Tuple[str, int, List[str]]],
+    Dict[str, List[Dict[str, Any]]],
+    Dict[str, List[Dict[str, Any]]],
+    Dict[str, List[Dict[str, Any]]],
+]:
+    return _aggregate_label_cached("target")
 
 
 def aggregate_statistics_cached() -> Tuple[Dict[str, Any], Dict[str, Any]]:
