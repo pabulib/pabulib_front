@@ -33,6 +33,91 @@
   const closeFiltersBtn = document.getElementById('closeFilters');
   let filtersBackdrop = null;
 
+  // URL parameter handling
+  let updateURLTimeout = null;
+  
+  function getURLParams() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+      search: params.get('search') || '',
+      country: params.get('country') || '',
+      city: params.get('city') || '',
+      year: params.get('year') || '',
+      votesMin: params.get('votes_min') || '',
+      votesMax: params.get('votes_max') || '',
+      projectsMin: params.get('projects_min') || '',
+      projectsMax: params.get('projects_max') || '',
+      lenMin: params.get('len_min') || '',
+      lenMax: params.get('len_max') || '',
+      type: params.get('type') || '',
+      excludeFully: params.get('exclude_fully') === 'true',
+      excludeExperimental: params.get('exclude_experimental') === 'true',
+      requireGeo: params.get('require_geo') === 'true',
+      requireTarget: params.get('require_target') === 'true',
+      requireCategory: params.get('require_category') === 'true',
+      orderBy: params.get('order_by') || 'quality',
+      orderDir: params.get('order_dir') || 'desc'
+    };
+  }
+  
+  function updateURL() {
+    // Debounce URL updates to avoid too many history entries
+    if (updateURLTimeout) clearTimeout(updateURLTimeout);
+    updateURLTimeout = setTimeout(() => {
+      const params = new URLSearchParams();
+      
+      // Add parameters only if they have values
+      if (input && input.value.trim()) params.set('search', input.value.trim());
+      if (filterCountry && filterCountry.value) params.set('country', filterCountry.value);
+      if (filterCity && filterCity.value) params.set('city', filterCity.value);
+      if (filterYear && filterYear.value) params.set('year', filterYear.value);
+      if (votesMin && votesMin.value) params.set('votes_min', votesMin.value);
+      if (votesMax && votesMax.value) params.set('votes_max', votesMax.value);
+      if (projectsMin && projectsMin.value) params.set('projects_min', projectsMin.value);
+      if (projectsMax && projectsMax.value) params.set('projects_max', projectsMax.value);
+      if (lenMin && lenMin.value) params.set('len_min', lenMin.value);
+      if (lenMax && lenMax.value) params.set('len_max', lenMax.value);
+      if (filterType && filterType.value) params.set('type', filterType.value);
+      if (excludeFully && excludeFully.checked) params.set('exclude_fully', 'true');
+      if (excludeExperimental && excludeExperimental.checked) params.set('exclude_experimental', 'true');
+      if (requireGeo && requireGeo.checked) params.set('require_geo', 'true');
+      if (requireTarget && requireTarget.checked) params.set('require_target', 'true');
+      if (requireCategory && requireCategory.checked) params.set('require_category', 'true');
+      if (orderBy && orderBy.value !== 'quality') params.set('order_by', orderBy.value);
+      if (orderDir && orderDir.dataset.dir !== 'desc') params.set('order_dir', orderDir.dataset.dir);
+      
+      const newURL = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+      history.replaceState({}, '', newURL);
+    }, 300);
+  }
+  
+  function applyURLParams() {
+    const params = getURLParams();
+    
+    // Apply parameters to form controls
+    if (input) input.value = params.search;
+    if (filterCountry) filterCountry.value = params.country;
+    if (filterCity) filterCity.value = params.city;
+    if (filterYear) filterYear.value = params.year;
+    if (votesMin) votesMin.value = params.votesMin;
+    if (votesMax) votesMax.value = params.votesMax;
+    if (projectsMin) projectsMin.value = params.projectsMin;
+    if (projectsMax) projectsMax.value = params.projectsMax;
+    if (lenMin) lenMin.value = params.lenMin;
+    if (lenMax) lenMax.value = params.lenMax;
+    if (filterType) filterType.value = params.type;
+    if (excludeFully) excludeFully.checked = params.excludeFully;
+    if (excludeExperimental) excludeExperimental.checked = params.excludeExperimental;
+    if (requireGeo) requireGeo.checked = params.requireGeo;
+    if (requireTarget) requireTarget.checked = params.requireTarget;
+    if (requireCategory) requireCategory.checked = params.requireCategory;
+    if (orderBy) orderBy.value = params.orderBy;
+    if (orderDir) {
+      orderDir.dataset.dir = params.orderDir;
+      orderDir.textContent = params.orderDir === 'desc' ? '↓' : '↑';
+    }
+  }
+
   function normalize(s){ return (s||'').toString().toLowerCase(); }
 
   function initOptions(){
@@ -390,18 +475,25 @@
   // simple debounce for input-heavy changes
   let tHandle;
   function debounced(){
-    clearTimeout(tHandle); tHandle = setTimeout(()=>{ updateSelectStates(); filter(); }, 100);
+    clearTimeout(tHandle); tHandle = setTimeout(()=>{ updateSelectStates(); filter(); updateURL(); }, 100);
   }
 
   [input, filterCountry, filterCity, filterYear, votesMin, votesMax, projectsMin, projectsMax, lenMin, lenMax, filterType, excludeFully, excludeExperimental, requireGeo, requireTarget, requireCategory]
-    .forEach(el => el.addEventListener('input', debounced));
-  orderBy.addEventListener('change', ()=>{ sortTiles(); visibleCount = 0; revealNext(); });
+    .forEach(el => {
+      el.addEventListener('input', debounced);
+      // Also listen for 'change' event on checkboxes and selects
+      if (el.type === 'checkbox' || el.tagName === 'SELECT') {
+        el.addEventListener('change', debounced);
+      }
+    });
+  orderBy.addEventListener('change', ()=>{ sortTiles(); visibleCount = 0; revealNext(); updateURL(); });
   orderDir.addEventListener('click', ()=>{
     orderDir.dataset.dir = (orderDir.dataset.dir === 'desc') ? 'asc' : 'desc';
     orderDir.textContent = (orderDir.dataset.dir === 'desc') ? '↓' : '↑';
     sortTiles();
     visibleCount = 0;
     revealNext();
+    updateURL();
   });
 
   // initial: default to Quality, descending (bigger score first)
@@ -409,6 +501,10 @@
   orderDir.dataset.dir = 'desc';
   orderDir.textContent = '↓';
   initOptions();
+  
+  // Apply URL parameters if present
+  applyURLParams();
+  
   updateSelectStates();
   updateChecks();
   sortTiles();
@@ -432,6 +528,7 @@
       if(requireCategory) requireCategory.checked=false;
       updateSelectStates();
       filter();
+      updateURL();
       input.focus();
     });
   }
@@ -537,6 +634,13 @@
     scheduleMiniHide();
   }, true);
   window.addEventListener('scroll', ()=>{ if(mini) mini.classList.remove('show'); }, {passive:true});
+
+  // Handle browser back/forward navigation
+  window.addEventListener('popstate', () => {
+    applyURLParams();
+    updateSelectStates();
+    filter();
+  });
 
   // Mobile Filters Drawer ---------------------------------------------------
   function ensureBackdrop(){
