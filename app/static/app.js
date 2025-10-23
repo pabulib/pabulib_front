@@ -129,7 +129,7 @@
     });
     [...setCountry].sort().forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; filterCountry.appendChild(o); });
     [...setCity].sort().forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; filterCity.appendChild(o); });
-    [...setYear].sort((a,b)=>Number(a||0)-Number(b||0)).forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; filterYear.appendChild(o); });
+    [...setYear].sort((a,b)=>Number(b||0)-Number(a||0)).forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; filterYear.appendChild(o); });
   }
 
   // Disable options that are not compatible with current selections across selects (exclusive filters)
@@ -506,6 +506,7 @@
   applyURLParams();
   
   updateSelectStates();
+  filter(); // Apply filters after setting URL parameters
   updateChecks();
   sortTiles();
   if(filtersClear){
