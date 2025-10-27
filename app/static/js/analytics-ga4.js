@@ -240,7 +240,40 @@ document.addEventListener('DOMContentLoaded', function() {
         if (form.hasAttribute('data-track-form')) {
             const formName = form.getAttribute('data-track-form') || form.id || 'unnamed_form';
             const formType = form.getAttribute('data-form-type') || 'general';
-            pabulibTrack.formSubmit(formName, formType);
+            
+            // Enhanced tracking for download forms
+            if (formName === 'batch_download') {
+                // Count selected files
+                const checkedBoxes = form.querySelectorAll('input[type="checkbox"]:checked:not(#selectAll)');
+                const selectAllBox = form.querySelector('#selectAll');
+                const isSelectAll = selectAllBox && selectAllBox.checked;
+                const fileCount = checkedBoxes.length;
+                
+                // Determine download type
+                let downloadType = 'batch';
+                if (isSelectAll) {
+                    downloadType = 'download_all';
+                } else if (fileCount === 1) {
+                    downloadType = 'single_via_form';
+                }
+                
+                // Enhanced form submit event
+                if (typeof gtag !== 'undefined') {
+                    gtag('event', 'form_submit', {
+                        event_category: 'forms',
+                        event_label: formName,
+                        custom_parameters: {
+                            form_type: formType,
+                            download_type: downloadType,
+                            file_count: fileCount,
+                            is_select_all: isSelectAll
+                        }
+                    });
+                }
+            } else {
+                // Standard form submit tracking
+                pabulibTrack.formSubmit(formName, formType);
+            }
         }
     });
 
