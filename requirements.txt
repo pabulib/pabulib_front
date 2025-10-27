@@ -8,3 +8,4 @@ requests>=2.25.0
 gunicorn>=21.2.0
 pabulib-checker
 flask-limiter>=3.5.0
+sentry-sdk[flask]>=1.38.0
