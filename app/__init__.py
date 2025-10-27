@@ -70,4 +70,9 @@ def create_app():
     def inject_now():
         return {"now": datetime.now()}
 
+    @app.context_processor
+    def inject_analytics():
+        """Make analytics configuration available to templates."""
+        return {"google_analytics_id": os.environ.get("GOOGLE_ANALYTICS_ID", "")}
+
     return app

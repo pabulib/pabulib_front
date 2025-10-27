@@ -97,13 +97,15 @@
       </aside>
 
       <div class="container mb-32">
-      <form id="downloadForm" method="post" action="{{ url_for('main.download_selected') }}">
+      <form id="downloadForm" method="post" action="{{ url_for('main.download_selected') }}" 
+            data-track-form="batch_download" data-form-type="download">
         <header class="toolbar">
           <input id="search" class="search" placeholder="Search..." />
           <label class="select-all"><input id="selectAll" type="checkbox" /> Select all</label>
           <div class="spacer"></div>
           <div class="count"><span id="count">{{ count }}</span> PBs found</div>
-          <button id="downloadBtn" class="primary" type="submit" disabled>Download selected</button>
+          <button id="downloadBtn" class="primary" type="submit" disabled 
+                  data-track="batch_download" data-track-category="download">Download selected</button>
         </header>
 
         <!-- Small hint about faster "Select all" download using pre-built archive -->
@@ -179,9 +181,11 @@
             {% endif %}
           </div>
           <span class="qs" title="QS = (avg vote length)³ × (projects)² × (votes). Higher is better.">QS {{ t.quality_short }}</span>
-          <a class="doc" href="{{ url_for('main.preview_file', filename=t.file_name) }}" title="Preview"></a>
-          <a class="visualization" href="{{ url_for('main.visualize_file', filename=t.file_name) }}" title="Visualize"></a>
-          <a class="download" href="{{ url_for('main.download', filename=t.file_name) }}" title="Download"></a>
+          <a class="doc" href="{{ url_for('main.preview_file', filename=t.file_name) }}" title="Preview" data-track="file_preview" data-track-category="engagement"></a>
+          <a class="visualization" href="{{ url_for('main.visualize_file', filename=t.file_name) }}" title="Visualize" data-track="file_visualize" data-track-category="engagement"></a>
+          <a class="download" href="{{ url_for('main.download', filename=t.file_name) }}" title="Download" 
+             data-track="file_download" data-track-category="download" 
+             data-filename="{{ t.file_name }}" data-download-type="single"></a>
         </div>
         <!-- Mobile compact meta row (hidden on desktop) -->
         <div class="mobile-meta" aria-hidden="true">

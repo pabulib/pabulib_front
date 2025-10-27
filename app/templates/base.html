@@ -29,6 +29,29 @@
       }
     </script>
     <link rel="stylesheet" href="{{ url_for('main.static', filename='styles.css') }}" />
+    
+    {% if google_analytics_id %}
+    <!-- Google Analytics 4 -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ google_analytics_id }}"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', '{{ google_analytics_id }}', {
+        // Privacy-friendly settings
+        anonymize_ip: true,
+        allow_google_signals: false,
+        allow_ad_personalization_signals: false
+      });
+      
+      // Make analytics ID available to other scripts
+      window.googleAnalyticsId = '{{ google_analytics_id }}';
+    </script>
+    
+    <!-- Enhanced Analytics for Pabulib -->
+    <script src="{{ url_for('main.static', filename='js/analytics-ga4.js') }}"></script>
+    {% endif %}
+    
     {% block head %}{% endblock %}
   </head>
   <body class="{% block bodyClass %} bg-slate-50{% endblock %}">

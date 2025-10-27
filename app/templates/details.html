@@ -20,7 +20,9 @@
           {'id':'targets','label':'Targets','desc':'from PROJECTS.target/targets'},
         ] %}
         {% for t in tabs %}
-          <a href="{{ url_for('main.details_page') }}?tab={{ t.id }}" class="px-3 py-1.5 rounded-md text-sm border transition-colors {{ 'bg-indigo-600 text-white border-indigo-600' if tab==t.id else 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50' }}">{{ t.label }}</a>
+          <a href="{{ url_for('main.details_page') }}?tab={{ t.id }}" 
+             class="px-3 py-1.5 rounded-md text-sm border transition-colors {{ 'bg-indigo-600 text-white border-indigo-600' if tab==t.id else 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50' }}"
+             data-tab-target="{{ t.id }}" data-track="tab_switch" data-track-category="navigation">{{ t.label }}</a>
         {% endfor %}
         <span class="ml-3 text-xs text-gray-500">
           {% if tab=='comments' %}{{ total_comments }} items{% elif tab=='categories' %}{{ total_categories }} items{% else %}{{ total_targets }} items{% endif %}
