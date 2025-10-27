@@ -41,7 +41,13 @@
         // Privacy-friendly settings
         anonymize_ip: true,
         allow_google_signals: false,
-        allow_ad_personalization_signals: false
+        allow_ad_personalization_signals: false,
+        // Custom parameters for better segmentation
+        custom_map: {
+          'custom_parameter_1': 'user_type',
+          'custom_parameter_2': 'session_datasets_viewed',
+          'custom_parameter_3': 'session_downloads_count'
+        }
       });
       
       // Make analytics ID available to other scripts

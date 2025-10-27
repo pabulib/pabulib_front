@@ -106,11 +106,101 @@ window.pabulibTrack = {
                 }
             });
         }
+    },
+
+    // Track filter usage
+    filterUsage: function(activeFilters, resultsCount) {
+        if (typeof gtag !== 'undefined') {
+            gtag('event', 'filter_usage', {
+                event_category: 'search',
+                custom_parameters: {
+                    filters_applied: activeFilters.join(','),
+                    filter_count: activeFilters.length,
+                    results_count: resultsCount
+                }
+            });
+        }
+    },
+
+    // Track sort changes
+    sortChange: function(sortBy, sortDirection) {
+        if (typeof gtag !== 'undefined') {
+            gtag('event', 'sort_change', {
+                event_category: 'engagement',
+                custom_parameters: {
+                    sort_by: sortBy,
+                    sort_direction: sortDirection
+                }
+            });
+        }
+    },
+
+    // Track dataset interactions (hover/preview mini cards)
+    datasetHover: function(datasetName, hoverDuration = null) {
+        if (typeof gtag !== 'undefined') {
+            gtag('event', 'dataset_hover', {
+                event_category: 'engagement',
+                event_label: datasetName,
+                custom_parameters: {
+                    hover_duration_ms: hoverDuration
+                }
+            });
+        }
+    },
+
+    // Track pagination/lazy loading
+    paginationLoad: function(itemsLoaded, totalVisible) {
+        if (typeof gtag !== 'undefined') {
+            gtag('event', 'pagination_load', {
+                event_category: 'engagement',
+                custom_parameters: {
+                    items_loaded: itemsLoaded,
+                    total_visible: totalVisible
+                }
+            });
+        }
+    },
+
+    // Track performance metrics
+    performanceMetric: function(metricName, value, unit = 'ms') {
+        if (typeof gtag !== 'undefined') {
+            gtag('event', 'performance_metric', {
+                event_category: 'performance',
+                event_label: metricName,
+                value: Math.round(value),
+                custom_parameters: {
+                    metric_unit: unit
+                }
+            });
+        }
+    },
+
+    // Track errors
+    trackError: function(errorType, errorMessage, errorLocation = null) {
+        if (typeof gtag !== 'undefined') {
+            gtag('event', 'exception', {
+                description: errorMessage,
+                fatal: false,
+                custom_parameters: {
+                    error_type: errorType,
+                    error_location: errorLocation
+                }
+            });
+        }
     }
 };
 
 // Auto-track common interactions
 document.addEventListener('DOMContentLoaded', function() {
+    // Track page load performance
+    window.addEventListener('load', function() {
+        const perfData = performance.getEntriesByType('navigation')[0];
+        if (perfData) {
+            pabulibTrack.performanceMetric('page_load_time', perfData.loadEventEnd - perfData.loadEventStart);
+            pabulibTrack.performanceMetric('dom_content_loaded', perfData.domContentLoadedEventEnd - perfData.domContentLoadedEventStart);
+            pabulibTrack.performanceMetric('time_to_first_byte', perfData.responseStart - perfData.requestStart);
+        }
+    });
     // Track downloads automatically
     document.addEventListener('click', function(e) {
         const target = e.target.closest('a[href*="/download"], button[data-download]');
@@ -152,5 +242,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const formType = form.getAttribute('data-form-type') || 'general';
             pabulibTrack.formSubmit(formName, formType);
         }
+    });
+
+    // Track JavaScript errors
+    window.addEventListener('error', function(e) {
+        pabulibTrack.trackError('javascript_error', e.message, e.filename + ':' + e.lineno);
+    });
+
+    // Track unhandled promise rejections
+    window.addEventListener('unhandledrejection', function(e) {
+        pabulibTrack.trackError('promise_rejection', e.reason?.toString() || 'Unknown promise rejection');
     });
 });

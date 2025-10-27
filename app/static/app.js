@@ -216,6 +216,14 @@
     const year = filterYear.value;
     const type = normalize(filterType.value);
     let visible = 0;
+    
+    // Track search queries (debounced to avoid too many events)
+    if (q && window.pabulibTrack) {
+      clearTimeout(window.searchTrackTimeout);
+      window.searchTrackTimeout = setTimeout(() => {
+        window.pabulibTrack.search(input.value.trim(), visible);
+      }, 1000);
+    }
     // hide all by default; reveal during pagination
     tiles.forEach(t=>{
       const hay = [t.dataset.title, t.dataset.webpage, t.dataset.desc, t.dataset.file]
@@ -243,6 +251,24 @@
     // reset pagination after filtering/sorting
     visibleCount = 0;
     revealNext();
+    
+    // Track filter usage
+    if (window.pabulibTrack) {
+      const activeFilters = [];
+      if (country) activeFilters.push(`country:${country}`);
+      if (city) activeFilters.push(`city:${city}`);
+      if (year) activeFilters.push(`year:${year}`);
+      if (type) activeFilters.push(`type:${type}`);
+      if (excludeFully.checked) activeFilters.push('exclude_fully_funded');
+      if (excludeExperimental.checked) activeFilters.push('exclude_experimental');
+      if (requireGeo && requireGeo.checked) activeFilters.push('require_geo');
+      if (requireTarget && requireTarget.checked) activeFilters.push('require_target');
+      if (requireCategory && requireCategory.checked) activeFilters.push('require_category');
+      
+      if (activeFilters.length > 0) {
+        window.pabulibTrack.filterUsage(activeFilters, visible);
+      }
+    }
   }
 
   function sortTiles(){
@@ -486,10 +512,18 @@
         el.addEventListener('change', debounced);
       }
     });
-  orderBy.addEventListener('change', ()=>{ sortTiles(); visibleCount = 0; revealNext(); updateURL(); });
+  orderBy.addEventListener('change', ()=>{ 
+    if (window.pabulibTrack) {
+      window.pabulibTrack.sortChange(orderBy.value, orderDir.dataset.dir);
+    }
+    sortTiles(); visibleCount = 0; revealNext(); updateURL(); 
+  });
   orderDir.addEventListener('click', ()=>{
     orderDir.dataset.dir = (orderDir.dataset.dir === 'desc') ? 'asc' : 'desc';
     orderDir.textContent = (orderDir.dataset.dir === 'desc') ? '↓' : '↑';
+    if (window.pabulibTrack) {
+      window.pabulibTrack.sortChange(orderBy.value, orderDir.dataset.dir);
+    }
     sortTiles();
     visibleCount = 0;
     revealNext();
@@ -539,10 +573,16 @@
     const parent = document.querySelector('#downloadForm') || document;
     const eligible = Array.from(parent.querySelectorAll('.tile')).filter(t => !t.hidden);
     const end = Math.min(eligible.length, visibleCount + PAGE);
+    const itemsLoaded = end - visibleCount;
     eligible.forEach((t, idx) => {
       t.style.display = (idx < end) ? '' : 'none';
     });
     visibleCount = end;
+    
+    // Track pagination/lazy loading when new items are loaded
+    if (itemsLoaded > 0 && window.pabulibTrack) {
+      window.pabulibTrack.paginationLoad(itemsLoaded, eligible.length);
+    }
   }
   revealNext();
 
@@ -625,6 +665,12 @@
     fillMini(tile, href);
     positionMini(a);
     mini.classList.add('show');
+    
+    // Track dataset hover
+    if (window.pabulibTrack && tile.dataset.file) {
+      window.hoverStartTime = Date.now();
+      window.pabulibTrack.datasetHover(tile.dataset.file);
+    }
   }, true);
   document.addEventListener('mouseout', (e)=>{
     const a = e.target && e.target.closest && e.target.closest('a.doc');
