@@ -88,6 +88,23 @@ setup_directories() {
     success "Directories created successfully"
 }
 
+# Check for port conflicts
+check_port_conflicts() {
+    log "Checking for port conflicts..."
+    
+    # Check if critical ports are in use
+    for port in 80 443; do
+        if ss -tln | grep -q ":${port} "; then
+            warning "Port ${port} is currently in use:"
+            ss -tlnp | grep ":${port}" || true
+            
+            if [ "$port" = "80" ] && pgrep apache2 >/dev/null; then
+                log "Apache2 detected on port 80. It will be stopped during deployment."
+            fi
+        fi
+    done
+}
+
 # Check prerequisites
 check_prerequisites() {
     log "Checking prerequisites..."
@@ -117,6 +134,8 @@ check_prerequisites() {
         warning "SSL certificates not found. HTTPS will not be available."
     fi
     
+    check_port_conflicts
+    
     success "Prerequisites check completed"
 }
 
@@ -143,8 +162,25 @@ stop_services() {
     
     cd "$PROJECT_DIR"
     
-    # Stop with both compose files to ensure everything stops
+    # Stop Docker Compose services first
     dc down --remove-orphans 2>/dev/null || true
+    
+    # Check if port 80 is still in use and stop Apache2 if needed
+    if ss -tln | grep -q ":80 "; then
+        log "Port 80 is still in use, checking for Apache2..."
+        if pgrep apache2 >/dev/null; then
+            log "Stopping Apache2 service to free port 80..."
+            sudo systemctl stop apache2 2>/dev/null || true
+            sudo systemctl disable apache2 2>/dev/null || warning "Could not disable Apache2 service"
+            log "Apache2 stopped and disabled"
+        fi
+        
+        # Double-check port 80 is free
+        if ss -tln | grep -q ":80 "; then
+            warning "Port 80 is still in use after stopping Apache2. Checking what's using it:"
+            ss -tlnp | grep :80 || true
+        fi
+    fi
     
     success "Services stopped"
 }
