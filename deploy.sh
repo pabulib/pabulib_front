@@ -93,16 +93,21 @@ check_port_conflicts() {
     log "Checking for port conflicts..."
     
     # Check if critical ports are in use
-    for port in 80 443; do
+    # NOTE: We now use ports 19080/19443 instead of 80/443 for CBIP integration
+    # Port 80/443 should be handled by Apache as reverse proxy
+    for port in 19080 19443; do
         if ss -tln | grep -q ":${port} "; then
             warning "Port ${port} is currently in use:"
             ss -tlnp | grep ":${port}" || true
-            
-            if [ "$port" = "80" ] && pgrep apache2 >/dev/null; then
-                log "Apache2 detected on port 80. It will be stopped during deployment."
-            fi
         fi
     done
+    
+    # Check if Apache is running (it should be for proxying)
+    if pgrep apache2 >/dev/null; then
+        log "Apache2 detected - this is expected for CBIP integration"
+    else
+        warning "Apache2 not running - ensure it's configured for reverse proxy to pabulib.org"
+    fi
 }
 
 # Check prerequisites
@@ -165,21 +170,12 @@ stop_services() {
     # Stop Docker Compose services first
     dc down --remove-orphans 2>/dev/null || true
     
-    # Check if port 80 is still in use and stop Apache2 if needed
-    if ss -tln | grep -q ":80 "; then
-        log "Port 80 is still in use, checking for Apache2..."
-        if pgrep apache2 >/dev/null; then
-            log "Stopping Apache2 service to free port 80..."
-            sudo systemctl stop apache2 2>/dev/null || true
-            sudo systemctl disable apache2 2>/dev/null || warning "Could not disable Apache2 service"
-            log "Apache2 stopped and disabled"
-        fi
-        
-        # Double-check port 80 is free
-        if ss -tln | grep -q ":80 "; then
-            warning "Port 80 is still in use after stopping Apache2. Checking what's using it:"
-            ss -tlnp | grep :80 || true
-        fi
+    # NOTE: We NO LONGER stop Apache2 as it's needed for reverse proxy
+    # The old port conflict check is changed to prevent stopping Apache
+    # Check if our custom ports are free
+    if ss -tln | grep -q ":19080\|:19443"; then
+        warning "Pabulib Docker ports (19080/19443) are still in use after stopping containers:"
+        ss -tlnp | grep -E ":19080|:19443" || true
     fi
     
     success "Services stopped"
@@ -221,12 +217,12 @@ start_services() {
         log "Running services:"
         dc ps
         
-        # Test HTTP redirect
-        log "Testing HTTP to HTTPS redirect..."
-        if curl -sI http://localhost/ | grep -q "301\|302"; then
-            success "HTTP redirect is working"
+        # Test internal ports accessibility (not HTTP redirect since it's handled by Apache)
+        log "Testing internal Pabulib ports..."
+        if curl -sk https://localhost:19443/ | grep -q "pabulib\|Pabulib" 2>/dev/null; then
+            success "Internal HTTPS port (19443) is responding"
         else
-            warning "HTTP redirect may not be working properly"
+            warning "Internal HTTPS port may not be responding properly - check container logs"
         fi
         
     else
@@ -282,9 +278,16 @@ deploy() {
     success "🎉 Deployment completed successfully!"
     
     log "📋 Deployment Summary:"
-    log "   • Application: https://pabulib.org"
+    log "   • Application: https://pabulib.org (via Apache proxy)"
+    log "   • Internal HTTPS: https://localhost:19443"
+    log "   • Internal HTTP: http://localhost:19080" 
     log "   • Logs: $LOG_DIR"
     log "   • Backups: $BACKUP_DIR"
+    log ""
+    log "⚙️  CBIP Integration Notes:"
+    log "   • Apache should proxy pabulib.org → localhost:19443"
+    log "   • Docker containers use ports 19080/19443 internally"
+    log "   • Ensure Apache virtual host is configured for pabulib.org"
     log ""
     log "📖 Useful commands:"
     log "   • View logs: $0 logs"
@@ -301,8 +304,11 @@ status() {
     
     log ""
     log "🌐 Port Status:"
-    # Avoid requiring root by skipping process names (-p)
-    ss -tln | grep -E ":80\s|:443\s|:3306\s" || log "No services listening on expected ports"
+    # Check both Apache ports and our internal Docker ports
+    log "   Apache ports (should be in use):"
+    ss -tln | grep -E ":80\s|:443\s" || log "   No Apache services on standard ports"
+    log "   Pabulib internal ports:"
+    ss -tln | grep -E ":19080\s|:19443\s|:3306\s" || log "   No Pabulib services on internal ports"
     
     log ""
     log "💾 Disk Usage:"
