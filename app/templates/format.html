@@ -92,7 +92,7 @@
     </style>
     <section class="max-w-4xl mx-auto px-4">
         <div class="flex justify-center">
-            <div class="w-full max-w-4xl bg-white rounded-lg shadow-lg p-8 mt-8 mb-32">
+            <div class="w-full max-w-4xl bg-white rounded-lg shadow-lg p-8 mt-8 mb-32 format-content" style="margin-left:auto; margin-right:auto;">
                 <h1 class="text-3xl font-bold text-slate-800 mb-6">The <kbd>.pb</kbd> File Format</h1>
                 <ul>
                     <li>
@@ -183,10 +183,25 @@ voter_id; age; sex; vote
                             Fields that do not contain special characters (like <kbd>;</kbd> or <kbd>"</kbd>) are left unquoted.
                             <br><br>For example, in the <kbd>poland_wroclaw_2017_.pb</kbd> file:
                             <br>
-                            <code>
-                                <br><span class="code-num">18</span>;<span class="code-num">1000000</span>;<span class="code-num">8640</span>;<span class="code-string"><strong>Rowerowy Wrocław 2017</strong></span>;<span class="code-num">category</span>
-                                <br><span class="code-num">50</span>;<span class="code-num">1000000</span>;<span class="code-num">10796</span>;<span class="code-string"><strong>"Zielona rowerowo-piesza obwodnica Wrocławia; ETAP II"</strong></span>;<span class="code-num">category</span>
-                                <br><span class="code-num">499</span>;<span class="code-num">1000000</span>;<span class="code-num">3949</span>;<span class="code-string"><strong>"""Konikowo"" - Budowa autorskiego placu zabaw"</strong></span>;<span class="code-num">category</span>
+                            <code style="font-size: 0.92em;">
+                                <br>
+                                <span class="code-num">18</span>;
+                                <span class="code-num">1000000</span>;
+                                <span class="code-num">8640</span>;
+                                <span class="code-string"><strong>Rowerowy Wrocław 2017</strong></span>;
+                                <span class="code-num">category</span>
+                                <br>
+                                <span class="code-num">50</span>;
+                                <span class="code-num">1000000</span>;
+                                <span class="code-num">10796</span>;
+                                <span class="code-string"><strong>"Zielona rowerowo-piesza obwodnica Wrocławia; ETAP II"</strong></span>;
+                                <span class="code-num">category</span>
+                                <br>
+                                <span class="code-num">499</span>;
+                                <span class="code-num">1000000</span>;
+                                <span class="code-num">3949</span>;
+                                <span class="code-string"><strong>"""Konikowo"" - Budowa autorskiego placu zabaw"</strong></span>;
+                                <span class="code-num">category</span>
                             </code>
                         </p>
                     </li>
@@ -213,7 +228,7 @@ voter_id; age; sex; vote
             <div id="section-one" class="block">
                 <div class="p-4">
                     <p><i>All fields are provided as <b>key:value</b> pairs.</i></p>
-                    <ul id="fields-container"></ul>
+                    <div id="fields-container"></div>
                 </div>
             </div>
         </div>
@@ -226,7 +241,7 @@ voter_id; age; sex; vote
             </h2>
             <div id="section-two" class="hidden">
                 <div class="p-4">
-                    <ul id="projects-container"></ul>
+                    <div id="projects-container"></div>
                 </div>
             </div>
         </div>
@@ -239,7 +254,7 @@ voter_id; age; sex; vote
             </h2>
             <div id="section-three" class="hidden">
                 <div class="p-4">
-                    <ul id="votes-container"></ul>
+                    <div id="votes-container"></div>
                 </div>
             </div>
         </div>
@@ -782,6 +797,15 @@ voter_id; age; sex; vote
 
     const renderFields = (fields, containerId) => {
         const container = document.getElementById(containerId);
+        // Create a single <ul> for all fields if not already present
+        let mainUl = container.querySelector('ul.rendered-fields');
+        if (!mainUl) {
+            mainUl = document.createElement('ul');
+            mainUl.className = 'rendered-fields';
+            mainUl.style.listStyleType = 'disc';
+            mainUl.style.marginLeft = '1em';
+            container.appendChild(mainUl);
+        }
         fields.forEach(field => {
             const fieldItem = document.createElement('li');
             // Special case: force 'vote_type' to use 'required header' (red)
@@ -790,23 +814,22 @@ voter_id; age; sex; vote
             fieldItem.innerHTML = `
                 <code class="${fieldClass}">${field.field_name}</code>
                 ${field.datatype ? `<em>(${field.datatype})</em>` : ''}${field.description ? ` &ndash; ${field.description}` : ''}
-                <ul>
-                    ${field.options ? `<ul>${field.options.map((option, idx) => {
-                        const indent = shouldIndentOption(field, idx, option) ? " style='margin-left:2em;'" : "";
+                <ul style="margin-left: 1em;">
+                    ${field.options ? `<ul style='list-style-type: disc; margin-left: 0;'>${field.options.map((option, idx) => {
                         const optionClass = getOptionClass(field, option);
-                        return `<li${indent}><code class='${optionClass}'>${option.value}</code>${option.description ? ` &ndash; ${option.description}` : ''}</li>`;
+                        return `<li><code class='${optionClass}'>${option.value}</code>${option.description ? ` &ndash; ${option.description}` : ''}</li>`;
                     }).join('')}</ul>` : ''}
-                    ${field.additional_info ? `<div style="margin-left: 1em;"><ul>${field.additional_info.map(info => `<li>${info}</li>`).join('')}</ul></div>` : ''}
+                    ${field.additional_info ? `<div style=\"margin-left: 1em;\"><ul>${field.additional_info.map(info => `<li>${info}</li>`).join('')}</ul></div>` : ''}
                     ${Array.isArray(field.example) 
-                    ? `<div style="margin-left: 1em;"><em>e.g.:</em> ${field.example.map((example, index) => 
+                    ? `<div style=\"margin-left: 1em;\"><em>e.g.:</em> ${field.example.map((example, index) => 
                         `<kbd>${example}</kbd>${index < field.example.length - 1 ? ' or ' : ''}`
                         ).join('')}</div>` 
                     : field.example 
-                        ? `<div style="margin-left: 1em;"><em>e.g.:</em> <kbd>${field.example}</kbd></div>` 
+                        ? `<div style=\"margin-left: 1em;\"><em>e.g.:</em> <kbd>${field.example}</kbd></div>` 
                         : ''}
                 </ul>
             `;
-            container.appendChild(fieldItem);
+            mainUl.appendChild(fieldItem);
         });
     };
 
@@ -827,7 +850,10 @@ voter_id; age; sex; vote
                     // Avoid rendering inside code/pre blocks
                     ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
                 };
-                window.renderMathInElement(document.querySelector('.format-content'), options);
+                // Use the .format-content wrapper for math rendering
+                document.querySelectorAll('.format-content').forEach(el => {
+                    window.renderMathInElement(el, options);
+                });
             }
         };
 
