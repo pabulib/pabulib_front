@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
-{% block bodyClass %}publications{% endblock %}
-{% block title %}Publications{% endblock %}
+{% block bodyClass %}citations{% endblock %}
+{% block title %}Citations{% endblock %}
 
 {% block body %}
     <section class="max-w-4xl mx-auto px-4">
@@ -12,10 +12,8 @@
                 <p class="italic bg-gray-50 p-4 rounded mb-6"><a href="https://www.ijcai.org/proceedings/2023/0297.pdf" class="text-blue-800 hover:text-blue-900 underline">
                         Faliszewski et al. "Participatory Budgeting: Data, Tools, and Analysis.", IJCAI-2023.
                     </a></p>
-                
-                <h4 class="text-2xl font-bold text-slate-800 mb-4 mt-8">Publications</h4>
-                <p class="mb-4">List of publications using data from Pabulib.</p>
-
+                <h4 class="text-2xl font-bold text-slate-800 mb-4 mt-8">Citations</h4>
+                <p class="mb-4">List of citations using data from Pabulib.</p>
                 {% set pubs_sorted = publications|sort(attribute='year', reverse=True) %}
                 {% set total = pubs_sorted|length %}
                 <div class="space-y-6">
@@ -29,7 +27,6 @@
                                 {{ pub.title }}
                             </div>
                             <div class="text-sm text-slate-600 mb-1">
-                                {# Display "Firstname Surname" for each author #}
                                 <span class="font-medium">
                                     {% for author in pub.authors.split(',') %}
                                         {{ author.strip() }}{% if not loop.last %}, {% endif %}

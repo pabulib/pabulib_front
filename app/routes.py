@@ -221,8 +221,8 @@ def tools_page():
     return render_template("tools.html")
 
 
-@bp.route("/publications")
-def publications_page():
+@bp.route("/citations")
+def citations_page():
     # Parse bib.bib and pass publications to the template
     import bibtexparser
 
@@ -259,7 +259,7 @@ def publications_page():
                 publications.append(
                     {"authors": authors_str, "year": year, "title": title, "url": url}
                 )
-    return render_template("publications.html", publications=publications)
+    return render_template("citations.html", publications=publications)
 
 
 @bp.route("/about")
