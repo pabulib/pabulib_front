@@ -6,9 +6,95 @@
   --muted:#4a5568;
   --primary:#1e88e5;
 }
+/* Global responsive fixes */
 *{box-sizing:border-box}
+
+/* Ensure all form elements are touch-friendly on mobile */
+@media (max-width:768px){
+  input, select, button, textarea {
+    min-height:44px;
+    font-size:16px; /* Prevents zoom on iOS */
+  }
+  
+  /* Better touch targets for checkboxes */
+  input[type="checkbox"] {
+    min-width:20px;
+    min-height:20px;
+  }
+  
+  /* Ensure buttons are properly sized for touch */
+  button, .download, .doc, .visualization {
+    min-height:44px;
+    min-width:44px;
+  }
+}
 body{margin:0;font-family: -apple-system,BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background:var(--bg); color:var(--text); overflow-x:hidden}
 html{overflow-x:hidden}
+
+/* Navbar responsive fixes */
+@media (max-width:768px){
+  /* Ensure navbar doesn't break */
+  nav#mainNav {
+    padding:0 8px !important;
+  }
+  
+  /* Navbar links on mobile */
+  #navLinks {
+    padding:8px 0;
+  }
+  
+  #navLinks a {
+    padding:8px 16px !important;
+    margin:2px 0;
+    display:block;
+    text-align:center;
+  }
+}
+
+/* General navbar fixes */
+nav#mainNav {
+  max-width:100vw;
+  overflow-x:hidden;
+}
+
+#navLinks {
+  max-width:100%;
+}
+
+/* Desktop navbar - shorten long names on medium screens */
+@media (min-width:769px) and (max-width:1200px){
+  #navLinks {
+    gap:8px;
+  }
+  
+  #navLinks a {
+    font-size:14px;
+    padding:8px 10px !important;
+    white-space:nowrap;
+  }
+}
+
+/* Very small desktop screens - shorten even more */
+@media (min-width:769px) and (max-width:1024px){
+  #navLinks {
+    gap:4px;
+  }
+  
+  #navLinks a {
+    font-size:13px;
+    padding:8px 6px !important;
+  }
+}
+
+/* Flexbox navbar improvements */
+@media (min-width:769px){
+  #navLinks {
+    display:flex !important;
+    flex-wrap:wrap;
+    justify-content:center;
+    align-items:center;
+  }
+}
 .main-nav-fullbleed{width:100vw;left:0;right:0;margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw)}
 .topbar{background:#065aa0;color:#fff}
 .fixed-top{position:sticky;top:0;z-index:10}
@@ -30,6 +116,17 @@ html{overflow-x:hidden}
   box-shadow:0 4px 12px rgba(0,0,0,0.05);
   position:sticky;
   top:24px;
+}
+
+/* Layout responsiveness */
+@media (max-width:768px){
+  .layout{
+    grid-template-columns:1fr;
+    gap:16px;
+    margin:8px auto;
+    padding:0 12px;
+    max-width:100%;
+  }
 }
 .sidebar .field{display:flex;flex-direction:column;margin-bottom:8px}
 .sidebar .field:last-child{margin-bottom:0}
@@ -177,14 +274,14 @@ html{overflow-x:hidden}
   color:var(--text);
   background:#f8f9fb;
 }
-.container{max-width:1100px;margin:0 auto;padding:0}
+.container{max-width:1100px;margin:0 auto;padding:0;overflow-x:hidden}
 /* Avoid accidental horizontal overflow */
-.container, .layout, .tile, .toolbar, .grid, .tile-header{max-width:100%;}
+.container, .layout, .tile, .toolbar, .grid, .tile-header{max-width:100%;box-sizing:border-box;}
 .grid, .tile-header{overflow-x:hidden}
 .tile-header h2{word-break:break-word}
-.toolbar{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.toolbar{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
 /* Desktop: keep search field at a stable width so it doesn't shift when the button label changes */
-.toolbar .search{flex:0 0 520px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);font-size:16px}
+.toolbar .search{flex:0 1 400px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);font-size:16px;min-width:200px;max-width:100%}
 .toolbar .select-all{display:flex;align-items:center;gap:8px;color:var(--text);font-weight:600;font-size: 20px;
   /* Prevent accidental text selection when toggling */
   -webkit-user-select:none; /* Safari */
@@ -192,11 +289,41 @@ html{overflow-x:hidden}
   -ms-user-select:none;     /* old Edge */
   user-select:none;         /* Standard */
   cursor:pointer;
+  white-space:nowrap;
 }
 .toolbar .select-all input[type="checkbox"]{
   width:18px;
   height:18px;
   cursor:pointer;
+}
+
+/* Toolbar responsiveness */
+@media (max-width:768px){
+  .toolbar{
+    flex-direction:column;
+    gap:8px;
+    align-items:stretch;
+  }
+  .toolbar .search{
+    flex:1 1 auto;
+    min-width:100%;
+    order:1;
+  }
+  .toolbar .select-all{
+    order:2;
+    font-size:16px;
+    justify-content:center;
+  }
+  .toolbar .count{
+    order:3;
+    text-align:center;
+    font-size:14px;
+  }
+  .toolbar .primary{
+    order:4;
+    width:100%;
+    min-width:auto;
+  }
 }
 .tile-header .row-check{
   width:18px;
@@ -217,13 +344,19 @@ html{overflow-x:hidden}
   font-weight:600;
   opacity:.8;
   white-space:nowrap; /* keep text on one line */
-  min-width:220px;    /* reasonable floor so text growth doesn't jitter */
+  min-width:180px;    /* reduced for better mobile fit */
+  transition:all 0.2s ease;
 }
 /* Make the download button visibly stronger (darker) when enabled and subdued when disabled */
 .toolbar .primary:disabled{
   background: #3730a3;
   opacity: .6;
   cursor: not-allowed;
+}
+.toolbar .primary:hover:not(:disabled){
+  opacity: 1;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
 /* Sidebar clear filters button */
@@ -265,8 +398,79 @@ html{overflow-x:hidden}
 .tile{content-visibility:auto;contain-intrinsic-size: 300px 600px}
 .tile[hidden]{display:none}
 .sentinel{height:1px}
-.tile-header{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border)}
-.tile-header h2{margin:0;font-size:26px;line-height:1.2;max-width:500px;overflow-wrap:anywhere;word-break:break-word;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex-shrink:0}
+.tile-header{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.tile-header h2{margin:0;font-size:26px;line-height:1.2;max-width:500px;overflow-wrap:anywhere;word-break:break-word;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex:1 1 auto;min-width:0}
+
+/* Tile header responsiveness */
+@media (max-width:768px){
+  .tile-header{
+    flex-direction:row;
+    align-items:flex-start;
+    gap:8px;
+    padding:12px 16px;
+    flex-wrap:wrap;
+    position:relative;
+  }
+  
+  /* First row: checkbox + title + QS */
+  .tile-header .row-check{
+    order:1;
+    flex-shrink:0;
+    margin-right:8px;
+    margin-top:2px;
+  }
+  .tile-header h2{
+    font-size:16px;
+    order:2;
+    flex:1;
+    margin:0;
+    line-height:1.3;
+    word-wrap:break-word;
+    overflow-wrap:break-word;
+    word-break:break-word;
+    white-space:normal;
+    min-width:0;
+    /* Remove desktop limitations */
+    -webkit-line-clamp:unset !important;
+    line-clamp:unset !important;
+    overflow:visible !important;
+    display:block !important;
+    -webkit-box-orient:unset !important;
+    max-width:none !important;
+  }
+  .tile-header .qs{
+    order:3;
+    font-size:11px;
+    color:#0b6ec5;
+    font-weight:700;
+    flex-shrink:0;
+    margin-left:8px;
+  }
+  
+  /* Hide labels on mobile - unnecessary! */
+  .tile-header .labels{
+    display:none !important;
+  }
+  
+  /* Second row: buttons only */
+  .tile-header .doc,
+  .tile-header .visualization,
+  .tile-header .download{
+    order:4;
+    margin-top:8px;
+    margin-left:4px;
+    display:inline-block;
+  }
+  
+  /* Ensure action buttons are visible */
+  .tile-header .doc,
+  .tile-header .visualization,
+  .tile-header .download{
+    width:32px;
+    height:32px;
+  }
+}
+
 .tile-header .preview{margin-left:auto;width:36px;height:36px;border-radius:10px;border:1px solid var(--border);background:linear-gradient(180deg,#fff,#f4f6fb);position:relative;display:inline-block}
 .tile-header .preview::before{content:"";position:absolute;inset:0;background:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>') center/20px no-repeat}
 .tile-header .download{width:36px;height:36px;border-radius:10px;border:1px solid var(--border);background:linear-gradient(180deg,#fff,#f4f6fb);position:relative}
@@ -299,21 +503,16 @@ html{overflow-x:hidden}
 .grid .muted{color:var(--muted)}
 
 /* Mobile tweaks: make layout single-column and convert filters into a drawer */
-@media (max-width:900px){
-  .toolbar{flex-wrap:wrap}
-  .toolbar .spacer{display:none}
-  .toolbar .search{min-width:0;flex:1 1 100%}
-  .toolbar .select-all{order:2}
-  .toolbar .count{order:3;width:100%;margin-top:4px}
-  /* On mobile, let the button span full width */
-  .toolbar .primary{order:4;width:100%;margin-top:6px;min-width:0}
-  .layout{
-    grid-template-columns:1fr;
-    gap:16px;
-    margin:8px auto;
-    padding:0 12px;
+@media (max-width:768px){
+  /* Layout fixes */
+  body {
+    padding:0;
+    margin:0;
   }
-  /* Off-canvas drawer baseline (closed by default via inline style class from JS) */
+  
+  /* Toolbar responsive fixes - moved above */
+  
+  /* Sidebar drawer fixes */
   .sidebar{
     display:none; /* hidden by default on mobile */
     position:fixed;
@@ -329,27 +528,96 @@ html{overflow-x:hidden}
     transform:translateY(100%);
     transition:transform .25s ease;
   }
-  .sidebar.drawer-open{ display:block; transform:translateY(0); }
+  .sidebar.drawer-open{ 
+    display:block; 
+    transform:translateY(0); 
+  }
   .sidebar .field{
     margin-bottom:8px;
   }
-  .grid{grid-template-columns:1fr 1fr;grid-auto-rows:auto}
+  
+  /* Grid responsive fixes */
+  .grid{
+    grid-template-columns:1fr 1fr;
+    grid-auto-rows:auto;
+    gap:12px;
+    padding:10px 12px;
+  }
   .grid.head{display:none}
+  
   /* Hide full details rows on mobile to avoid duplication with compact meta */
   .tile > .grid:not(.head){display:none}
   .grid>div{padding:6px 0;border-bottom:1px dashed var(--border)}
   .grid>div:nth-child(odd){font-weight:600}
+  
   /* Make tiles more compact */
   .tile{margin:12px 0;border-radius:12px}
-  .tile-header{padding:10px 12px;gap:10px;flex-wrap:wrap}
-  .tile-header h2{font-size:20px;line-height:1.2;max-width:280px}
+  
+  /* Tile header improvements are above */
   .tile-header .qs{font-size:11px;padding:0}
-  .tile-header .tag{font-size:11px;padding:4px 6px}
+  /* Labels are hidden on mobile so we don't need their styles */
+  
   /* Mobile-only compact meta row */
-  .mobile-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);background:#fcfcfe}
-  .mobile-meta > div{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
+  .mobile-meta{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:8px;
+    padding:8px 12px;
+    border-bottom:1px solid var(--border);
+    background:#fcfcfe
+  }
+  .mobile-meta > div{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    align-items:flex-start
+  }
   .mobile-meta span{font-size:11px;color:#64748b}
   .mobile-meta strong{font-size:14px;color:#0f172a}
+}
+
+/* Extra small screens */
+@media (max-width:480px){
+  .layout{
+    margin:4px auto;
+    padding:0 8px;
+  }
+  
+  .tile-header{
+    padding:8px 12px;
+  }
+  
+  .tile-header h2{
+    font-size:14px;
+    max-width:calc(100% - 140px); /* space for QS + buttons */
+  }
+  
+  /* QS and labels already hidden above */
+  
+  /* Make buttons smaller but keep touch-friendly size */
+  .tile-header .doc,
+  .tile-header .visualization,
+  .tile-header .download{
+    width:36px !important;
+    height:36px !important;
+    margin-left:2px;
+  }
+  
+  .toolbar .primary{
+    min-width:auto;
+    padding:10px 12px;
+    font-size:14px;
+  }
+  
+  .mobile-meta{
+    grid-template-columns:1fr 1fr;
+    gap:6px;
+  }
+  
+  .mobile-meta > div:nth-child(3){
+    grid-column:1 / -1;
+    text-align:center;
+  }
 }
 
 /* Slightly wider gutters on larger screens without affecting mobile */
@@ -358,6 +626,83 @@ html{overflow-x:hidden}
 }
 @media (min-width:1536px){
   .layout{ padding:0 40px; }
+}
+
+/* Medium screens (tablets) - breakpoint between mobile and desktop */
+@media (min-width:769px) and (max-width:1024px){
+  .layout{
+    gap:24px;
+    padding:0 16px;
+  }
+  
+  .toolbar .search{
+    flex:0 1 300px;
+    max-width:300px;
+  }
+  
+  .tile-header{
+    gap:8px;
+    flex-direction:row;
+    align-items:flex-start;
+    padding:12px 16px;
+    flex-wrap:wrap;
+  }
+  
+  /* First row: checkbox + title + QS */
+  .tile-header .row-check{
+    order:1;
+    flex-shrink:0;
+    margin-right:8px;
+    margin-top:2px;
+  }
+  .tile-header h2{
+    font-size:18px;
+    order:2;
+    flex:1;
+    margin:0;
+    line-height:1.2;
+    min-width:0;
+  }
+  .tile-header .qs{
+    order:3;
+    font-size:12px;
+    color:#0b6ec5;
+    font-weight:700;
+    flex-shrink:0;
+    margin-left:8px;
+  }
+  
+  /* Hide labels - like on mobile */
+  .tile-header .labels{
+    display:none !important;
+  }
+  
+  /* Second row: buttons side by side */
+  .tile-header .doc,
+  .tile-header .visualization,
+  .tile-header .download{
+    order:4;
+    margin-top:8px;
+    margin-left:4px;
+    display:inline-block;
+  }
+  
+  /* Table - only 3 columns and smaller text */
+  .grid{
+    grid-template-columns:2fr 0.8fr 0.8fr;
+    font-size:13px;
+    gap:12px;
+  }
+  .grid.head{
+    font-weight:600;
+  }
+  
+  /* Hide last 3 columns (Budget, Vote type, Vote length) */
+  .grid > div:nth-child(4),
+  .grid > div:nth-child(5),
+  .grid > div:nth-child(6){
+    display:none;
+  }
 }
 
 /* Semi-transparent backdrop for the filter drawer */
@@ -456,6 +801,22 @@ html{overflow-x:hidden}
 .mini-pop .mini-grid .k{color:var(--muted)}
 .mini-pop .mini-actions{margin-top:10px;text-align:right}
 .mini-pop .mini-actions a{color:#065aa0;text-decoration:none}
+
+/* Mobile fixes for mini-pop */
+@media (max-width:768px){
+  .mini-pop{
+    max-width:90vw;
+    min-width:280px;
+    padding:8px 10px;
+  }
+  .mini-pop .mini-grid{
+    gap:4px 8px;
+    font-size:12px;
+  }
+  .mini-pop .mini-head{
+    font-size:14px;
+  }
+}
 
 /* Preview page: keep Back-to-search button from changing color on hover */
 /* Back to search: neutral link, not blue at all */

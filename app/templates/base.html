@@ -133,6 +133,36 @@
             navLinks.classList.add('hidden');
           }
         });
+        
+        // Shorten tab names if small screen
+        function adjustNavText() {
+          const links = navLinks.querySelectorAll('a');
+          const isNarrow = window.innerWidth < 1200 && window.innerWidth >= 768;
+          
+          links.forEach(link => {
+            const originalText = link.getAttribute('data-original-text') || link.textContent;
+            if (!link.hasAttribute('data-original-text')) {
+              link.setAttribute('data-original-text', originalText);
+            }
+            
+            if (isNarrow) {
+              if (originalText === 'Data format') {
+                link.textContent = 'Format';
+              } else if (originalText === 'Upload & Check') {
+                link.textContent = 'Upload';
+              } else if (originalText === 'Statistics') {
+                link.textContent = 'Stats';
+              } else if (originalText === 'Citations') {
+                link.textContent = 'Cite';
+              }
+            } else {
+              link.textContent = originalText;
+            }
+          });
+        }
+        
+        adjustNavText();
+        window.addEventListener('resize', adjustNavText);
       });
     </script>
 

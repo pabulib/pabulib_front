@@ -619,10 +619,16 @@
   function positionMini(anchor){
     const r = anchor.getBoundingClientRect();
     const top = Math.max(8, r.bottom + 8);
-    const left = Math.min(window.innerWidth - 16 - 360, Math.max(8, r.right - 360));
+    
+    // Responsive width for mini popup
+    const isMobile = window.innerWidth <= 768;
+    const popupWidth = isMobile ? Math.min(320, window.innerWidth - 32) : 360;
+    const left = Math.min(window.innerWidth - 16 - popupWidth, Math.max(8, r.right - popupWidth));
+    
     // mini is position: fixed -> use viewport coordinates, no scroll offsets
     mini.style.top = `${top}px`;
     mini.style.left = `${left}px`;
+    mini.style.maxWidth = `${popupWidth}px`;
   }
   function fillMini(tile, href){
     const head = mini.querySelector('.mini-head');
@@ -729,7 +735,9 @@
     });
     // On desktop resize, make sure drawer isn't open state interfering
     window.addEventListener('resize', ()=>{
-      if(window.innerWidth > 900) closeDrawer();
+      if(window.innerWidth > 768) closeDrawer();
     });
   }
 })();
+
+// Removed mobile tags shortening - labels are hidden on mobile now
