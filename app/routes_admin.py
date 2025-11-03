@@ -2565,12 +2565,15 @@ def admin_export_download(relpath: str):
 
     # If the ZIP already contains the permanent link, serve as-is and set headers
     try:
-        import zipfile, re
+        import re
+        import zipfile
 
         with zipfile.ZipFile(target, "r") as zf:
             if "_PERMANENT_DOWNLOAD_LINK.txt" in zf.namelist():
                 try:
-                    txt = zf.read("_PERMANENT_DOWNLOAD_LINK.txt").decode("utf-8", "ignore")
+                    txt = zf.read("_PERMANENT_DOWNLOAD_LINK.txt").decode(
+                        "utf-8", "ignore"
+                    )
                 except Exception:
                     txt = ""
                 m = re.search(r"/download/snapshot/([0-9a-f]{16})", txt)
@@ -2583,7 +2586,9 @@ def admin_export_download(relpath: str):
                 if snapshot_id:
                     response.headers["X-Download-Snapshot-ID"] = snapshot_id
                     response.headers["X-Download-Snapshot-URL"] = url_for(
-                        "main.download_snapshot", snapshot_id=snapshot_id, _external=True
+                        "main.download_snapshot",
+                        snapshot_id=snapshot_id,
+                        _external=True,
                     )
                 return response
     except Exception:

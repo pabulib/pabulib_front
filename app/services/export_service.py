@@ -13,8 +13,8 @@ from typing import List, Tuple
 from ..db import get_session
 from ..models import PBFile
 from ..utils.pb_utils import pb_folder as _pb_folder
+from .snapshot_service import create_link_text_file as _create_link_text_file
 from .snapshot_service import (
-    create_link_text_file as _create_link_text_file,
     create_snapshot_for_cache_file as _create_snapshot_for_cache_file,
 )
 
