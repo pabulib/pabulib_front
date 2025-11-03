@@ -65,10 +65,16 @@
               <td class="px-3 py-2 align-top font-mono">{{ z.relpath }}</td>
               <td class="px-3 py-2 align-top">
                 <div class="flex items-center gap-2">
-                  <a href="{{ url_for('admin.admin_export_download', relpath=z.relpath) }}" class="px-2 py-1 text-xs rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50">Download</a>
+                  <a href="{{ url_for('admin.admin_export_download', relpath=z.relpath) }}" class="px-3 py-1.5 text-xs font-medium rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors">Download</a>
+                  <button type="button" onclick="createSnapshotLink('{{ z.relpath }}', '{{ z.name }}')" class="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-1">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                    </svg>
+                    Create Link
+                  </button>
                   <form method="post" action="{{ url_for('admin.admin_export_delete') }}" onsubmit="return confirm('Delete this ZIP permanently?');">
                     <input type="hidden" name="relpath" value="{{ z.relpath }}" />
-                    <button type="submit" class="px-2 py-1 text-xs rounded-md bg-red-600 text-white hover:bg-red-700">Delete</button>
+                    <button type="submit" class="px-3 py-1.5 text-xs font-medium rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors">Delete</button>
                   </form>
                 </div>
               </td>
@@ -82,4 +88,118 @@
     {% endif %}
   </div>
 </section>
+
+<!-- Snapshot Link Modal -->
+<div id="snapshotModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+  <div class="bg-white rounded-lg shadow-lg max-w-2xl w-full mx-4 p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-semibold">Snapshot Link Created</h3>
+      <button onclick="closeSnapshotModal()" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+    
+    <div class="space-y-4">
+      <p class="text-sm text-slate-600">A permanent snapshot link has been created for this export. This link will always point to the exact same files, even if they are updated later.</p>
+      
+      <div class="bg-slate-50 rounded-md p-3">
+        <label class="block text-sm font-medium text-slate-700 mb-1">Snapshot URL:</label>
+        <div class="flex items-center gap-2">
+          <input id="snapshotUrl" type="text" readonly class="flex-1 text-sm font-mono bg-white border border-slate-300 rounded px-2 py-1" />
+          <button onclick="copySnapshotUrl()" class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">Copy</button>
+        </div>
+      </div>
+      
+      <div class="bg-slate-50 rounded-md p-3">
+        <label class="block text-sm font-medium text-slate-700 mb-1">Snapshot ID:</label>
+        <input id="snapshotId" type="text" readonly class="w-full text-sm font-mono bg-white border border-slate-300 rounded px-2 py-1" />
+      </div>
+      
+      <div class="flex justify-end gap-2">
+        <button onclick="closeSnapshotModal()" class="px-4 py-2 text-sm border border-slate-300 rounded hover:bg-slate-50">Close</button>
+        <a id="snapshotDownloadLink" href="#" class="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700">Test Download</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function createSnapshotLink(relpath, filename) {
+  // Show loading state
+  const button = event.target;
+  const originalHTML = button.innerHTML;
+  button.innerHTML = `
+    <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+    Creating...
+  `;
+  button.disabled = true;
+  
+  fetch('{{ url_for("admin.admin_export_create_snapshot") }}', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      relpath: relpath,
+      download_name: filename
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.ok) {
+      // Show the modal with the snapshot URL
+      document.getElementById('snapshotUrl').value = data.snapshot_url;
+      document.getElementById('snapshotId').value = data.snapshot_id;
+      document.getElementById('snapshotDownloadLink').href = data.snapshot_url;
+      document.getElementById('snapshotModal').classList.remove('hidden');
+    } else {
+      alert('Error creating snapshot: ' + (data.error || 'Unknown error'));
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('Error creating snapshot: ' + error.message);
+  })
+  .finally(() => {
+    // Reset button state
+    button.innerHTML = originalHTML;
+    button.disabled = false;
+  });
+}
+
+function closeSnapshotModal() {
+  document.getElementById('snapshotModal').classList.add('hidden');
+}
+
+function copySnapshotUrl() {
+  const urlInput = document.getElementById('snapshotUrl');
+  urlInput.select();
+  urlInput.setSelectionRange(0, 99999); // For mobile devices
+  
+  try {
+    document.execCommand('copy');
+    const button = event.target;
+    const originalText = button.textContent;
+    button.textContent = 'Copied!';
+    setTimeout(() => {
+      button.textContent = originalText;
+    }, 2000);
+  } catch (err) {
+    console.error('Could not copy text: ', err);
+    alert('Could not copy to clipboard. Please copy manually.');
+  }
+}
+
+// Close modal when clicking outside
+document.getElementById('snapshotModal').addEventListener('click', function(e) {
+  if (e.target === this) {
+    closeSnapshotModal();
+  }
+});
+</script>
 {% endblock %}

@@ -11,12 +11,47 @@
         <path fill-rule="evenodd" d="M11.47 3.84a.75.75 0 0 1 1.06 0l7.5 7.5a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 1 1-1.06-1.06L17.94 12 11.47 5.56a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/>
       </svg>
     </div>
-    <h1 class="text-3xl font-semibold text-slate-900 tracking-tight">404 – Page not found</h1>
-    <p class="mt-3 text-slate-600">The page you’re looking for doesn’t exist or was moved.</p>
+    <h1 class="text-3xl font-semibold text-slate-900 tracking-tight">
+      {% if 'snapshot' in path %}
+        Snapshot Not Found
+      {% else %}
+        404 – Page not found
+      {% endif %}
+    </h1>
+    
+    {% if 'snapshot' in path %}
+      <p class="mt-3 text-slate-600">The snapshot you're looking for doesn't exist or may have been removed.</p>
+    {% else %}
+      <p class="mt-3 text-slate-600">The page you're looking for doesn't exist or was moved.</p>
+    {% endif %}
+    
     {% if path %}
       <p class="mt-1 text-sm text-slate-500">Requested endpoint: <code class="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200">{{ path }}</code></p>
     {% endif %}
+
+    {% if 'snapshot' in path %}
+      <div class="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg text-left">
+        <h3 class="text-sm font-medium text-amber-900 mb-2">Possible reasons:</h3>
+        <ul class="text-xs text-amber-800 space-y-1">
+          <li>• The snapshot ID is incorrect or incomplete</li>
+          <li>• The snapshot was created on a different server</li>
+          <li>• The snapshot has been removed (though this is rare)</li>
+        </ul>
+        <p class="text-xs text-amber-700 mt-2">
+          Valid snapshot links look like: <code>{{ request.host_url }}download/snapshot/a1b2c3d4e5f67890</code>
+        </p>
+      </div>
+    {% endif %}
     <div class="mt-6">
+      {% if 'snapshot' in path %}
+      <a href="{{ url_for('main.home') }}"
+         class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
+          <path fill-rule="evenodd" d="M11.03 3.97a.75.75 0 0 1 0 1.06l-6.22 6.22H21a.75.75 0 0 1 0 1.5H4.81l6.22 6.22a.75.75 0 1 1-1.06 1.06l-7.5-7.5a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd"/>
+        </svg>
+        Back to search
+      </a>
+      {% else %}
       <a href="{{ url_for('main.home') }}"
          class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
@@ -25,6 +60,7 @@
         </svg>
         Back to search
       </a>
+      {% endif %}
     </div>
   </div>
   

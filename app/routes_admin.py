@@ -24,13 +24,27 @@ from flask import (
     session,
     url_for,
 )
+from sqlalchemy import func
 from werkzeug.security import check_password_hash
 from werkzeug.utils import secure_filename
 
 from .db import get_session
-from .models import AdminUser, PBCategory, PBComment, PBFile, PBTarget
+from .models import (
+    AdminUser,
+    DownloadSnapshot,
+    DownloadSnapshotFile,
+    PBCategory,
+    PBComment,
+    PBFile,
+    PBTarget,
+)
 from .services import export_service, pb_service
 from .services.pb_service import get_comment_usages as _get_comment_usages
+from .services.snapshot_service import (
+    add_link_to_existing_zip,
+    create_download_snapshot,
+    create_snapshot_for_cache_file,
+)
 from .utils.formatting import format_budget as _format_budget
 from .utils.formatting import format_int as _format_int
 from .utils.formatting import format_vote_length as _format_vote_length
@@ -207,6 +221,50 @@ def admin_dashboard():
         count=len(files),
         message=msg,
         success=success,
+    )
+
+
+@bp.get("/admin/links")
+def admin_links():
+    """List all permanent download links (snapshots) with minimal useful info."""
+    with get_session() as s:
+        rows = (
+            s.query(
+                DownloadSnapshot.snapshot_id,
+                DownloadSnapshot.download_name,
+                DownloadSnapshot.created_at,
+                DownloadSnapshot.is_active,
+                func.count(DownloadSnapshotFile.id).label("file_count"),
+            )
+            .outerjoin(
+                DownloadSnapshotFile,
+                DownloadSnapshotFile.snapshot_id == DownloadSnapshot.snapshot_id,
+            )
+            .group_by(
+                DownloadSnapshot.snapshot_id,
+                DownloadSnapshot.download_name,
+                DownloadSnapshot.created_at,
+                DownloadSnapshot.is_active,
+            )
+            .order_by(DownloadSnapshot.created_at.desc())
+            .all()
+        )
+
+    links = [
+        {
+            "snapshot_id": r[0],
+            "download_name": r[1],
+            "created_at": r[2],
+            "is_active": bool(r[3]),
+            "file_count": int(r[4] or 0),
+        }
+        for r in rows
+    ]
+
+    return render_template(
+        "admin/links.html",
+        links=links,
+        count=len(links),
     )
 
 
@@ -1396,11 +1454,17 @@ def upload_tiles_download_file(token: str):
             file_path = p
     if not file_path or not file_path.exists():
         abort(404)
-    return send_file(
+    # Add snapshot information if available
+    response = send_file(
         file_path,
         as_attachment=True,
         download_name=data.get("download_name") or "temp_selected.zip",
     )
+
+    # For admin temp downloads, we could create snapshots, but these are usually temporary files
+    # So we'll skip snapshot creation to avoid cluttering the snapshot system
+
+    return response
 
 
 @bp.post("/admin/upload/validate")
@@ -2488,7 +2552,93 @@ def admin_export_download(relpath: str):
 
     if not target.exists() or not target.is_file() or not target.name.endswith(".zip"):
         abort(404)
+
+    # Create snapshot for this admin export download
+    try:
+        # For admin exports, we need to get the file pairs from the database
+        # This is a bit more complex since we need to reconstruct what was in the zip
+        with get_session() as s:
+            current_files = s.query(PBFile).filter(PBFile.is_current == True).all()
+            file_pairs = []
+            for pb_file in current_files:
+                file_path = Path(pb_file.path)
+                if file_path.exists():
+                    file_pairs.append((pb_file.file_name, file_path))
+
+        if file_pairs:
+            snapshot_id = create_download_snapshot(
+                file_pairs=file_pairs,
+                download_name=target.name,
+            )
+
+            # Add link file to the existing ZIP for download
+            base_url = request.host_url.rstrip("/")
+            memory_file = add_link_to_existing_zip(
+                target, snapshot_id, target.name, base_url
+            )
+
+            response = send_file(
+                memory_file,
+                as_attachment=True,
+                download_name=target.name,
+                mimetype="application/zip",
+            )
+            response.headers["X-Download-Snapshot-ID"] = snapshot_id
+            response.headers["X-Download-Snapshot-URL"] = url_for(
+                "main.download_snapshot", snapshot_id=snapshot_id, _external=True
+            )
+            return response
+    except Exception:
+        # If snapshot creation fails, still serve the file
+        pass
+
     return send_file(target, as_attachment=True, download_name=target.name)
+
+
+@bp.post("/admin/export/create-snapshot")
+def admin_export_create_snapshot():
+    """Create a snapshot link for an existing cache file.
+
+    Accepts JSON with 'relpath' (cache relative path) and 'download_name'.
+    Returns snapshot_id and snapshot_url.
+    """
+    if not request.is_json:
+        return jsonify({"ok": False, "error": "JSON required"}), 400
+
+    data = request.get_json()
+    relpath = (data.get("relpath") or "").strip()
+    download_name = (data.get("download_name") or "").strip()
+
+    if not relpath or ".." in relpath:
+        return jsonify({"ok": False, "error": "Invalid relpath"}), 400
+
+    if not download_name:
+        # Extract filename from relpath
+        download_name = Path(relpath).name
+
+    try:
+        # Create snapshot for the existing cache file
+        snapshot_id = create_snapshot_for_cache_file(download_name=download_name)
+
+        # Generate the snapshot URL
+        snapshot_url = url_for(
+            "main.download_snapshot", snapshot_id=snapshot_id, _external=True
+        )
+
+        return jsonify(
+            {
+                "ok": True,
+                "snapshot_id": snapshot_id,
+                "snapshot_url": snapshot_url,
+                "message": "Snapshot link created successfully",
+            }
+        )
+
+    except FileNotFoundError as e:
+        return jsonify({"ok": False, "error": f"Cache file not found: {e}"}), 404
+    except Exception as e:
+        current_app.logger.exception("Failed to create snapshot for cache file")
+        return jsonify({"ok": False, "error": f"Failed to create snapshot: {e}"}), 500
 
 
 @bp.post("/admin/export/delete")

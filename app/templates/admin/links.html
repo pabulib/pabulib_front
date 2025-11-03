@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block bodyClass %}admin{% endblock %}
+{% block title %}Admin – Links{% endblock %}
+
+{% block body %}
+{% include 'admin/_navbar.html' %}
+
+<div class="max-w-7xl mx-auto px-4 py-6">
+  <div class="flex items-center justify-between mb-4">
+    <h1 class="text-3xl font-bold text-slate-800">Permanent Links</h1>
+    <span class="text-slate-500">{{ count }} total</span>
+  </div>
+
+  <div class="overflow-x-auto bg-white border border-slate-200 rounded-lg">
+    <table class="min-w-full">
+      <thead class="bg-slate-50 text-slate-600 text-sm">
+        <tr>
+          <th class="px-3 py-2 text-left">Created</th>
+          <th class="px-3 py-2 text-left">Files</th>
+          <th class="px-3 py-2 text-left">Token</th>
+          <th class="px-3 py-2 text-left">Download name</th>
+          <th class="px-3 py-2 text-left">Link</th>
+          <th class="px-3 py-2 text-left">Active</th>
+          <th class="px-3 py-2 text-left">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="text-sm text-slate-800">
+        {% for l in links %}
+        <tr class="border-t border-slate-200 hover:bg-slate-50">
+          <td class="px-3 py-2 whitespace-nowrap">{{ l.created_at.strftime('%Y-%m-%d %H:%M:%S') if l.created_at else '—' }}</td>
+          <td class="px-3 py-2">{{ l.file_count }}</td>
+          <td class="px-3 py-2 font-mono text-xs">{{ l.snapshot_id }}</td>
+          <td class="px-3 py-2">{{ l.download_name }}</td>
+          <td class="px-3 py-2">
+            <a class="text-blue-600 hover:text-blue-800 break-all" href="{{ url_for('main.download_snapshot', snapshot_id=l.snapshot_id) }}" target="_blank" rel="noopener">/download/snapshot/{{ l.snapshot_id }}</a>
+          </td>
+          <td class="px-3 py-2">{{ 'yes' if l.is_active else 'no' }}</td>
+          <td class="px-3 py-2">
+            <a class="text-blue-600 hover:text-blue-800" href="{{ url_for('main.download_snapshot', snapshot_id=l.snapshot_id) }}" target="_blank" rel="noopener">Open</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="px-3 py-6 text-center text-slate-500">No links yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="mt-4 text-slate-500 text-sm">
+    Tip: Each link downloads the exact PBFile versions captured when the link was created. New uploads create new PBFile IDs and do not affect existing links.
+  </p>
+</div>
+
+{% endblock %}

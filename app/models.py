@@ -165,3 +165,51 @@ class RefreshState(Base):
     last_completed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime, nullable=True
     )
+
+
+class DownloadSnapshot(Base):
+    """Minimal link record for a permanent download token."""
+
+    __tablename__ = "download_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # Unique identifier for this snapshot (deterministic hash based on file set)
+    snapshot_id: Mapped[str] = mapped_column(
+        String(64), unique=True, nullable=False, index=True
+    )
+
+    # Display/download details
+    download_name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # Metadata
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+
+    # Status
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+    __table_args__ = (Index("ix_download_snapshots_created_at", "created_at"),)
+
+
+class DownloadSnapshotFile(Base):
+    """Minimal mapping of link token to exact PBFile record IDs."""
+
+    __tablename__ = "download_snapshot_files"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    snapshot_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("download_snapshots.snapshot_id"),
+        nullable=False,
+        index=True,
+    )
+
+    # Exact PBFile.id captured at link creation time (stable version semantics)
+    file_id: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("snapshot_id", "file_id", name="uq_snapshot_file"),
+        Index("ix_download_snapshot_files_snapshot", "snapshot_id"),
+        Index("ix_download_snapshot_files_file_id", "file_id"),
+    )

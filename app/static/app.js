@@ -474,18 +474,41 @@
         return;
       }
       if(d.done){
-        // Trigger file download
+        // Trigger file download with snapshot notification
         try{
           if(bar) bar.style.width = '100%';
           if(pct) pct.textContent = '100%';
           if(text) text.textContent = 'Starting download...';
+          
+          // Fetch the file to get snapshot headers
+          const response = await fetch(fileUrl);
+          if (!response.ok) {
+            throw new Error(`Download failed: ${response.status}`);
+          }
+          const blob = await response.blob();
+          
+          // Check for snapshot headers and show notification
+          handleSnapshotInfo(response);
+          
+          // Trigger download
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = (d.download_name || 'pb_selected.zip');
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+        } catch (error) {
+          console.error('Download error:', error);
+          // Fallback to simple download link
           const a = document.createElement('a');
           a.href = fileUrl;
           a.download = (d.download_name || 'pb_selected.zip');
           document.body.appendChild(a);
           a.click();
           a.remove();
-        }finally{
+        } finally{
           setTimeout(()=>{ if(box) box.classList.add('hidden'); }, 1000);
         }
         return;
@@ -738,6 +761,186 @@
       if(window.innerWidth > 768) closeDrawer();
     });
   }
+  // Snapshot Management ---------------------------------------------------
+  
+  /**
+   * Check for snapshot information in download response headers
+   * and display a notification with the permanent link
+   */
+  function handleSnapshotInfo(response) {
+    const snapshotId = response.headers.get('X-Download-Snapshot-ID');
+    const snapshotUrl = response.headers.get('X-Download-Snapshot-URL');
+    
+    if (snapshotId && snapshotUrl) {
+      showSnapshotNotification(snapshotId, snapshotUrl);
+    }
+  }
+  
+  /**
+   * Show a notification with snapshot information
+   */
+  function showSnapshotNotification(snapshotId, snapshotUrl) {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = 'snapshot-notification';
+    notification.innerHTML = `
+      <div class="snapshot-content">
+        <h4>Download Saved!</h4>
+        <p>Your download has been saved with a permanent link:</p>
+        <div class="snapshot-link-container">
+          <input type="text" readonly value="${snapshotUrl}" class="snapshot-link" id="snapshot-link-${snapshotId}">
+          <button type="button" class="copy-btn" data-target="snapshot-link-${snapshotId}">Copy</button>
+        </div>
+        <small>This link will always point to the exact same files, even if they're updated later.</small>
+        <button type="button" class="close-btn" onclick="this.parentElement.parentElement.remove()">×</button>
+      </div>
+    `;
+    
+    // Add styles if not already present
+    if (!document.querySelector('#snapshot-styles')) {
+      const styles = document.createElement('style');
+      styles.id = 'snapshot-styles';
+      styles.textContent = `
+        .snapshot-notification {
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: #fff;
+          border: 1px solid #ddd;
+          border-radius: 8px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          padding: 16px;
+          max-width: 400px;
+          z-index: 1000;
+          animation: slideIn 0.3s ease;
+        }
+        .snapshot-content h4 {
+          margin: 0 0 8px 0;
+          color: #059669;
+        }
+        .snapshot-content p {
+          margin: 0 0 12px 0;
+          font-size: 14px;
+        }
+        .snapshot-link-container {
+          display: flex;
+          gap: 8px;
+          margin-bottom: 8px;
+        }
+        .snapshot-link {
+          flex: 1;
+          padding: 6px 8px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          font-family: monospace;
+          font-size: 12px;
+        }
+        .copy-btn {
+          padding: 6px 12px;
+          background: #059669;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 12px;
+        }
+        .copy-btn:hover {
+          background: #047857;
+        }
+        .close-btn {
+          position: absolute;
+          top: 8px;
+          right: 12px;
+          background: none;
+          border: none;
+          font-size: 18px;
+          cursor: pointer;
+          color: #666;
+        }
+        .close-btn:hover {
+          color: #333;
+        }
+        .snapshot-content small {
+          color: #666;
+          font-size: 12px;
+          display: block;
+        }
+        @keyframes slideIn {
+          from { transform: translateX(100%); }
+          to { transform: translateX(0); }
+        }
+      `;
+      document.head.appendChild(styles);
+    }
+    
+    // Add to page
+    document.body.appendChild(notification);
+    
+    // Add copy functionality
+    notification.querySelector('.copy-btn').addEventListener('click', function() {
+      const input = notification.querySelector('.snapshot-link');
+      input.select();
+      document.execCommand('copy');
+      
+      // Show feedback
+      this.textContent = 'Copied!';
+      setTimeout(() => {
+        this.textContent = 'Copy';
+      }, 2000);
+    });
+    
+    // Auto-remove after 30 seconds
+    setTimeout(() => {
+      if (notification.parentElement) {
+        notification.remove();
+      }
+    }, 30000);
+  }
+  
+  /**
+   * Intercept download links to check for snapshot headers
+   */
+  function interceptDownloads() {
+    // Intercept single file downloads
+    $$('a[href^="/download/"]').forEach(link => {
+      if (link.href.includes('/download/snapshot/')) return; // Skip snapshot links
+      
+      link.addEventListener('click', async function(e) {
+        e.preventDefault();
+        
+        try {
+          const response = await fetch(this.href);
+          const blob = await response.blob();
+          
+          // Check for snapshot headers
+          handleSnapshotInfo(response);
+          
+          // Trigger download
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] || 'download';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+          
+        } catch (error) {
+          console.error('Download failed:', error);
+          // Fallback to normal download
+          window.location.href = this.href;
+        }
+      });
+    });
+  }
+  
+  // Initialize snapshot functionality
+  if (typeof window !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', interceptDownloads);
+    // Re-run when new content is loaded dynamically
+    document.addEventListener('contentLoaded', interceptDownloads);
+  }
+
 })();
 
 // Removed mobile tags shortening - labels are hidden on mobile now

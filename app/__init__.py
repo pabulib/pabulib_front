@@ -61,6 +61,11 @@ def create_app():
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.environ["SECRET_KEY"]
 
+    # Create database tables if they don't exist
+    from .db import Base, engine
+
+    Base.metadata.create_all(engine)
+
     # Global request body cap (security): default 10 MB unless overridden.
     # Note: We provide a targeted handler to allow download-start endpoints
     # to proceed without needing to read large request bodies (see routes).
@@ -101,6 +106,11 @@ def create_app():
     app.register_blueprint(admin_bp)
 
     # Error handlers
+    @app.errorhandler(400)
+    def bad_request(e):  # pragma: no cover
+        # Provide the requested path and error details for bad request template
+        return render_template("400.html", path=request.path, error=e), 400
+
     @app.errorhandler(404)
     def not_found(e):  # pragma: no cover
         # Provide the requested path so the template can show what was missing

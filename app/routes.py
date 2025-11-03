@@ -1,5 +1,6 @@
 import io
 import json
+import re
 import tempfile
 import threading
 import uuid
@@ -93,6 +94,7 @@ def _build_zip_in_background(
     file_pairs: List[Tuple[str, Path]],
     download_name: str,
     reuse_file_path: Optional[Path] = None,
+    file_ids: Optional[List[int]] = None,
 ) -> None:
     """Create the zip in the background and update progress JSON. If reuse_file_path
     is provided, mark job as done immediately using that existing file."""
@@ -109,12 +111,14 @@ def _build_zip_in_background(
                 "done": True,
                 "error": None,
                 "download_name": download_name,
+                "file_ids": file_ids or [],
             }
             _write_progress(token, progress)
             with _ZIP_JOBS_LOCK:
                 _ZIP_JOBS[token] = {
                     "file_path": str(reuse_file_path),
                     "download_name": download_name,
+                    "file_ids": file_ids or [],
                 }
             return
 
@@ -130,6 +134,7 @@ def _build_zip_in_background(
             "done": False,
             "error": None,
             "download_name": download_name,
+            "file_ids": file_ids or [],
         }
         _write_progress(token, progress)
 
@@ -169,6 +174,7 @@ def _build_zip_in_background(
             _ZIP_JOBS[token] = {
                 "file_path": str(out_zip),
                 "download_name": download_name,
+                "file_ids": file_ids or [],
             }
     except Exception as e:
         progress = {
@@ -181,11 +187,21 @@ def _build_zip_in_background(
             "done": False,
             "error": f"Zip error: {e}",
             "download_name": download_name,
+            "file_ids": file_ids or [],
         }
         _write_progress(token, progress)
 
 
 from .services.pb_service import get_tiles_cached as _get_tiles_cached
+from .services.snapshot_service import (
+    add_link_to_existing_zip as _add_link_to_existing_zip,
+)
+from .services.snapshot_service import (
+    create_download_with_link as _create_download_with_link,
+)
+from .services.snapshot_service import (
+    serve_snapshot_download as _serve_snapshot_download,
+)
 from .utils.file_helpers import is_safe_filename as _is_safe_filename
 from .utils.formatting import format_int as _format_int
 from .utils.load_pb_file import parse_pb_lines
@@ -972,7 +988,22 @@ def download(filename: str):
     path = get_current_file_path(filename)
     if not path or not path.exists() or not path.is_file():
         abort(404)
-    return send_file(path, as_attachment=True)
+    # For single-file downloads, also expose snapshot headers so the UI can show
+    # a permanent-link notification (we don't embed the link file in .pb files).
+    try:
+        from .services.snapshot_service import create_download_snapshot as _create_snap
+
+        snapshot_id = _create_snap(file_pairs=[(path.name, path)], download_name=path.name)
+        response = send_file(path, as_attachment=True)
+        # Inform the client about the permanent link via headers
+        response.headers["X-Download-Snapshot-ID"] = snapshot_id
+        response.headers["X-Download-Snapshot-URL"] = url_for(
+            "main.download_snapshot", snapshot_id=snapshot_id, _external=True
+        )
+        return response
+    except Exception:
+        # If anything goes wrong, still serve the original file
+        return send_file(path, as_attachment=True)
 
 
 @bp.post("/download-selected")
@@ -1019,10 +1050,39 @@ def download_selected():
         except Exception:
             latest_export = None
         if latest_export is not None:
-            # Add current timestamp to the download name at time of download
+            # Build file_pairs from DB to generate a permanent link token
+            all_file_pairs = get_all_current_file_paths()
+            if not all_file_pairs:
+                abort(404, description="No current files found")
+            # Create snapshot and inject link file into ZIP in-memory
+            base_url = request.host_url.rstrip("/")
             ts_download = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             dl_name = f"all_pb_files_{ts_download}.zip"
-            return send_file(latest_export, as_attachment=True, download_name=dl_name)
+            try:
+                from .services.snapshot_service import create_download_snapshot
+
+                snapshot_id = create_download_snapshot(
+                    file_pairs=all_file_pairs, download_name=dl_name
+                )
+                mem = _add_link_to_existing_zip(
+                    latest_export, snapshot_id, dl_name, base_url
+                )
+                response = send_file(
+                    mem,
+                    as_attachment=True,
+                    download_name=dl_name,
+                    mimetype="application/zip",
+                )
+                response.headers["X-Download-Snapshot-ID"] = snapshot_id
+                response.headers["X-Download-Snapshot-URL"] = url_for(
+                    "main.download_snapshot", snapshot_id=snapshot_id, _external=True
+                )
+                return response
+            except Exception:
+                # Fallback: serve original zip without link if snapshot creation fails
+                return send_file(
+                    latest_export, as_attachment=True, download_name=dl_name
+                )
 
         # 2) No timestamped export found; build a fresh timestamped export now
         all_file_pairs = get_all_current_file_paths()
@@ -1040,7 +1100,28 @@ def download_selected():
                 zf.write(file_path, arcname=file_name)
         ts_download = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         dl_name = f"all_pb_files_{ts_download}.zip"
-        return send_file(out_zip, as_attachment=True, download_name=dl_name)
+        # Add link file to streamed response (cached zip on disk remains unchanged)
+        try:
+            from .services.snapshot_service import create_download_snapshot
+
+            base_url = request.host_url.rstrip("/")
+            snapshot_id = create_download_snapshot(
+                file_pairs=all_file_pairs, download_name=dl_name
+            )
+            mem = _add_link_to_existing_zip(out_zip, snapshot_id, dl_name, base_url)
+            response = send_file(
+                mem,
+                as_attachment=True,
+                download_name=dl_name,
+                mimetype="application/zip",
+            )
+            response.headers["X-Download-Snapshot-ID"] = snapshot_id
+            response.headers["X-Download-Snapshot-URL"] = url_for(
+                "main.download_snapshot", snapshot_id=snapshot_id, _external=True
+            )
+            return response
+        except Exception:
+            return send_file(out_zip, as_attachment=True, download_name=dl_name)
 
     # Original logic for individual file selection
     files = []
@@ -1054,16 +1135,25 @@ def download_selected():
     if not files:
         abort(404, description="Selected files not found")
 
-    mem = io.BytesIO()
-    with zipfile.ZipFile(mem, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for p in files:
-            zf.write(p, arcname=p.name)
-    mem.seek(0)
+    # Build download with embedded permanent link
+    file_pairs = [(p.name, p) for p in files]
     stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     filename = f"pb_selected_{len(files)}_{stamp}.zip"
-    return send_file(
+    base_url = request.host_url.rstrip("/")
+    mem, _snapshot_id = _create_download_with_link(
+        file_pairs=file_pairs, download_name=filename, base_url=base_url
+    )
+    response = send_file(
         mem, as_attachment=True, download_name=filename, mimetype="application/zip"
     )
+    try:
+        response.headers["X-Download-Snapshot-ID"] = _snapshot_id
+        response.headers["X-Download-Snapshot-URL"] = url_for(
+            "main.download_snapshot", snapshot_id=_snapshot_id, _external=True
+        )
+    except Exception:
+        pass
+    return response
 
     # No public API endpoints; JSON routes removed
 
@@ -1100,6 +1190,7 @@ def download_selected_start():
     )
 
     file_pairs: List[Tuple[str, Path]] = []
+    file_ids_for_snapshot: List[int] = []
     reuse_path: Optional[Path] = None
     download_name = "pb_selected.zip"
 
@@ -1110,6 +1201,18 @@ def download_selected_start():
         all_file_pairs = get_all_current_file_paths()
         if not all_file_pairs:
             return jsonify({"ok": False, "error": "No current files found"}), 404
+        # Capture PBFile IDs for all current files at job start
+        try:
+            with get_session() as s:
+                file_ids_for_snapshot = [
+                    int(fid)
+                    for (fid,) in s.query(PBFile.id)
+                    .filter(PBFile.is_current == True)  # noqa: E712
+                    .order_by(PBFile.file_name)
+                    .all()
+                ]
+        except Exception:
+            file_ids_for_snapshot = []
         # 1) Try newest timestamped export first
         latest_export: Optional[Path] = None
         try:
@@ -1150,6 +1253,24 @@ def download_selected_start():
                     ),
                     404,
                 )
+            # Capture PBFile IDs for included names
+            try:
+                with get_session() as s:
+                    names = [name for (name, _p) in file_pairs]
+                    rows = (
+                        s.query(PBFile.file_name, PBFile.id)
+                        .filter(PBFile.is_current == True)  # noqa: E712
+                        .filter(PBFile.file_name.in_(names))
+                        .all()
+                    )
+                    name_to_id = {fn: int(fid) for fn, fid in rows}
+                    file_ids_for_snapshot = [
+                        name_to_id.get(n)
+                        for n in names
+                        if name_to_id.get(n) is not None
+                    ]
+            except Exception:
+                file_ids_for_snapshot = []
             stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             download_name = f"pb_selected_{len(file_pairs)}_{stamp}.zip"
         else:
@@ -1162,6 +1283,24 @@ def download_selected_start():
                     file_pairs.append((name, p))
             if not file_pairs:
                 return jsonify({"ok": False, "error": "Selected files not found"}), 404
+            # Capture PBFile IDs for selected names
+            try:
+                with get_session() as s:
+                    rows = (
+                        s.query(PBFile.file_name, PBFile.id)
+                        .filter(PBFile.is_current == True)  # noqa: E712
+                        .filter(PBFile.file_name.in_(names))
+                        .all()
+                    )
+                    name_to_id = {fn: int(fid) for fn, fid in rows}
+                    # Preserve the order of file_pairs
+                    file_ids_for_snapshot = [
+                        name_to_id.get(n)
+                        for (n, _p) in file_pairs
+                        if name_to_id.get(n) is not None
+                    ]
+            except Exception:
+                file_ids_for_snapshot = []
             stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             download_name = f"pb_selected_{len(file_pairs)}_{stamp}.zip"
 
@@ -1190,6 +1329,7 @@ def download_selected_start():
             file_pairs,
             download_name,
             reuse_path,
+            file_ids_for_snapshot,
         ),
         daemon=True,
     )
@@ -1343,6 +1483,14 @@ def download_selected_file(token: str):
         or (job_data or {}).get("download_name")
         or "pb_selected.zip"
     )
+    # Attempt to retrieve captured PBFile IDs for deterministic snapshot
+    captured_ids: List[int] = []
+    try:
+        ids_from_job = (job_data or {}).get("file_ids") or data.get("file_ids") or []
+        if isinstance(ids_from_job, list):
+            captured_ids = [int(x) for x in ids_from_job if x is not None]
+    except Exception:
+        captured_ids = []
     if job_data and job_data.get("file_path"):
         file_path = Path(job_data["file_path"])  # type: ignore[index]
     else:
@@ -1352,7 +1500,48 @@ def download_selected_file(token: str):
             file_path = p
     if not file_path or not file_path.exists():
         abort(404)
+    # If we have captured IDs, create a snapshot and inject link file into the ZIP on the fly
+    if captured_ids:
+        try:
+            from .services.snapshot_service import add_link_to_existing_zip as _add_link
+            from .services.snapshot_service import (
+                create_download_snapshot_from_ids as _create_snapshot_from_ids,
+            )
+
+            base_url = request.host_url.rstrip("/")
+            snapshot_id = _create_snapshot_from_ids(captured_ids, download_name)
+            mem = _add_link(file_path, snapshot_id, download_name, base_url)
+            response = send_file(
+                mem,
+                as_attachment=True,
+                download_name=download_name,
+                mimetype="application/zip",
+            )
+            # Expose snapshot headers so the frontend can show the top-right notice
+            response.headers["X-Download-Snapshot-ID"] = snapshot_id
+            response.headers["X-Download-Snapshot-URL"] = url_for(
+                "main.download_snapshot", snapshot_id=snapshot_id, _external=True
+            )
+            return response
+        except Exception:
+            # Fall back to serving the raw ZIP if snapshot injection fails
+            return send_file(file_path, as_attachment=True, download_name=download_name)
+    # No captured IDs; serve raw ZIP
     return send_file(file_path, as_attachment=True, download_name=download_name)
+
+
+@bp.get("/download/snapshot/<snapshot_id>")
+def download_snapshot(snapshot_id: str):
+    """Serve a permanent, version-stable download by snapshot ID.
+
+    The snapshot maps to exact PBFile record IDs captured at creation time,
+    ensuring the same versions are downloaded even after updates.
+    """
+    token = (snapshot_id or "").strip().lower()
+    # Validate token format (deterministic 16 hex chars). Return 400 for invalid format.
+    if not re.fullmatch(r"[0-9a-f]{16}", token):
+        abort(400, description="Invalid snapshot link format.")
+    return _serve_snapshot_download(token)
 
 
 def _order_columns(all_keys: List[str], preferred_order: List[str]) -> List[str]:
