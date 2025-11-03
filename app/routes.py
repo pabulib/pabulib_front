@@ -993,7 +993,9 @@ def download(filename: str):
     try:
         from .services.snapshot_service import create_download_snapshot as _create_snap
 
-        snapshot_id = _create_snap(file_pairs=[(path.name, path)], download_name=path.name)
+        snapshot_id = _create_snap(
+            file_pairs=[(path.name, path)], download_name=path.name
+        )
         response = send_file(path, as_attachment=True)
         # Inform the client about the permanent link via headers
         response.headers["X-Download-Snapshot-ID"] = snapshot_id
