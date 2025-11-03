@@ -1052,11 +1052,7 @@ def download_selected():
         except Exception:
             latest_export = None
         if latest_export is not None:
-            # Build file_pairs from DB to generate a permanent link token
-            all_file_pairs = get_all_current_file_paths()
-            if not all_file_pairs:
-                abort(404, description="No current files found")
-            # Prefer serving the prebuilt ZIP directly if it already contains the link
+            # Prefer serving the prebuilt ZIP directly; only consult DB if we must inject a link
             base_url = request.host_url.rstrip("/")
             ts_download = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             dl_name = f"all_pb_files_{ts_download}.zip"
@@ -1090,7 +1086,10 @@ def download_selected():
             except Exception:
                 pass
 
-            # If the prebuilt doesn't have a link (legacy zip), inject on the fly
+            # If the prebuilt doesn't have a link (legacy zip), we need the current set
+            all_file_pairs = get_all_current_file_paths()
+            if not all_file_pairs:
+                abort(404, description="No current files found")
             try:
                 from .services.snapshot_service import create_download_snapshot
 
@@ -1230,21 +1229,6 @@ def download_selected_start():
         # Prefer the newest timestamped export zip under cache/<ts>/all_pb_files.zip
         cache_dir = Path(__file__).parent.parent / "cache"
         cache_dir.mkdir(exist_ok=True)
-        all_file_pairs = get_all_current_file_paths()
-        if not all_file_pairs:
-            return jsonify({"ok": False, "error": "No current files found"}), 404
-        # Capture PBFile IDs for all current files at job start
-        try:
-            with get_session() as s:
-                file_ids_for_snapshot = [
-                    int(fid)
-                    for (fid,) in s.query(PBFile.id)
-                    .filter(PBFile.is_current == True)  # noqa: E712
-                    .order_by(PBFile.file_name)
-                    .all()
-                ]
-        except Exception:
-            file_ids_for_snapshot = []
         # 1) Try newest timestamped export first
         latest_export: Optional[Path] = None
         try:
@@ -1264,6 +1248,9 @@ def download_selected_start():
             reuse_path = latest_export
         else:
             # 2) Build on the fly (do not use root-level canonical cache)
+            all_file_pairs = get_all_current_file_paths()
+            if not all_file_pairs:
+                return jsonify({"ok": False, "error": "No current files found"}), 404
             file_pairs = [(name, path) for name, path in all_file_pairs]
         # Use current timestamp in the suggested download name for the 'all' download
         download_name = (
@@ -1396,9 +1383,17 @@ def handle_large_request(e):
         if select_all:
             # Mirror the select-all branch from download_selected_start
             _cleanup_old_jobs()
-            # Compute all current file pairs
-            all_file_pairs = get_all_current_file_paths()
-            if not all_file_pairs:
+            # Determine total current file count for progress without scanning filesystem
+            try:
+                with get_session() as s:
+                    total_current_files = (
+                        s.query(PBFile)
+                        .filter(PBFile.is_current == True)
+                        .count()  # noqa: E712
+                    )
+            except Exception:
+                total_current_files = 0
+            if total_current_files == 0:
                 return jsonify({"ok": False, "error": "No current files found"}), 404
             # Use or refresh cache
             cache_dir = Path(__file__).parent.parent / "cache"
@@ -1427,8 +1422,8 @@ def handle_large_request(e):
                     token,
                     {
                         "token": token,
-                        "total": len(all_file_pairs),
-                        "current": len(all_file_pairs),
+                        "total": int(total_current_files),
+                        "current": int(total_current_files),
                         "percent": 100,
                         "status": "ready",
                         "current_name": None,
@@ -1448,7 +1443,7 @@ def handle_large_request(e):
                     token,
                     {
                         "token": token,
-                        "total": len(all_file_pairs),
+                        "total": int(total_current_files),
                         "current": 0,
                         "percent": 0,
                         "status": "queued",
@@ -1464,6 +1459,12 @@ def handle_large_request(e):
                         "download_name": download_name,
                     }
                 # Start background builder to create the all-files zip
+                all_file_pairs = get_all_current_file_paths()
+                if not all_file_pairs:
+                    return (
+                        jsonify({"ok": False, "error": "No current files found"}),
+                        404,
+                    )
                 t = threading.Thread(
                     target=_build_zip_in_background,
                     args=(
@@ -1532,7 +1533,38 @@ def download_selected_file(token: str):
             file_path = p
     if not file_path or not file_path.exists():
         abort(404)
-    # If we have captured IDs, create a snapshot and inject link file into the ZIP on the fly
+    # If the ZIP already contains a link file, serve it directly and set headers
+    try:
+        import re
+        import zipfile
+
+        with zipfile.ZipFile(file_path, "r") as zf:
+            if "_PERMANENT_DOWNLOAD_LINK.txt" in zf.namelist():
+                try:
+                    txt = zf.read("_PERMANENT_DOWNLOAD_LINK.txt").decode(
+                        "utf-8", "ignore"
+                    )
+                except Exception:
+                    txt = ""
+                m = re.search(r"/download/snapshot/([0-9a-f]{16})", txt)
+                snapshot_id = m.group(1) if m else None
+                resp = send_file(
+                    file_path,
+                    as_attachment=True,
+                    download_name=download_name,
+                )
+                if snapshot_id:
+                    resp.headers["X-Download-Snapshot-ID"] = snapshot_id
+                    resp.headers["X-Download-Snapshot-URL"] = url_for(
+                        "main.download_snapshot",
+                        snapshot_id=snapshot_id,
+                        _external=True,
+                    )
+                return resp
+    except Exception:
+        pass
+
+    # If we have captured IDs (legacy/no-link case), create a snapshot and inject link file into the ZIP on the fly
     if captured_ids:
         try:
             from .services.snapshot_service import add_link_to_existing_zip as _add_link
@@ -1541,37 +1573,6 @@ def download_selected_file(token: str):
             )
 
             base_url = request.host_url.rstrip("/")
-            # If the reused ZIP already contains a link, serve it directly
-            try:
-                import re
-                import zipfile
-
-                with zipfile.ZipFile(file_path, "r") as zf:
-                    if "_PERMANENT_DOWNLOAD_LINK.txt" in zf.namelist():
-                        try:
-                            txt = zf.read("_PERMANENT_DOWNLOAD_LINK.txt").decode(
-                                "utf-8", "ignore"
-                            )
-                        except Exception:
-                            txt = ""
-                        m = re.search(r"/download/snapshot/([0-9a-f]{16})", txt)
-                        snapshot_id = m.group(1) if m else None
-                        resp = send_file(
-                            file_path,
-                            as_attachment=True,
-                            download_name=download_name,
-                        )
-                        if snapshot_id:
-                            resp.headers["X-Download-Snapshot-ID"] = snapshot_id
-                            resp.headers["X-Download-Snapshot-URL"] = url_for(
-                                "main.download_snapshot",
-                                snapshot_id=snapshot_id,
-                                _external=True,
-                            )
-                        return resp
-            except Exception:
-                pass
-
             # Legacy zip without link: inject into memory
             snapshot_id = _create_snapshot_from_ids(captured_ids, download_name)
             mem = _add_link(file_path, snapshot_id, download_name, base_url)
