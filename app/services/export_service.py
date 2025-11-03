@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 import zipfile
 from dataclasses import dataclass
@@ -12,6 +13,10 @@ from typing import List, Tuple
 from ..db import get_session
 from ..models import PBFile
 from ..utils.pb_utils import pb_folder as _pb_folder
+from .snapshot_service import (
+    create_link_text_file as _create_link_text_file,
+    create_snapshot_for_cache_file as _create_snapshot_for_cache_file,
+)
 
 # Simple lock to avoid concurrent rebuilds
 _EXPORT_LOCK = threading.Lock()
@@ -95,6 +100,8 @@ def _build_zip(zip_name: str = "all_pb_files.zip") -> Path:
     """Build a fresh ZIP of all .pb files currently on disk in pb_files/.
 
     The ZIP is written to cache/<timestamp>/<zip_name> and that path is returned.
+    Also embeds a `_PERMANENT_DOWNLOAD_LINK.txt` so the archive is ready to serve
+    without any request-time mutation.
     """
     pb_dir = _pb_folder()
     files = [p for p in sorted(pb_dir.glob("*.pb")) if p.is_file()]
@@ -109,6 +116,16 @@ def _build_zip(zip_name: str = "all_pb_files.zip") -> Path:
     with zipfile.ZipFile(out_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
         for p in files:
             zf.write(p, arcname=p.name)
+        # Create or reuse a snapshot for the current set, and write link note
+        try:
+            # This uses the current DB set at build time, matching files we just zipped
+            snapshot_id = _create_snapshot_for_cache_file(download_name=out_zip.name)
+            base_url = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+            link_txt = _create_link_text_file(snapshot_id, out_zip.name, base_url)
+            zf.writestr("_PERMANENT_DOWNLOAD_LINK.txt", link_txt.encode("utf-8"))
+        except Exception:
+            # Non-fatal: zip will still be usable without the link file
+            pass
 
     return out_zip
 

@@ -1056,10 +1056,41 @@ def download_selected():
             all_file_pairs = get_all_current_file_paths()
             if not all_file_pairs:
                 abort(404, description="No current files found")
-            # Create snapshot and inject link file into ZIP in-memory
+            # Prefer serving the prebuilt ZIP directly if it already contains the link
             base_url = request.host_url.rstrip("/")
             ts_download = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             dl_name = f"all_pb_files_{ts_download}.zip"
+            try:
+                import re
+                import zipfile
+
+                with zipfile.ZipFile(latest_export, "r") as zf:
+                    if "_PERMANENT_DOWNLOAD_LINK.txt" in zf.namelist():
+                        try:
+                            txt = zf.read("_PERMANENT_DOWNLOAD_LINK.txt").decode(
+                                "utf-8", "ignore"
+                            )
+                        except Exception:
+                            txt = ""
+                        m = re.search(r"/download/snapshot/([0-9a-f]{16})", txt)
+                        snapshot_id = m.group(1) if m else None
+                        resp = send_file(
+                            latest_export,
+                            as_attachment=True,
+                            download_name=dl_name,
+                        )
+                        if snapshot_id:
+                            resp.headers["X-Download-Snapshot-ID"] = snapshot_id
+                            resp.headers["X-Download-Snapshot-URL"] = url_for(
+                                "main.download_snapshot",
+                                snapshot_id=snapshot_id,
+                                _external=True,
+                            )
+                        return resp
+            except Exception:
+                pass
+
+            # If the prebuilt doesn't have a link (legacy zip), inject on the fly
             try:
                 from .services.snapshot_service import create_download_snapshot
 
@@ -1081,7 +1112,6 @@ def download_selected():
                 )
                 return response
             except Exception:
-                # Fallback: serve original zip without link if snapshot creation fails
                 return send_file(
                     latest_export, as_attachment=True, download_name=dl_name
                 )
@@ -1511,6 +1541,38 @@ def download_selected_file(token: str):
             )
 
             base_url = request.host_url.rstrip("/")
+            # If the reused ZIP already contains a link, serve it directly
+            try:
+                import re
+                import zipfile
+
+                with zipfile.ZipFile(file_path, "r") as zf:
+                    if "_PERMANENT_DOWNLOAD_LINK.txt" in zf.namelist():
+                        try:
+                            txt = zf.read("_PERMANENT_DOWNLOAD_LINK.txt").decode(
+                                "utf-8", "ignore"
+                            )
+                        except Exception:
+                            txt = ""
+                        m = re.search(r"/download/snapshot/([0-9a-f]{16})", txt)
+                        snapshot_id = m.group(1) if m else None
+                        resp = send_file(
+                            file_path,
+                            as_attachment=True,
+                            download_name=download_name,
+                        )
+                        if snapshot_id:
+                            resp.headers["X-Download-Snapshot-ID"] = snapshot_id
+                            resp.headers["X-Download-Snapshot-URL"] = url_for(
+                                "main.download_snapshot",
+                                snapshot_id=snapshot_id,
+                                _external=True,
+                            )
+                        return resp
+            except Exception:
+                pass
+
+            # Legacy zip without link: inject into memory
             snapshot_id = _create_snapshot_from_ids(captured_ids, download_name)
             mem = _add_link(file_path, snapshot_id, download_name, base_url)
             response = send_file(
@@ -1519,7 +1581,6 @@ def download_selected_file(token: str):
                 download_name=download_name,
                 mimetype="application/zip",
             )
-            # Expose snapshot headers so the frontend can show the top-right notice
             response.headers["X-Download-Snapshot-ID"] = snapshot_id
             response.headers["X-Download-Snapshot-URL"] = url_for(
                 "main.download_snapshot", snapshot_id=snapshot_id, _external=True

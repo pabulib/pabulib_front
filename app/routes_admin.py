@@ -2508,6 +2508,16 @@ def admin_export_create():
         with zipfile.ZipFile(out_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
             for p in files:
                 zf.write(p, arcname=p.name)
+            # Embed permanent link file at creation time so serving is instant
+            try:
+                snapshot_id = create_snapshot_for_cache_file(download_name=out_zip.name)
+                base_url = request.host_url.rstrip("/")
+                from .services.snapshot_service import create_link_text_file as _mk
+
+                link_txt = _mk(snapshot_id, out_zip.name, base_url)
+                zf.writestr("_PERMANENT_DOWNLOAD_LINK.txt", link_txt.encode("utf-8"))
+            except Exception:
+                pass
     except Exception as e:
         current_app.logger.exception("Failed to create export zip")
         if request.is_json:
@@ -2553,10 +2563,34 @@ def admin_export_download(relpath: str):
     if not target.exists() or not target.is_file() or not target.name.endswith(".zip"):
         abort(404)
 
-    # Create snapshot for this admin export download
+    # If the ZIP already contains the permanent link, serve as-is and set headers
     try:
-        # For admin exports, we need to get the file pairs from the database
-        # This is a bit more complex since we need to reconstruct what was in the zip
+        import zipfile, re
+
+        with zipfile.ZipFile(target, "r") as zf:
+            if "_PERMANENT_DOWNLOAD_LINK.txt" in zf.namelist():
+                try:
+                    txt = zf.read("_PERMANENT_DOWNLOAD_LINK.txt").decode("utf-8", "ignore")
+                except Exception:
+                    txt = ""
+                m = re.search(r"/download/snapshot/([0-9a-f]{16})", txt)
+                snapshot_id = m.group(1) if m else None
+                response = send_file(
+                    target,
+                    as_attachment=True,
+                    download_name=target.name,
+                )
+                if snapshot_id:
+                    response.headers["X-Download-Snapshot-ID"] = snapshot_id
+                    response.headers["X-Download-Snapshot-URL"] = url_for(
+                        "main.download_snapshot", snapshot_id=snapshot_id, _external=True
+                    )
+                return response
+    except Exception:
+        pass
+
+    # Legacy export without link: create snapshot and inject on the fly (rare)
+    try:
         with get_session() as s:
             current_files = s.query(PBFile).filter(PBFile.is_current == True).all()
             file_pairs = []
@@ -2564,19 +2598,15 @@ def admin_export_download(relpath: str):
                 file_path = Path(pb_file.path)
                 if file_path.exists():
                     file_pairs.append((pb_file.file_name, file_path))
-
         if file_pairs:
             snapshot_id = create_download_snapshot(
                 file_pairs=file_pairs,
                 download_name=target.name,
             )
-
-            # Add link file to the existing ZIP for download
             base_url = request.host_url.rstrip("/")
             memory_file = add_link_to_existing_zip(
                 target, snapshot_id, target.name, base_url
             )
-
             response = send_file(
                 memory_file,
                 as_attachment=True,
@@ -2589,7 +2619,6 @@ def admin_export_download(relpath: str):
             )
             return response
     except Exception:
-        # If snapshot creation fails, still serve the file
         pass
 
     return send_file(target, as_attachment=True, download_name=target.name)
