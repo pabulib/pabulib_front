@@ -81,9 +81,9 @@
         </div>
         <div class="field">
           <label>Show datasets with</label>
-          <label class="checkbox"><input id="requireGeo" type="checkbox"> Project coordinates</label>
-          <label class="checkbox"><input id="requireTarget" type="checkbox"> Project targets</label>
-          <label class="checkbox"><input id="requireCategory" type="checkbox"> Project categories</label>
+          <label class="checkbox"><input id="requireGeo" type="checkbox"> <span class="badge geo" title="Includes project coordinates">Geo</span> Project coordinates</label>
+          <label class="checkbox"><input id="requireTarget" type="checkbox"> <span class="badge target" title="Includes project targets">Tgt</span> Project targets</label>
+          <label class="checkbox"><input id="requireCategory" type="checkbox"> <span class="badge category" title="Includes project categories">Cat</span> Project categories</label>
         </div>
 
         <div class="field">
@@ -158,6 +158,7 @@
         data-webpage="{{ t.webpage_name|e }}"
         data-desc="{{ t.description|e }}"
         data-file="{{ t.file_name|e }}"
+        data-comments="{{ (t.comments|join(' ') if t.comments else '')|e }}"
         data-country="{{ t.country|e }}"
         data-city="{{ t.city|e }}"
         data-year="{{ t.year|e }}"
@@ -180,8 +181,9 @@
       >
         <div class="tile-header">
           <input class="row-check" type="checkbox" data-file="{{ t.file_name|e }}" />
-          <h2>{{ t.title|replace('_', ' ') }}</h2>
-          <div class="labels">
+          <div class="title-row">
+            <h2>{{ t.title|replace('_', ' ') }}</h2>
+            <div class="labels">
             {% if t.experimental %}
             <span class="tag exp" title="Dataset marked as experimental">Experimental</span>
             {% endif %}
@@ -189,14 +191,15 @@
             <span class="tag funded" title="All selected projects are funded">Fully funded</span>
             {% endif %}
             {% if t.has_geo %}
-            <span class="tag geo" title="Dataset includes project coordinates">Coordinates</span>
+            <span class="tag geo" title="Dataset includes project coordinates">Geo</span>
             {% endif %}
             {% if t.has_category %}
-            <span class="tag category" title="Dataset includes project categories">Categories</span>
+            <span class="tag category" title="Dataset includes project categories">Cat</span>
             {% endif %}
             {% if t.has_target %}
-            <span class="tag target" title="Dataset includes project targets">Targets</span>
+            <span class="tag target" title="Dataset includes project targets">Tgt</span>
             {% endif %}
+            </div>
           </div>
           <span class="qs" title="QS = (avg vote length)³ × (projects)² × (votes). Higher is better.">QS {{ t.quality_short }}</span>
           <a class="doc" href="{{ url_for('main.preview_file', filename=t.file_name) }}" title="Preview" data-track="file_preview" data-track-category="engagement"></a>

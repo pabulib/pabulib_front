@@ -178,6 +178,7 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 "rule_raw": rule_raw or "",
                 "edition": edition or "",
                 "language": language or "",
+                # filled below with active comments for this file (strings)
                 "comments": [],
                 "country_raw": country or "",
                 "unit_raw": unit or "",
@@ -187,6 +188,31 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 "has_target": bool(has_target),
             }
         )
+
+    # Attach active comments to tiles so the public search can match them too
+    try:
+        with get_session() as s:
+            rows_c = (
+                s.query(PBFile.file_name, PBComment.text)
+                .join(PBComment, PBComment.file_id == PBFile.id)
+                .filter(PBFile.is_current == True)  # noqa: E712
+                .filter(PBComment.is_active == True)  # noqa: E712
+                .all()
+            )
+        by_file: Dict[str, List[str]] = {}
+        for fname, ctext in rows_c:
+            if not ctext:
+                continue
+            by_file.setdefault(fname, []).append(str(ctext))
+        idx_by_file: Dict[str, int] = {t["file_name"]: i for i, t in enumerate(tiles)}
+        for fname, clist in by_file.items():
+            i = idx_by_file.get(fname)
+            if i is None:
+                continue
+            tiles[i]["comments"] = clist
+    except Exception:
+        # Non-fatal: if comments fail to attach, keep tiles functional
+        pass
 
     try:
         setattr(tiles, "_db_sig", db_sig)

@@ -118,7 +118,22 @@
     }
   }
 
-  function normalize(s){ return (s||'').toString().toLowerCase(); }
+  function normalize(s){
+    try{
+      return (s||'')
+        .toString()
+        .toLowerCase()
+        // remove diacritics
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        // treat underscores/hyphens as spaces
+        .replace(/[_-]+/g, ' ')
+        // collapse whitespace
+        .replace(/\s+/g, ' ')
+        .trim();
+    }catch(_){
+      return (s||'').toString().toLowerCase();
+    }
+  }
 
   function initOptions(){
     const setCountry = new Set(), setCity = new Set(), setYear = new Set();
@@ -144,7 +159,7 @@
     function tilePasses(t, excludeKey){
       // text search
       if(q){
-        const hay = [t.dataset.title, t.dataset.webpage, t.dataset.desc, t.dataset.file].map(normalize).join(' ');
+        const hay = [t.dataset.title, t.dataset.webpage, t.dataset.desc, t.dataset.comments, t.dataset.file].map(normalize).join(' ');
         if(!hay.includes(q)) return false;
       }
       // select-based filters (skip the one we're evaluating options for)
@@ -226,7 +241,7 @@
     }
     // hide all by default; reveal during pagination
     tiles.forEach(t=>{
-      const hay = [t.dataset.title, t.dataset.webpage, t.dataset.desc, t.dataset.file]
+      const hay = [t.dataset.title, t.dataset.webpage, t.dataset.desc, t.dataset.comments, t.dataset.file]
         .map(normalize).join(' ');
       if(q && !hay.includes(q)) { t.hidden = true; return; }
       if(country && normalize(t.dataset.country) !== country) { t.hidden=true; return; }

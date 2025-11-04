@@ -399,7 +399,8 @@ nav#mainNav {
 .tile[hidden]{display:none}
 .sentinel{height:1px}
 .tile-header{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap}
-.tile-header h2{margin:0;font-size:26px;line-height:1.2;max-width:500px;overflow-wrap:anywhere;word-break:break-word;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex:1 1 auto;min-width:0}
+.tile-header .title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1 1 auto;min-width:0}
+.tile-header h2{margin:0;font-size:26px;line-height:1.2;max-width:500px;overflow-wrap:anywhere;word-break:break-word;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex:0 1 auto;min-width:0}
 
 /* Tile header responsiveness */
 @media (max-width:768px){
@@ -422,7 +423,7 @@ nav#mainNav {
   .tile-header h2{
     font-size:16px;
     order:2;
-    flex:1;
+    flex:0 1 auto;
     margin:0;
     line-height:1.3;
     word-wrap:break-word;
@@ -494,6 +495,21 @@ nav#mainNav {
 .tile-header .tag.geo{color:#0369a1;background:#e0f2fe;border-color:#bae6fd}
 .tile-header .tag.category{color:#c2410c;background:#ffedd5;border-color:#fed7aa}
 .tile-header .tag.target{color:#7c2d12;background:#fef3c7;border-color:#fde68a}
+
+/* Compact badges for use in sidebar next to filter checkboxes */
+.badge{
+  font-size:10px;
+  font-weight:700;
+  border-radius:999px;
+  padding:2px 6px;
+  border:1px solid transparent;
+  line-height:1;
+  display:inline-block;
+}
+.badge.geo{color:#0369a1;background:#e0f2fe;border-color:#bae6fd}
+.badge.category{color:#c2410c;background:#ffedd5;border-color:#fed7aa}
+.badge.target{color:#7c2d12;background:#fef3c7;border-color:#fde68a}
+.sidebar .checkbox .badge{margin-left:4px;margin-right:6px}
 
 /* Hidden by default; shown only on mobile breakpoint */
 .mobile-meta{display:none}
@@ -658,7 +674,7 @@ nav#mainNav {
   .tile-header h2{
     font-size:18px;
     order:2;
-    flex:1;
+    flex:0 1 auto;
     margin:0;
     line-height:1.2;
     min-width:0;
