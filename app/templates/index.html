@@ -170,6 +170,7 @@
   data-aklabel="{{ t.approval_k_label or '' }}"
   data-aktype="{{ (t.approval_k_type or '') }}"
   data-aknapsack="{{ '1' if t.approval_knapsack else '0' }}"
+  data-cpts="{{ t.cumulative_points_label or '' }}"
         data-vlen="{{ '%.3f' % t.vote_length_raw if t.vote_length_raw is not none else '' }}"
         data-fully="{{ '1' if t.fully_funded else '0' }}"
         data-experimental="{{ '1' if t.experimental else '0' }}"
@@ -250,6 +251,8 @@
               app.{% if t.approval_knapsack %}, <code>knapsack</code>{% elif t.approval_k_label %}, <code>{{ t.approval_k_label|e }}</code>{% endif %}
             {% elif t.vote_type and t.vote_type|lower == 'ordinal' %}
               ord.{% if t.ordinal_k_label %}, <code>{{ t.ordinal_k_label|e }}</code>{% endif %}
+            {% elif t.vote_type and t.vote_type|lower == 'cumulative' %}
+              cml.{% if t.cumulative_points_label %}, <code>{{ t.cumulative_points_label|e }}</code>{% endif %}
             {% else %}
               {{ t.vote_type }}
             {% endif %}

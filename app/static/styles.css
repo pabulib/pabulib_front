@@ -525,7 +525,8 @@ nav#mainNav {
   border-radius:4px;
   padding:2px 6px;
   font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
-  font-size:12px;
+  font-size:inherit; /* match surrounding text size for readability */
+  line-height:inherit;
 }
 
 /* Mobile tweaks: make layout single-column and convert filters into a drawer */

@@ -181,6 +181,42 @@ def _compute_ordinal_k_from_meta(
     return f"k≤{max_k}", "upper"
 
 
+def _compute_cumulative_points_from_meta(
+    meta: Dict[str, Any],
+) -> Optional[str]:
+    """Return a compact label for cumulative points constraints derived from META.
+
+    We focus on the total points available to distribute (sum constraints):
+    - min_sum_points – lower bound (optional)
+    - max_sum_points – upper bound (optional)
+
+    Formatting mirrors k-bounds style with single-glyph inequalities:
+    - Both equal: 'pts=n'
+    - Range: 'm≤pts≤n'
+    - Lower-only: 'm≤pts'
+    - Upper-only: 'pts≤n'
+
+    If neither bound is present, return None (no label shown).
+    """
+    min_sum = _parse_int(meta.get("min_sum_points"))
+    max_sum = _parse_int(meta.get("max_sum_points"))
+
+    # Treat min_sum == 0 as trivial lower bound for display
+    if min_sum == 0:
+        min_sum = None
+
+    if min_sum is None and max_sum is None:
+        return None
+    if min_sum is not None and max_sum is not None and min_sum == max_sum:
+        return f"pts={max_sum}"
+    if min_sum is not None and max_sum is not None:
+        return f"{min_sum}≤pts≤{max_sum}"
+    if min_sum is not None:
+        return f"{min_sum}≤pts"
+    # only upper bound present
+    return f"pts≤{max_sum}"
+
+
 def _db_signature() -> Optional[str]:
     try:
         with get_session() as s:
@@ -324,6 +360,8 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 # ordinal (computed from META)
                 "ordinal_k_label": None,
                 "ordinal_k_type": None,
+                # cumulative (computed from META)
+                "cumulative_points_label": None,
             }
         )
 
@@ -373,6 +411,9 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                     ok_label, ok_type = _compute_ordinal_k_from_meta(meta)
                     t["ordinal_k_label"] = ok_label
                     t["ordinal_k_type"] = ok_type
+                elif vtype == "cumulative":
+                    c_label = _compute_cumulative_points_from_meta(meta)
+                    t["cumulative_points_label"] = c_label
             except Exception:
                 # If any single file fails, skip labels for it only
                 continue
