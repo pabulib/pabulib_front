@@ -135,7 +135,8 @@ def ingest_file(
     group_key = build_group_key(country, unit, instance, subunit)
 
     st = p.stat()
-    mtime = datetime.fromtimestamp(int(st.st_mtime))
+    # Use UTC for file_mtime to be consistent across the app
+    mtime = datetime.utcfromtimestamp(int(st.st_mtime))
 
     record = PBFile(
         file_name=p.name,
@@ -235,6 +236,17 @@ def refresh(full: bool = False) -> Dict[str, Any]:
                     )
                     .one_or_none()  # noqa: E712
                 )
+                # Idempotency guard: if there is a current record with same or newer file_mtime
+                # and same on-disk path, skip creating a new version.
+                if prev and prev.file_mtime and rec.file_mtime <= prev.file_mtime:
+                    # Also skip if path unchanged (no move/rename)
+                    if (prev.path or "") == rec.path:
+                        skipped += 1
+                        print(
+                            f"[SKIP] {idx}/{total} {p.name} (no newer mtime than current)",
+                            flush=True,
+                        )
+                        continue
                 if prev:
                     rec.supersedes_id = prev.id
                 s.add(rec)
