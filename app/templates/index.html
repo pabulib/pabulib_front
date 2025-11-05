@@ -123,7 +123,7 @@
             <div class="text-xs text-blue-800">
               <div class="font-medium mb-1">📄 Permanent Download Links</div>
               <div class="text-blue-700">
-                Every download includes a <code class="px-1 py-0.5 bg-blue-100 rounded text-blue-900 font-mono">_PERMANENT_DOWNLOAD_LINK.txt</code> file with a permanent URL. 
+                Multi-file downloads include a <code class="px-1 py-0.5 bg-blue-100 rounded text-blue-900 font-mono">_PERMANENT_DOWNLOAD_LINK.txt</code> with a permanent URL.
                 This link will always download the exact same files, even if they are updated later.
                 <span class="inline-block ml-1 text-blue-600 hover:text-blue-800 cursor-help" title="The same set of files always generates the same permanent URL">♻️</span>
               </div>
@@ -230,7 +230,7 @@
           <div>Description</div>
           <div># votes</div>
           <div># projects</div>
-          <div>Budget</div>
+          <div>Budget{% if t.currency %} {{ t.currency }}{% endif %}</div>
           <div>Vote type</div>
           <div>Vote length</div>
         </div>
@@ -239,12 +239,10 @@
           <div>{{ t.num_votes }}</div>
           <div>{{ t.num_projects }}</div>
           <div>
-            {% if t.currency == "EUR" %}
-              {{ t.budget|replace('EUR', '€') }}
-            {% elif t.currency == "USD" %}
-              ${{ t.budget|replace('USD', '') }}
+            {% if t.currency %}
+              {{ t.budget|replace(t.currency, '')|replace('€','')|replace('$','')|trim }}
             {% else %}
-              {{ t.budget }}
+              {{ t.budget|replace('€','')|replace('$','')|trim }}
             {% endif %}
           </div>
           <div>

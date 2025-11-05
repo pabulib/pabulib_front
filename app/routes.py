@@ -988,24 +988,8 @@ def download(filename: str):
     path = get_current_file_path(filename)
     if not path or not path.exists() or not path.is_file():
         abort(404)
-    # For single-file downloads, also expose snapshot headers so the UI can show
-    # a permanent-link notification (we don't embed the link file in .pb files).
-    try:
-        from .services.snapshot_service import create_download_snapshot as _create_snap
-
-        snapshot_id = _create_snap(
-            file_pairs=[(path.name, path)], download_name=path.name
-        )
-        response = send_file(path, as_attachment=True)
-        # Inform the client about the permanent link via headers
-        response.headers["X-Download-Snapshot-ID"] = snapshot_id
-        response.headers["X-Download-Snapshot-URL"] = url_for(
-            "main.download_snapshot", snapshot_id=snapshot_id, _external=True
-        )
-        return response
-    except Exception:
-        # If anything goes wrong, still serve the original file
-        return send_file(path, as_attachment=True)
+    # Serve single files directly without creating a snapshot or exposing headers.
+    return send_file(path, as_attachment=True)
 
 
 @bp.post("/download-selected")
@@ -1166,7 +1150,11 @@ def download_selected():
     if not files:
         abort(404, description="Selected files not found")
 
-    # Build download with embedded permanent link
+    # If only one file selected, serve it directly with no snapshot link
+    if len(files) == 1:
+        return send_file(files[0], as_attachment=True)
+
+    # Build multi-file download with embedded permanent link
     file_pairs = [(p.name, p) for p in files]
     stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     filename = f"pb_selected_{len(files)}_{stamp}.zip"
@@ -1290,6 +1278,9 @@ def download_selected_start():
                     ]
             except Exception:
                 file_ids_for_snapshot = []
+            # If only one file will be downloaded, do not create a snapshot link
+            if len(file_pairs) == 1:
+                file_ids_for_snapshot = []
             stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             download_name = f"pb_selected_{len(file_pairs)}_{stamp}.zip"
         else:
@@ -1319,6 +1310,9 @@ def download_selected_start():
                         if name_to_id.get(n) is not None
                     ]
             except Exception:
+                file_ids_for_snapshot = []
+            # If only one file will be downloaded, do not create a snapshot link
+            if len(file_pairs) == 1:
                 file_ids_for_snapshot = []
             stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             download_name = f"pb_selected_{len(file_pairs)}_{stamp}.zip"

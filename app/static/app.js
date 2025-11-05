@@ -358,7 +358,8 @@
   form.addEventListener('submit', async (e) => {
     // client-side: start background job instead of direct POST to get progress
     e.preventDefault();
-    const selected = $$('.row-check:checked');
+  const selected = $$('.row-check:checked');
+  const selectionSize = selected.length;
     if(!selected.length){ return; }
 
     // Build form data; prefer exclude-mode when selection is large
@@ -502,8 +503,10 @@
           }
           const blob = await response.blob();
           
-          // Check for snapshot headers and show notification
-          handleSnapshotInfo(response);
+          // Check for snapshot headers and show notification (skip for single-file)
+          if (selectionSize > 1) {
+            handleSnapshotInfo(response);
+          }
           
           // Trigger download
           const url = window.URL.createObjectURL(blob);
@@ -922,19 +925,54 @@
       
       link.addEventListener('click', async function(e) {
         e.preventDefault();
-        
+        const isSingle = this.dataset && this.dataset.downloadType === 'single';
+        const hrefUrl = this.href;
+
+        function parseContentDispositionFilename(cd) {
+          if (!cd) return null;
+          try {
+            // filename* (RFC 5987)
+            const mStar = cd.match(/filename\*=([^;]+)/i);
+            if (mStar && mStar[1]) {
+              const v = mStar[1].trim();
+              const parts = v.split("''");
+              const rest = parts.length > 1 ? parts.slice(1).join("''") : v;
+              try { return decodeURIComponent(rest); } catch(_) { return rest; }
+            }
+            // filename="..."
+            const mQuoted = cd.match(/filename="([^"]+)"/i);
+            if (mQuoted && mQuoted[1]) return mQuoted[1];
+            // filename=...
+            const mPlain = cd.match(/filename=([^;]+)/i);
+            if (mPlain && mPlain[1]) return mPlain[1].trim();
+          } catch(_){}
+          return null;
+        }
+        function filenameFromUrl(u){
+          try{
+            const url = new URL(u, window.location.origin);
+            const path = url.pathname;
+            const base = path.substring(path.lastIndexOf('/')+1);
+            return decodeURIComponent(base || 'download');
+          }catch(_) { return 'download'; }
+        }
+
         try {
           const response = await fetch(this.href);
           const blob = await response.blob();
           
-          // Check for snapshot headers
-          handleSnapshotInfo(response);
+          // Check for snapshot headers (skip for single-file direct downloads)
+          if (!isSingle) {
+            handleSnapshotInfo(response);
+          }
           
           // Trigger download
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] || 'download';
+          const cd = response.headers.get('Content-Disposition') || '';
+          const cdName = parseContentDispositionFilename(cd);
+          a.download = cdName || filenameFromUrl(hrefUrl);
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
