@@ -136,6 +136,7 @@
               <td class="px-6 py-3 text-sm font-mono text-slate-800">
                 <input class="mr-3 align-middle admin-row-check" type="checkbox" data-file="{{ f.file_name|e }}" />
                 <span class="inline-block truncate max-w-[420px] align-middle" title="{{ f.file_name }}">{{ f.file_name }}</span>
+                <div class="text-xs text-slate-500 mt-1">ID: {{ f.id }}</div>
               </td>
               <td class="px-6 py-3 text-sm text-slate-700 whitespace-nowrap">
                 {{ f.file_mtime.strftime('%Y-%m-%d %H:%M:%S') if f.file_mtime else '—' }}

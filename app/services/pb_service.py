@@ -201,8 +201,11 @@ def _compute_cumulative_points_from_meta(
     min_sum = _parse_int(meta.get("min_sum_points"))
     max_sum = _parse_int(meta.get("max_sum_points"))
 
-    # Treat min_sum == 0 as trivial lower bound for display
-    if min_sum == 0:
+    # Treat min_sum in {0,1} as trivial lower bound for display
+    # Rationale: when the lower bound is 1 and an upper bound exists (e.g., 1≤pts≤10),
+    # display can omit the lower bound as it conveys little extra information -> pts≤10.
+    # We generalize and drop 1 as a lower-only bound for consistency.
+    if min_sum in (0, 1):
         min_sum = None
 
     if min_sum is None and max_sum is None:

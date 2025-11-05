@@ -193,6 +193,7 @@ def admin_dashboard():
         # Convert to plain dicts so templates don't rely on active DB session
         files: List[Dict[str, Any]] = [
             {
+                "id": r.id,
                 "file_name": r.file_name,
                 "path": r.path,
                 "country": r.country,
