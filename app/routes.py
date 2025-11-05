@@ -210,7 +210,9 @@ from .utils.pb_utils import parse_pb_to_tile as _parse_pb_to_tile
 from .utils.upload_security import is_allowed_extension as _is_allowed_ext
 from .utils.upload_security import is_probably_text_file as _is_probably_text_file
 from .utils.upload_security import public_tmp_dir as _public_tmp_dir
-from .utils.validation import count_issues, format_validation_summary, validate_pb_file
+from .utils.validation import count_issues, format_validation_summary
+from .utils.validation import get_checker_version as _get_checker_version
+from .utils.validation import validate_pb_file
 
 bp = Blueprint(
     "main",
@@ -293,8 +295,17 @@ def upload_page():
     """Public page to validate .pb files and send them for acceptance."""
     settings = _load_upload_settings()
     tiles = _list_public_tmp_tiles()
+    checker_version = None
+    try:
+        checker_version = _get_checker_version()
+    except Exception:
+        checker_version = None
     return render_template(
-        "upload.html", upload_settings=settings, tiles=tiles, count=len(tiles)
+        "upload.html",
+        upload_settings=settings,
+        tiles=tiles,
+        count=len(tiles),
+        checker_version=checker_version,
     )
 
 

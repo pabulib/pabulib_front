@@ -52,7 +52,12 @@ from .utils.pb_utils import build_group_key as _build_group_key
 from .utils.pb_utils import parse_pb_to_tile as _parse_pb_to_tile
 from .utils.pb_utils import pb_depreciated_folder as _pb_depr_folder
 from .utils.pb_utils import pb_folder as _pb_folder
-from .utils.validation import count_issues, format_validation_summary, validate_pb_file
+from .utils.validation import (
+    count_issues,
+    format_validation_summary,
+    get_checker_version,
+    validate_pb_file,
+)
 
 # --- Upload Settings (stored locally in temp folder) -------------------------
 
@@ -508,6 +513,11 @@ def _format_preview_tile(tile: dict) -> dict:
 def upload_tiles():
     tiles = _list_tmp_tiles()
     settings = _load_upload_settings()
+    checker_version = None
+    try:
+        checker_version = get_checker_version()
+    except Exception:
+        checker_version = None
     # Precompute existence/conflict flags for each tile to adjust UI
     try:
         with get_session() as s:
@@ -546,6 +556,7 @@ def upload_tiles():
         tiles=tiles,
         count=len(tiles),
         upload_settings=settings,
+        checker_version=checker_version,
     )
 
 
@@ -553,22 +564,34 @@ def upload_tiles():
 def upload_tiles_post():
     if "files" not in request.files:
         tiles = _list_tmp_tiles()
+        checker_version = None
+        try:
+            checker_version = get_checker_version()
+        except Exception:
+            checker_version = None
         return render_template(
             "admin/upload_tiles.html",
             message="No files part in request.",
             success=False,
             tiles=tiles,
             count=len(tiles),
+            checker_version=checker_version,
         )
     files = request.files.getlist("files")
     if not files:
         tiles = _list_tmp_tiles()
+        checker_version = None
+        try:
+            checker_version = get_checker_version()
+        except Exception:
+            checker_version = None
         return render_template(
             "admin/upload_tiles.html",
             message="Please choose at least one .pb file.",
             success=False,
             tiles=tiles,
             count=len(tiles),
+            checker_version=checker_version,
         )
 
     # Check if user confirmed to force replace duplicates
@@ -800,6 +823,7 @@ def upload_tiles_post():
         results=results,
         tiles=tiles,
         count=len(tiles),
+        checker_version=get_checker_version(),
     )
 
 

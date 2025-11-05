@@ -17,6 +17,50 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 
+def get_checker_version() -> str | None:
+    """
+    Return the installed pabulib-checker version string, if available.
+
+    Tries importlib.metadata first, then falls back to module attributes.
+    Returns None if the checker is not installed or version can't be determined.
+    """
+    try:
+        # Python 3.8+
+        try:
+            from importlib.metadata import version as _pkg_version  # type: ignore
+        except Exception:  # pragma: no cover - fallback for very old environments
+            _pkg_version = None  # type: ignore
+
+        if _pkg_version is not None:
+            try:
+                return _pkg_version("pabulib-checker")
+            except Exception:
+                pass
+
+        # Fallback: try reading __version__ from the module
+        try:
+            import pabulib  # type: ignore
+
+            v = getattr(pabulib, "__version__", None)
+            if isinstance(v, str) and v:
+                return v
+        except Exception:
+            pass
+
+        try:
+            from pabulib import checker as _checker  # type: ignore
+
+            v = getattr(_checker, "__version__", None)
+            if isinstance(v, str) and v:
+                return v
+        except Exception:
+            pass
+    except Exception:
+        # Never break the page on version lookup
+        return None
+    return None
+
+
 def _sanitize_pb_for_checker(file_path: Path) -> Path:
     """
     Create a sanitized copy of the PB file where project cost values that look
