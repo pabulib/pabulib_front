@@ -46,3 +46,23 @@ def worker_int(worker):
 def on_exit(server):
     """Called just before exiting."""
     server.log.info("🛑 Pabulib server shutting down")
+
+
+def post_fork(server, worker):
+    """Dispose DB connections inherited from preloaded master.
+
+    With preload_app=True, any DB connections opened during app import (e.g.,
+    metadata.create_all(engine)) may be inherited by worker processes. MySQL
+    connections are not fork-safe and can lead to packet sequence / framing
+    errors under load. Disposing the SQLAlchemy engine here ensures each worker
+    opens fresh, independent connections.
+    """
+    try:
+        from app.db import engine  # type: ignore
+
+        engine.dispose()
+        server.log.info(
+            "🔌 Disposed SQLAlchemy engine in worker PID %s after fork", worker.pid
+        )
+    except Exception as e:  # pragma: no cover
+        server.log.warning("Engine dispose after fork failed: %s", e)

@@ -28,7 +28,8 @@ DATABASE_URL = _build_database_url()
 # Use pool_pre_ping to avoid stale connections when containers restart
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,
+    pool_pre_ping=True,  # validate connections before use
+    pool_recycle=280,  # proactively recycle MySQL connections (< 5 min) to avoid server timeouts
     future=True,
 )
 SessionLocal = sessionmaker(
@@ -47,7 +48,13 @@ def get_session() -> Iterator[Session]:
         yield session
         session.commit()
     except Exception:
-        session.rollback()
+        # If the underlying DB connection is already broken, rollback itself
+        # can fail (e.g., packet sequence errors). Swallow rollback errors so
+        # the original exception is preserved and the session can be closed.
+        try:
+            session.rollback()
+        except Exception:
+            pass
         raise
     finally:
         session.close()
