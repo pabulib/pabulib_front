@@ -166,7 +166,10 @@
         data-projects="{{ t.num_projects_raw if t.num_projects_raw is not none else '' }}"
         data-budget="{{ t.budget_raw if t.budget_raw is not none else '' }}"
         data-currency="{{ t.currency|e }}"
-        data-type="{{ t.vote_type|e }}"
+  data-type="{{ t.vote_type|e }}"
+  data-aklabel="{{ t.approval_k_label or '' }}"
+  data-aktype="{{ (t.approval_k_type or '') }}"
+  data-aknapsack="{{ '1' if t.approval_knapsack else '0' }}"
         data-vlen="{{ '%.3f' % t.vote_length_raw if t.vote_length_raw is not none else '' }}"
         data-fully="{{ '1' if t.fully_funded else '0' }}"
         data-experimental="{{ '1' if t.experimental else '0' }}"
@@ -244,7 +247,15 @@
               {{ t.budget }}
             {% endif %}
           </div>
-          <div>{{ t.vote_type }}</div>
+          <div>
+            {% if t.vote_type and t.vote_type|lower == 'approval' %}
+              app.{% if t.approval_knapsack %}, <code>knapsack</code>{% elif t.approval_k_label %}, <code>{{ t.approval_k_label|e }}</code>{% endif %}
+            {% elif t.vote_type and t.vote_type|lower == 'ordinal' %}
+              ord.{% if t.ordinal_k_label %}, <code>{{ t.ordinal_k_label|e }}</code>{% endif %}
+            {% else %}
+              {{ t.vote_type }}
+            {% endif %}
+          </div>
           <div>{{ t.vote_length }}</div>
         </div>
       </section>

@@ -11,6 +11,7 @@ from ..utils.formatting import (
     format_short_number,
     format_vote_length,
 )
+from ..utils.load_pb_file import parse_pb_lines as _parse_pb_lines
 
 # Optional optimization helper (load_only)
 try:  # pragma: no cover
@@ -48,6 +49,136 @@ _TARGETS_CACHE: Optional[
         Dict[str, List[Dict[str, Any]]],
     ]
 ] = None
+
+
+def _read_meta_only(path: Path) -> Dict[str, Any]:
+    """Read only the META section of a PB file and return its key/value map.
+
+    This avoids parsing large VOTES/PROJECTS sections when we only need META
+    constraints (min_length/max_length/max_sum_cost, etc.).
+    """
+    try:
+        lines: List[str] = []
+        with path.open("r", encoding="utf-8", newline="") as f:
+            in_meta = False
+            for raw in f:
+                line = raw.rstrip("\n")
+                up = line.strip().upper()
+                if up == "META":
+                    in_meta = True
+                    lines.append("META")
+                    continue
+                if not in_meta:
+                    # skip preamble until META
+                    continue
+                # include header row and subsequent rows until next section
+                if up in {"PROJECTS", "VOTES"}:
+                    break
+                lines.append(line)
+        if not lines:
+            return {}
+        meta, _projects, _votes, _v_in_p, _s_in_p = _parse_pb_lines(lines)
+        # normalize keys to lowercase for robust lookups
+        return {str(k).strip().lower(): v for k, v in (meta or {}).items()}
+    except Exception:
+        return {}
+
+
+def _parse_int(val: Any) -> Optional[int]:
+    try:
+        s = str(val).strip()
+        if not s:
+            return None
+        # handle floats like "10.0" gracefully
+        return int(float(s))
+    except Exception:
+        return None
+
+
+def _compute_approval_labels_from_meta(
+    meta: Dict[str, Any],
+) -> Tuple[Optional[str], bool, Optional[str]]:
+    """Return (k_label, knapsack, k_type) derived from META.
+
+    k_label examples: 'Any k', '2<k', 'k<=10', 'k=5', '2<k<=5'.
+    knapsack: True when max_sum_cost or similar constraints are present.
+    k_type in {'any','lower','upper','exact','range'} or None when hidden.
+    """
+    # Detect knapsack-style constraint first
+    has_knapsack = False
+    for key in ("max_sum_cost", "max_sum_cost_per_category", "max_total_cost"):
+        if key in meta and str(meta.get(key)).strip() != "":
+            has_knapsack = True
+            break
+    # Additionally, some datasets encode hint in subunit as 'vote knapsacks'
+    subunit_val = str(meta.get("subunit", "")).strip().lower()
+    if (not has_knapsack) and ("knapsack" in subunit_val):
+        has_knapsack = True
+    # If knapsack, we suppress k label entirely per requirement
+    if has_knapsack:
+        return None, True, None
+
+    # Detect k-bounds
+    min_k = _parse_int(meta.get("min_length"))
+    max_k = _parse_int(meta.get("max_length"))
+
+    k_label: Optional[str]
+    k_type: Optional[str]
+    # Treat min_k == 1 as trivial lower bound (do not display as lower)
+    if min_k == 1:
+        min_k = None
+
+    if min_k is None and max_k is None:
+        k_label = "Any k"
+        k_type = "any"
+    elif min_k is not None and max_k is not None and min_k == max_k:
+        k_label = f"k={min_k}"
+        k_type = "exact"
+    elif min_k is not None and max_k is not None:
+        # Use single-glyph inequality characters for clarity: m≤k≤n
+        k_label = f"{min_k}≤k≤{max_k}"
+        k_type = "range"
+    elif min_k is not None:
+        # Lower bound shown as m≤k
+        k_label = f"{min_k}≤k"
+        k_type = "lower"
+    else:
+        # only upper bound: use ≤
+        k_label = f"k≤{max_k}"
+        k_type = "upper"
+
+    return k_label, False, k_type
+
+
+def _compute_ordinal_k_from_meta(
+    meta: Dict[str, Any],
+) -> Tuple[Optional[str], Optional[str]]:
+    """Return (k_label, k_type) for ordinal ballots derived from META.
+
+    Uses the same rules as Approval for k-bounds formatting:
+    - Ignore min=1 as trivial
+    - Exact when min==max => k=n
+    - Range uses single-glyph inequalities: m≤k≤n
+    - Lower-only: m≤k
+    - Upper-only: k≤n
+    - None: 'Any k'
+    """
+    min_k = _parse_int(meta.get("min_length"))
+    max_k = _parse_int(meta.get("max_length"))
+
+    if min_k == 1:
+        min_k = None
+
+    if min_k is None and max_k is None:
+        return "Any k", "any"
+    if min_k is not None and max_k is not None and min_k == max_k:
+        return f"k={min_k}", "exact"
+    if min_k is not None and max_k is not None:
+        return f"{min_k}≤k≤{max_k}", "range"
+    if min_k is not None:
+        return f"{min_k}≤k", "lower"
+    # only upper bound
+    return f"k≤{max_k}", "upper"
 
 
 def _db_signature() -> Optional[str]:
@@ -186,6 +317,13 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 "has_geo": bool(has_geo),
                 "has_category": bool(has_category),
                 "has_target": bool(has_target),
+                # computed client labels (filled later for approvals)
+                "approval_k_label": None,
+                "approval_knapsack": False,
+                "approval_k_type": None,
+                # ordinal (computed from META)
+                "ordinal_k_label": None,
+                "ordinal_k_type": None,
             }
         )
 
@@ -212,6 +350,34 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
             tiles[i]["comments"] = clist
     except Exception:
         # Non-fatal: if comments fail to attach, keep tiles functional
+        pass
+
+    # Compute approval/ordinal-specific labels by reading META of each file once
+    try:
+        # Build filename -> Path map for current files
+        file_pairs = get_all_current_file_paths()
+        path_by_name: Dict[str, Path] = {fn: p for fn, p in file_pairs}
+        for t in tiles:
+            try:
+                p = path_by_name.get(t.get("file_name", ""))
+                if not p or not p.exists():
+                    continue
+                meta = _read_meta_only(p)
+                vtype = (t.get("vote_type") or "").strip().lower()
+                if vtype == "approval":
+                    k_label, has_knap, k_type = _compute_approval_labels_from_meta(meta)
+                    t["approval_k_label"] = k_label
+                    t["approval_knapsack"] = bool(has_knap)
+                    t["approval_k_type"] = k_type
+                elif vtype == "ordinal":
+                    ok_label, ok_type = _compute_ordinal_k_from_meta(meta)
+                    t["ordinal_k_label"] = ok_label
+                    t["ordinal_k_type"] = ok_type
+            except Exception:
+                # If any single file fails, skip labels for it only
+                continue
+    except Exception:
+        # non-fatal
         pass
 
     try:

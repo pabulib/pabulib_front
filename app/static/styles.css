@@ -517,6 +517,16 @@ nav#mainNav {
 .grid{display:grid;grid-template-columns:2fr 0.7fr 0.7fr 1fr 1fr 1fr;gap:16px;padding:12px 16px}
 .grid.head{font-weight:700;border-bottom:1px solid var(--border)}
 .grid .muted{color:var(--muted)}
+/* Inline code pill styling for constraints in Vote type cell */
+.grid code{
+  background:#f3f4f6; /* light grey */
+  color:#111827;
+  border:1px solid #e5e7eb;
+  border-radius:4px;
+  padding:2px 6px;
+  font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+  font-size:12px;
+}
 
 /* Mobile tweaks: make layout single-column and convert filters into a drawer */
 @media (max-width:768px){
