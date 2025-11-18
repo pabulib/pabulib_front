@@ -2,12 +2,7 @@ services:
   db:
     image: mysql:5.7
     env_file:
-      - .env
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      - ../config/.env
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-authentication-plugin=mysql_native_password
     ports:
       - "${MYSQL_PORT:-3306}:3306"
@@ -30,28 +25,21 @@ services:
       - "${ADMINER_PORT:-8080}:8080"
 
   web:
-    build: .
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     env_file:
-      - .env
+      - ../config/.env
     environment:
-      ENVIRONMENT: ${ENVIRONMENT:-development}
-      FLASK_PORT: ${FLASK_PORT:-5050}
-      REFRESH_FULL: ${REFRESH_FULL:-0}
       MYSQL_HOST: db
-      # Use the container-internal MySQL port for inter-container networking
       MYSQL_PORT: 3306
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      FLASK_DEBUG: ${FLASK_DEBUG:-0}
-      # DB wait tuning for entrypoint + refresh
-      WAIT_FOR_DB_MAX_TRIES: ${WAIT_FOR_DB_MAX_TRIES:-120}
-      WAIT_FOR_DB_SLEEP: ${WAIT_FOR_DB_SLEEP:-3}
-      WAIT_FOR_DB_GRACE: ${WAIT_FOR_DB_GRACE:-2}
       # Override pb_files paths for container - don't use host paths
       # These paths are where the volumes are mounted inside the container
       PB_FILES_DIR: /app/pb_files
       PB_FILES_DEPRECIATED_DIR: /app/pb_files_depreciated
+      WAIT_FOR_DB_MAX_TRIES: 120
+      WAIT_FOR_DB_SLEEP: 3
+      WAIT_FOR_DB_GRACE: 2
     depends_on:
       db:
         condition: service_healthy
@@ -59,13 +47,14 @@ services:
       - "${FLASK_PORT:-5050}:${FLASK_PORT:-5050}"
     volumes:
       # Host path for PB files -> container path used by the app
-      # Set PB_FILES_DIR in .env to point to your local folder; defaults to ./pb_files
-      # Must be writable to allow ingest to move files into this folder
-      - ${PB_FILES_DIR:-./pb_files}:/app/pb_files
+      # HOST_PROJECT_ROOT defaults to .. so relative paths resolve from repo root
+      # Set PB_FILES_DIR in config/.env relative to repo root (e.g. ./pb_files) or
+      # override PB_FILES_HOST_DIR with an absolute path
+      - ${PB_FILES_HOST_DIR:-${HOST_PROJECT_ROOT:-..}/${PB_FILES_DIR:-pb_files}}:/app/pb_files
       # Archive (depreciated) files folder
-      - ${PB_FILES_DEPRECIATED_DIR:-./pb_files_depreciated}:/app/pb_files_depreciated
+      - ${PB_FILES_DEPRECIATED_HOST_DIR:-${HOST_PROJECT_ROOT:-..}/${PB_FILES_DEPRECIATED_DIR:-pb_files_depreciated}}:/app/pb_files_depreciated
       # Cache folder for exports and admin zip jobs
-      - ./cache:/app/cache
+      - ${HOST_PROJECT_ROOT:-..}/cache:/app/cache
     entrypoint: ["scripts/entrypoint.sh"]
 
 volumes:

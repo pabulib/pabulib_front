@@ -1,4 +1,5 @@
-# This override is used automatically by `docker compose up` for local development.
+# Include this override manually when running local development.
+# Example: docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml --profile debug up
 # It bind-mounts source code so changes are reflected immediately without rebuilds
 # and enables Flask debug/reloader.
 services:
@@ -17,8 +18,8 @@ services:
       FLASK_DEBUG: 1
     volumes:
       # Bind mount application source (Python, templates, static)
-      - ./app:/app/app
+      - ../app:/app/app
       # Optionally bind the entry point script if you edit it frequently
-      # - ./scripts:/app/scripts
+      # - ../scripts:/app/scripts
       # Bind the app runner so edits are picked up too
-      - ./run.py:/app/run.py
+      - ../run.py:/app/run.py

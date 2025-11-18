@@ -5,9 +5,20 @@ App to explore and download Participatory Budgeting (.pb) files.
 ## Start
 
 Docker
-- docker compose up --build
+- cp config/.env.example config/.env
+- docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml --profile debug up --build
 - App: http://localhost:${FLASK_PORT:-5050}
 - Adminer (DB UI): http://localhost:${ADMINER_PORT:-8080}
+
+## Repository Layout
+
+- `app/` — Flask application code
+- `config/` — Environment templates (`.env.example`, `.env.production.example`) and your local `.env`
+- `docker/` — Dockerfile and compose stacks
+- `deployment/` — Production scripts, systemd service, logrotate, nginx config
+- `docs/` — Project documentation (`CONTRIBUTING.md`, `bib.bib`, etc.)
+- `pb_files/`, `pb_files_depreciated/`, `cache/`, `scripts/` — Data, archives, cache, and utility scripts
+- Root contains `README.md`, `requirements.txt`, `run.py`, and other runtime essentials
 
 ## Services
 
@@ -29,18 +40,18 @@ Docker
 
 ## Configuration
 
-- PB files path (host): set PB_FILES_DIR in your shell or .env to the local folder with .pb files. Docker binds it to /app/pb_files inside the container. Default is ./pb_files.
+- PB files path (host): set PB_FILES_DIR in your shell or `config/.env` to the local folder with .pb files. Docker binds it to /app/pb_files inside the container. Default is ./pb_files.
 - Other common env: FLASK_PORT, REFRESH_FULL, MYSQL_*.
 
-To re-ingest after adding files: docker compose exec web python -m scripts.db_refresh
+To re-ingest after adding files: docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml exec web python -m scripts.db_refresh
 
 ## PB File Validation (Checker)
 
 This project uses the [pabulib/checker](https://github.com/pabulib/checker) library to validate .pb files. The checker is automatically installed during Docker build via `requirements.txt`.
 
-To update the checker: `docker compose build web && docker compose up -d`
+To update the checker: `docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml build web && docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml --profile debug up -d`
 
-To validate files: `docker compose exec web python scripts/validate_pb_files.py /app/pb_files 10`
+To validate files: `docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml exec web python scripts/validate_pb_files.py /app/pb_files 10`
 
 ## Deployment
 
@@ -49,5 +60,6 @@ To deploy changes to the server:
 1. Push your changes to the `main` branch
 2. SSH into the server and navigate to `/home/pabulib/pabulib_front` directory
 3. `git pull` to fetch the latest changes
-4. Run `./deploy.sh restart` to restart the application
-5. Optionally, run `./deploy.sh monitor` to view logs and monitor the deployment
+4. Update `/home/pabulib/pabulib_front/config/.env` with any required secrets or configuration changes
+5. Run `./deployment/deploy.sh restart` to restart the application
+6. Optionally, run `./deployment/deploy.sh monitor` to view logs and monitor the deployment

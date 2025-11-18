@@ -4,7 +4,25 @@ __pycache__/
 *.pyd
 *.db
 *.sqlite3
-.env
+.env*
 .git
 .gitignore
 .DS_Store
+
+# Large data and generated artifacts (mounted at runtime)
+pb_files/
+pb_files_depreciated/
+cache/
+
+# Environment overrides live under config/
+config/.env
+
+# Documentation is not needed inside the image
+docs/
+
+# Deployment helpers stay on the host; keep Gunicorn config available
+deployment/*
+!deployment/gunicorn_config.py
+
+# Local testing fixtures
+test_files/

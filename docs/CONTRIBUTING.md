@@ -22,7 +22,7 @@ If you find a bug or have a feature request:
    ```bash
    git clone https://github.com/yourusername/pabulib_front.git
    cd pabulib_front
-   docker compose up --build
+   docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml --profile debug up --build
    ```
 3. **Make your changes** and test them locally
 4. **Follow the coding standards**:
@@ -50,8 +50,11 @@ If you find a bug or have a feature request:
 git clone https://github.com/pabulib/pabulib_front.git
 cd pabulib_front
 
-# Start the development environment
-docker compose up --build
+# Copy the sample environment and adjust values
+cp config/.env.example config/.env
+# (Optional) edit config/.env to point PB_FILES_DIR at your local dataset.
+
+docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml --profile debug up --build
 
 # Access the application
 # App: http://localhost:5050
@@ -60,6 +63,10 @@ docker compose up --build
 
 ### Project Structure
 - `app/` - Main Flask application code
+- `config/` - Environment templates and your local `.env`
+- `docker/` - Dockerfile and compose stacks
+- `deployment/` - Deployment scripts, systemd units, nginx config, log rotation
+- `docs/` - Documentation (`CONTRIBUTING.md`, bibliography, etc.)
 - `pb_files/` - Participatory budgeting data files
 - `scripts/` - Database and utility scripts
 - `templates/` - HTML templates
@@ -68,7 +75,7 @@ docker compose up --build
 ### Adding New .pb Files
 After adding new .pb files to the `pb_files/` directory:
 ```bash
-docker compose exec web python -m scripts.db_refresh
+docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml exec web python -m scripts.db_refresh
 ```
 
 ## Code Style Guidelines

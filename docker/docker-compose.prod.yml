@@ -1,16 +1,5 @@
-# Production override for docker-compose.yml
-# This file should be used on the server with: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
-
-# CBIP INTEGRATION CONFIGURATION:
-# ==============================
-# This configuration is designed to work with existing Apache server on CBIP
-# that already occupies ports 80 and 443. The Docker containers are mapped to
-# non-standard ports (19080, 19443) and Apache acts as a reverse proxy.
-#
-# Architecture:
-# Internet → Apache (80/443) → Docker containers (19080/19443) → Pabulib app
-#
-# Apache virtual host configuration should proxy pabulib.org to localhost:19443
+# Production override for docker/docker-compose.yml
+# Use with: docker compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml up
 
 services:
   web:
@@ -28,18 +17,18 @@ services:
       # but this allows the container to handle HTTPS directly for port 19443
       - /etc/letsencrypt:/etc/letsencrypt:ro
       # Mount application code for live updates
-      - ./app:/app/app
-      - ./scripts:/app/scripts
-      - ./requirements.txt:/app/requirements.txt
-      - ./run.py:/app/run.py
-      - ./wsgi.py:/app/wsgi.py
-      - ./gunicorn_config.py:/app/gunicorn_config.py
+      - ../app:/app/app
+      - ../scripts:/app/scripts
+      - ../requirements.txt:/app/requirements.txt
+      - ../run.py:/app/run.py
+      - ../app/wsgi.py:/app/app/wsgi.py
+      - ../deployment/gunicorn_config.py:/app/deployment/gunicorn_config.py
       # Host path for PB files -> container path used by the app
-      - ${PB_FILES_DIR:-./pb_files}:/app/pb_files
+      - ${PB_FILES_DIR:-../pb_files}:/app/pb_files
       # Archive (depreciated) files folder
-      - ${PB_FILES_DEPRECIATED_DIR:-./pb_files_depreciated}:/app/pb_files_depreciated
+      - ${PB_FILES_DEPRECIATED_DIR:-../pb_files_depreciated}:/app/pb_files_depreciated
       # Cache folder for exports and admin zip jobs
-      - ./cache:/app/cache
+      - ../cache:/app/cache
     restart: unless-stopped
     
   db:

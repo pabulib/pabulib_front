@@ -15,13 +15,13 @@ WorkingDirectory=/home/pabulib/pabulib_front
 Environment=COMPOSE_PROJECT_NAME=pabulib
 
 # Start command
-ExecStart=/home/pabulib/pabulib_front/deploy.sh deploy
+ExecStart=/home/pabulib/pabulib_front/deployment/deploy.sh deploy
 
 # Stop command
-ExecStop=/bin/bash -c 'cd /home/pabulib/pabulib_front && docker-compose -f docker-compose.yml -f docker-compose.prod.yml -p pabulib down'
+ExecStop=/home/pabulib/pabulib_front/deployment/deploy.sh stop
 
 # Reload command (for log rotation)
-ExecReload=/bin/bash -c 'cd /home/pabulib/pabulib_front && docker-compose -f docker-compose.yml -f docker-compose.prod.yml -p pabulib restart'
+ExecReload=/home/pabulib/pabulib_front/deployment/deploy.sh restart
 
 # Restart policy
 Restart=on-failure

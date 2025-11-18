@@ -12,6 +12,8 @@ PROJECT_DIR="/home/pabulib/pabulib_front"
 LOG_DIR="/home/pabulib/logs"
 BACKUP_DIR="/home/pabulib/backups"
 COMPOSE_PROJECT_NAME="pabulib"
+CONFIG_DIR="$PROJECT_DIR/config"
+ENV_FILE="$CONFIG_DIR/.env"
 
 # Detect docker compose command and provide a helper wrapper
 COMPOSE_CMD=""
@@ -28,15 +30,15 @@ dc() {
         fi
     fi
     ${COMPOSE_CMD} \
-        -f "${PROJECT_DIR}/docker-compose.yml" \
-        -f "${PROJECT_DIR}/docker-compose.prod.yml" \
+        -f "${PROJECT_DIR}/docker/docker-compose.yml" \
+        -f "${PROJECT_DIR}/docker/docker-compose.prod.yml" \
         -p "${COMPOSE_PROJECT_NAME}" "$@"
 }
 
 # Load environment variables
-if [ -f "$PROJECT_DIR/.env" ]; then
+if [ -f "$ENV_FILE" ]; then
     set -a  # automatically export all variables
-    source "$PROJECT_DIR/.env"
+    source "$ENV_FILE"
     set +a  # disable automatic export
 fi
 
@@ -129,9 +131,9 @@ check_prerequisites() {
     # Initialize compose command via wrapper; will error out with helpful message if missing
     dc version >/dev/null 2>&1 || true
     
-    if [ ! -f "$PROJECT_DIR/.env" ]; then
-        error ".env file not found in $PROJECT_DIR"
-        echo "Please create .env file from .env.production.example"
+    if [ ! -f "$ENV_FILE" ]; then
+        error ".env file not found at $ENV_FILE"
+        echo "Please create it from $CONFIG_DIR/.env.production.example"
         exit 1
     fi
     

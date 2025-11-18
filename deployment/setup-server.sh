@@ -31,30 +31,37 @@ log "🚀 Setting up Pabulib production environment..."
 log "Creating directory structure..."
 mkdir -p /home/pabulib/{logs,backups,pb_files,pb_files_depreciated}
 
+PROJECT_DIR=/home/pabulib/pabulib_front
+CONFIG_DIR="$PROJECT_DIR/config"
+ENV_FILE="$CONFIG_DIR/.env"
+ENV_TEMPLATE="$CONFIG_DIR/.env.production.example"
+
+mkdir -p "$CONFIG_DIR"
+
 # Copy files to proper locations
 log "Setting up deployment files..."
 
 # Make deploy script executable
-chmod +x /home/pabulib/pabulib_front/deploy.sh
+chmod +x /home/pabulib/pabulib_front/deployment/deploy.sh
 
 # Create symlink for easy access
-ln -sf /home/pabulib/pabulib_front/deploy.sh /home/pabulib/deploy.sh
+ln -sf /home/pabulib/pabulib_front/deployment/deploy.sh /home/pabulib/deploy.sh
 
 # Setup environment file
-if [ ! -f /home/pabulib/pabulib_front/.env ]; then
+if [ ! -f "$ENV_FILE" ]; then
     log "Creating .env file from template..."
-    cp /home/pabulib/pabulib_front/.env.production.example /home/pabulib/pabulib_front/.env
+    cp "$ENV_TEMPLATE" "$ENV_FILE"
     
     echo -e "${YELLOW}"
     cat << 'EOF'
-⚠️  IMPORTANT: Please edit /home/pabulib/pabulib_front/.env file with your production values:
+⚠️  IMPORTANT: Please edit $ENV_FILE file with your production values:
 
    • SECRET_KEY=your-production-secret-key
    • ADMIN_PASSWORD=your-secure-password
    • MYSQL_ROOT_PASSWORD=your-root-password
    • MYSQL_PASSWORD=your-db-password
 
-Run: nano /home/pabulib/pabulib_front/.env
+Run: nano $ENV_FILE
 EOF
     echo -e "${NC}"
 fi
@@ -63,13 +70,13 @@ fi
 log "Setting up systemd service..."
 echo "You may be prompted for sudo password to install systemd service:"
 
-sudo cp /home/pabulib/pabulib_front/pabulib.service /etc/systemd/system/
+sudo cp /home/pabulib/pabulib_front/deployment/pabulib.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable pabulib.service
 
 # Setup log rotation (requires sudo)
 log "Setting up log rotation..."
-sudo cp /home/pabulib/pabulib_front/pabulib.logrotate /etc/logrotate.d/pabulib
+sudo cp /home/pabulib/pabulib_front/deployment/pabulib.logrotate /etc/logrotate.d/pabulib
 
 # Set proper permissions
 sudo chown -R pabulib:pabulib /home/pabulib/
@@ -79,8 +86,8 @@ success "🎉 Setup completed successfully!"
 
 log ""
 log "📋 Next Steps:"
-log "1. Edit .env file with your production values:"
-log "   nano /home/pabulib/pabulib_front/.env"
+log "1. Edit $ENV_FILE with your production values:"
+log "   nano $ENV_FILE"
 log ""
 log "2. Deploy the application:"
 log "   /home/pabulib/deploy.sh"
@@ -93,5 +100,3 @@ log "   • Deploy:           /home/pabulib/deploy.sh"
 log "   • Check status:     /home/pabulib/deploy.sh status"
 log "   • View logs:        /home/pabulib/deploy.sh logs"
 log "   • Monitor:          /home/pabulib/deploy.sh monitor"
-log "   • Systemd status:   sudo systemctl status pabulib"
-log "   • Systemd logs:     sudo journalctl -u pabulib -f"

@@ -1,12 +1,13 @@
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 try:
     # Load environment variables from .env if present (local dev)
     from dotenv import load_dotenv  # type: ignore
 
-    load_dotenv()
+    load_dotenv(Path(__file__).resolve().parent / "config" / ".env")
 except Exception:
     pass
 
@@ -53,7 +54,12 @@ def start_gunicorn():
         start_http_redirect_server()
 
         # Start Gunicorn with our configuration
-        cmd = ["gunicorn", "--config", "gunicorn_config.py", "wsgi:application"]
+        cmd = [
+            "gunicorn",
+            "--config",
+            "deployment/gunicorn_config.py",
+            "app.wsgi:application",
+        ]
 
         print("   🎯 Starting Gunicorn WSGI server...")
         print(f"   Command: {' '.join(cmd)}")

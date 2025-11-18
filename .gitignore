@@ -86,6 +86,7 @@ pb_files_depreciated/*
 
 # Local environment overrides
 .env
+config/.env
 
 # Cache directory for generated files (keep directory, ignore contents)
 cache/*
