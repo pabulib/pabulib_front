@@ -514,8 +514,14 @@ nav#mainNav {
 /* Hidden by default; shown only on mobile breakpoint */
 .mobile-meta{display:none}
 
-.grid{display:grid;grid-template-columns:2fr 0.7fr 0.7fr 1fr 1fr 1fr;gap:16px;padding:12px 16px}
+.grid{display:grid;grid-template-columns:2.5fr 0.65fr 0.65fr 0.75fr 1fr 0.65fr;gap:16px;padding:12px 16px}
 .grid.head{font-weight:700;border-bottom:1px solid var(--border)}
+.grid.head > div:nth-child(3) {
+  white-space: nowrap;
+}
+.grid.head > div:nth-child(2) {
+  white-space: nowrap;
+}
 .grid .muted{color:var(--muted)}
 /* Inline code pill styling for constraints in Vote type cell */
 .grid code{
