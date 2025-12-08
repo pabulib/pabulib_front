@@ -4,11 +4,13 @@ App to explore and download Participatory Budgeting (.pb) files.
 
 ## Start
 
-Docker
-- cp config/.env.example config/.env
-- docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml --profile debug up --build
+Local development (`python run_locally.py` wraps Docker Compose for you):
+- `cp config/.env.example config/.env`
+- `python run_locally.py`
 - App: http://localhost:${FLASK_PORT:-5050}
 - Adminer (DB UI): http://localhost:${ADMINER_PORT:-8080}
+
+`run_locally.py` forwards any extra arguments to Docker Compose (for example, `python run_locally.py down`). Use that if you need fine-grained control.
 
 ## Repository Layout
 
@@ -63,5 +65,5 @@ To deploy changes to the server:
 2. SSH into the server and navigate to `/home/pabulib/pabulib_front` directory
 3. `git pull` to fetch the latest changes
 4. Update `/home/pabulib/pabulib_front/config/.env` with any required secrets or configuration changes
-5. Run `./deployment/deploy.sh restart` to restart the application
-6. Optionally, run `./deployment/deploy.sh monitor` to view logs and monitor the deployment
+5. Run `bash deployment/deploy.sh restart` to restart the application
+6. Optionally, run `bash deployment/deploy.sh monitor` to view logs and monitor the deployment

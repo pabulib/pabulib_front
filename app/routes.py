@@ -1,5 +1,6 @@
 import io
 import json
+import mimetypes
 import re
 import tempfile
 import threading
@@ -112,6 +113,9 @@ def _build_zip_in_background(
                 "error": None,
                 "download_name": download_name,
                 "file_ids": file_ids or [],
+                "artifact_type": "zip",
+                "file_path": str(reuse_file_path),
+                "mime_type": "application/zip",
             }
             _write_progress(token, progress)
             with _ZIP_JOBS_LOCK:
@@ -119,6 +123,8 @@ def _build_zip_in_background(
                     "file_path": str(reuse_file_path),
                     "download_name": download_name,
                     "file_ids": file_ids or [],
+                    "artifact_type": "zip",
+                    "mime_type": "application/zip",
                 }
             return
 
@@ -135,6 +141,9 @@ def _build_zip_in_background(
             "error": None,
             "download_name": download_name,
             "file_ids": file_ids or [],
+            "artifact_type": "zip",
+            "file_path": str(out_zip),
+            "mime_type": "application/zip",
         }
         _write_progress(token, progress)
 
@@ -168,13 +177,23 @@ def _build_zip_in_background(
                     )
                     _write_progress(token, progress)
         # Mark complete
-        progress.update({"done": True, "status": "ready", "percent": 100})
+        progress.update(
+            {
+                "done": True,
+                "status": "ready",
+                "percent": 100,
+                "artifact_type": "zip",
+                "file_path": str(out_zip),
+            }
+        )
         _write_progress(token, progress)
         with _ZIP_JOBS_LOCK:
             _ZIP_JOBS[token] = {
                 "file_path": str(out_zip),
                 "download_name": download_name,
                 "file_ids": file_ids or [],
+                "artifact_type": "zip",
+                "mime_type": "application/zip",
             }
     except Exception as e:
         progress = {
@@ -188,6 +207,7 @@ def _build_zip_in_background(
             "error": f"Zip error: {e}",
             "download_name": download_name,
             "file_ids": file_ids or [],
+            "artifact_type": "zip",
         }
         _write_progress(token, progress)
 
@@ -1328,6 +1348,43 @@ def download_selected_start():
             stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             download_name = f"pb_selected_{len(file_pairs)}_{stamp}.zip"
 
+    if len(file_pairs) == 1 and reuse_path is None:
+        arcname, path = file_pairs[0]
+        download_name = arcname
+        mime_type = mimetypes.guess_type(download_name)[0] or "application/octet-stream"
+        token = uuid.uuid4().hex
+        progress_payload = {
+            "token": token,
+            "total": 1,
+            "current": 1,
+            "percent": 100,
+            "status": "ready",
+            "current_name": arcname,
+            "done": True,
+            "error": None,
+            "download_name": download_name,
+            "artifact_type": "file",
+            "file_path": str(path),
+            "mime_type": mime_type,
+            "file_ids": [],
+        }
+        _write_progress(token, progress_payload)
+        with _ZIP_JOBS_LOCK:
+            _ZIP_JOBS[token] = {
+                "file_path": str(path),
+                "download_name": download_name,
+                "artifact_type": "file",
+                "mime_type": mime_type,
+            }
+        return jsonify(
+            {
+                "ok": True,
+                "token": token,
+                "progress_url": url_for("main.download_selected_progress", token=token),
+                "file_url": url_for("main.download_selected_file", token=token),
+            }
+        )
+
     token = uuid.uuid4().hex
     # Record initial state
     _write_progress(
@@ -1342,6 +1399,9 @@ def download_selected_start():
             "done": False,
             "error": None,
             "download_name": download_name,
+            "artifact_type": "zip",
+            "mime_type": "application/zip",
+            "file_ids": file_ids_for_snapshot,
         },
     )
 
@@ -1435,12 +1495,19 @@ def handle_large_request(e):
                         "done": True,
                         "error": None,
                         "download_name": download_name,
+                        "artifact_type": "zip",
+                        "mime_type": "application/zip",
+                        "file_path": str(latest_export),
+                        "file_ids": [],
                     },
                 )
                 with _ZIP_JOBS_LOCK:
                     _ZIP_JOBS[token] = {
                         "file_path": str(latest_export),
                         "download_name": download_name,
+                        "artifact_type": "zip",
+                        "mime_type": "application/zip",
+                        "file_ids": [],
                     }
             else:
                 # No timestamped export found; queue a fresh build (no canonical cache fallback)
@@ -1456,12 +1523,18 @@ def handle_large_request(e):
                         "done": False,
                         "error": None,
                         "download_name": download_name,
+                        "artifact_type": "zip",
+                        "mime_type": "application/zip",
+                        "file_ids": [],
                     },
                 )
                 with _ZIP_JOBS_LOCK:
                     _ZIP_JOBS[token] = {
                         "file_path": None,
                         "download_name": download_name,
+                        "artifact_type": "zip",
+                        "mime_type": "application/zip",
+                        "file_ids": [],
                     }
                 # Start background builder to create the all-files zip
                 all_file_pairs = get_all_current_file_paths()
@@ -1515,7 +1588,6 @@ def download_selected_file(token: str):
     job_data = None
     with _ZIP_JOBS_LOCK:
         job_data = _ZIP_JOBS.get(token)
-    file_path: Optional[Path] = None
     download_name = (
         data.get("download_name")
         or (job_data or {}).get("download_name")
@@ -1529,15 +1601,34 @@ def download_selected_file(token: str):
             captured_ids = [int(x) for x in ids_from_job if x is not None]
     except Exception:
         captured_ids = []
-    if job_data and job_data.get("file_path"):
-        file_path = Path(job_data["file_path"])  # type: ignore[index]
-    else:
+    artifact_type = (
+        (job_data or {}).get("artifact_type") or data.get("artifact_type") or "zip"
+    )
+    mime_type = (
+        (job_data or {}).get("mime_type")
+        or data.get("mime_type")
+        or ("application/zip" if artifact_type == "zip" else None)
+    )
+    file_path_str = (job_data or {}).get("file_path") or data.get("file_path")
+    file_path: Optional[Path] = Path(file_path_str) if file_path_str else None
+    if artifact_type == "zip" and (file_path is None or not file_path.exists()):
         # fallback to token zip
         p = _zip_jobs_dir() / f"{token}.zip"
         if p.exists():
             file_path = p
     if not file_path or not file_path.exists():
         abort(404)
+    if artifact_type == "file":
+        fallback_name = Path(file_path).name
+        if not download_name:
+            download_name = fallback_name
+        guessed_mime = mime_type or mimetypes.guess_type(download_name)[0]
+        return send_file(
+            file_path,
+            as_attachment=True,
+            download_name=download_name or fallback_name,
+            mimetype=guessed_mime or "application/octet-stream",
+        )
     # If the ZIP already contains a link file, serve it directly and set headers
     try:
         import re
