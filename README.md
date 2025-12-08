@@ -51,6 +51,8 @@ This project uses the [pabulib/checker](https://github.com/pabulib/checker) libr
 
 To update the checker: `docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml build web && docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml --profile debug up -d`
 
+Quick update (running container): `docker exec pabulib-web-1 pip install pabulib-checker==0.3.1` (replace version as needed)
+
 To validate files: `docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml exec web python scripts/validate_pb_files.py /app/pb_files 10`
 
 ## Deployment
