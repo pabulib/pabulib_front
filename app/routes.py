@@ -264,7 +264,7 @@ def citations_page():
     # Parse bib.bib and pass publications to the template
     import bibtexparser
 
-    bib_path = Path(__file__).parent.parent / "bib.bib"
+    bib_path = Path(__file__).parent.parent / "docs" / "bib.bib"
     publications = []
     if bib_path.exists():
         with open(bib_path, "r", encoding="utf-8") as bibfile:

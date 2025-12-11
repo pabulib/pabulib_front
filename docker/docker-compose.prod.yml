@@ -23,6 +23,7 @@ services:
       - ../run.py:/app/run.py
       - ../app/wsgi.py:/app/app/wsgi.py
       - ../deployment/gunicorn_config.py:/app/deployment/gunicorn_config.py
+      - ../docs:/app/docs
       # Host path for PB files -> container path used by the app
       - ${PB_FILES_DIR:-../pb_files}:/app/pb_files
       # Archive (depreciated) files folder
