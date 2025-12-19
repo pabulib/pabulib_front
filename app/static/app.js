@@ -243,19 +243,25 @@
     tiles.forEach(t=>{
       const hay = [t.dataset.title, t.dataset.webpage, t.dataset.desc, t.dataset.comments, t.dataset.file]
         .map(normalize).join(' ');
-      if(q && !hay.includes(q)) { t.hidden = true; return; }
-      if(country && normalize(t.dataset.country) !== country) { t.hidden=true; return; }
-      if(city && normalize(t.dataset.city) !== city) { t.hidden=true; return; }
-      if(year && (t.dataset.year !== year)) { t.hidden=true; return; }
-      if(!passesNumeric(t.dataset.votes || 0, votesMin, votesMax)) { t.hidden=true; return; }
-      if(!passesNumeric(t.dataset.projects || 0, projectsMin, projectsMax)) { t.hidden=true; return; }
-      if(!passesNumeric(t.dataset.vlen || NaN, lenMin, lenMax)) { t.hidden=true; return; }
-      if(type && normalize(t.dataset.type) !== type) { t.hidden=true; return; }
-      if(excludeFully.checked && t.dataset.fully === '1') { t.hidden=true; return; }
-      if(excludeExperimental.checked && t.dataset.experimental === '1') { t.hidden=true; return; }
-      if(requireGeo && requireGeo.checked && t.dataset.geo !== '1') { t.hidden=true; return; }
-      if(requireTarget && requireTarget.checked && t.dataset.target !== '1') { t.hidden=true; return; }
-      if(requireCategory && requireCategory.checked && t.dataset.category !== '1') { t.hidden=true; return; }
+      // Helper to hide tile and uncheck its checkbox
+      const hideTile = () => {
+        t.hidden = true;
+        const cb = t.querySelector('.row-check');
+        if(cb) cb.checked = false;
+      };
+      if(q && !hay.includes(q)) { hideTile(); return; }
+      if(country && normalize(t.dataset.country) !== country) { hideTile(); return; }
+      if(city && normalize(t.dataset.city) !== city) { hideTile(); return; }
+      if(year && (t.dataset.year !== year)) { hideTile(); return; }
+      if(!passesNumeric(t.dataset.votes || 0, votesMin, votesMax)) { hideTile(); return; }
+      if(!passesNumeric(t.dataset.projects || 0, projectsMin, projectsMax)) { hideTile(); return; }
+      if(!passesNumeric(t.dataset.vlen || NaN, lenMin, lenMax)) { hideTile(); return; }
+      if(type && normalize(t.dataset.type) !== type) { hideTile(); return; }
+      if(excludeFully.checked && t.dataset.fully === '1') { hideTile(); return; }
+      if(excludeExperimental.checked && t.dataset.experimental === '1') { hideTile(); return; }
+      if(requireGeo && requireGeo.checked && t.dataset.geo !== '1') { hideTile(); return; }
+      if(requireTarget && requireTarget.checked && t.dataset.target !== '1') { hideTile(); return; }
+      if(requireCategory && requireCategory.checked && t.dataset.category !== '1') { hideTile(); return; }
       t.hidden = false;
       visible++;
     });
@@ -358,7 +364,7 @@
   form.addEventListener('submit', async (e) => {
     // client-side: start background job instead of direct POST to get progress
     e.preventDefault();
-  const selected = $$('.row-check:checked');
+  const selected = allFilteredRowChecks().filter(ch => ch.checked);
   const selectionSize = selected.length;
     if(!selected.length){ return; }
 
