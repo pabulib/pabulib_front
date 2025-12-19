@@ -712,10 +712,10 @@ voter_id; age; sex; vote
         },
         {
             "field_name": "age",
-            "datatype": "int",
-            "description": "age of the voter. Sometimes it shows very low values (starting from zero), indicating that one doesn't need to be an adult to vote: If a voter is under 13, they can vote with the consent of a parent or guardian. Hence, for example, age 0 likely corresponds to cases where parents/guardians are voting on behalf of their children.",
+            "datatype": "int or str",
+            "description": "age of the voter. Can be an integer for exact age, or a string for age buckets (e.g., '40-59'). Sometimes it shows very low values (starting from zero), indicating that one doesn't need to be an adult to vote: If a voter is under 13, they can vote with the consent of a parent or guardian. Hence, for example, age 0 likely corresponds to cases where parents/guardians are voting on behalf of their children.",
             "options": null,
-            "example": "27",
+            "example": ["27", "40-59"],
             "if_obligatory": false
         },
         {

@@ -6,6 +6,6 @@ cryptography>=41
 bibtexparser
 requests>=2.25.0
 gunicorn>=21.2.0
-pabulib-checker==0.3.1
+pabulib-checker==0.3.2
 flask-limiter>=3.5.0
 sentry-sdk[flask]>=1.38.0
