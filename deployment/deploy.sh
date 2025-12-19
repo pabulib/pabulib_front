@@ -74,20 +74,21 @@ setup_directories() {
     mkdir -p "$PROJECT_DIR/pb_files"
     mkdir -p "$PROJECT_DIR/pb_files_depreciated"
     
-    # Set proper permissions and ownership
-    chmod 755 "$LOG_DIR" "$BACKUP_DIR"
-    chmod 755 "$PROJECT_DIR/pb_files" "$PROJECT_DIR/pb_files_depreciated"
+    # Set permissions only if we have permission to do so (non-fatal)
+    chmod 755 "$LOG_DIR" "$BACKUP_DIR" 2>/dev/null || true
+    chmod 755 "$PROJECT_DIR/pb_files" "$PROJECT_DIR/pb_files_depreciated" 2>/dev/null || true
     
-    # Ensure current user owns the directories (fixes tee permission issues)
-    # Avoid sudo; warn if not writable
-    for d in "$LOG_DIR" "$BACKUP_DIR"; do
+    # Try to set ownership, but don't fail if we can't (non-fatal)
+    chown -R $(whoami):$(whoami) "$PROJECT_DIR/pb_files" "$PROJECT_DIR/pb_files_depreciated" 2>/dev/null || true
+    
+    # Check if critical directories are writable
+    for d in "$LOG_DIR" "$BACKUP_DIR" "$PROJECT_DIR/pb_files" "$PROJECT_DIR/pb_files_depreciated"; do
         if [ ! -w "$d" ]; then
             warning "Directory $d is not writable by $(whoami). You may need to adjust permissions or ownership."
         fi
     done
-    chown -R $(whoami):$(whoami) "$PROJECT_DIR/pb_files" "$PROJECT_DIR/pb_files_depreciated" 2>/dev/null || true
     
-    success "Directories created successfully"
+    success "Directories verified successfully"
 }
 
 # Check for port conflicts
@@ -267,13 +268,32 @@ cleanup() {
 
 # Main deployment function
 deploy() {
+    local rebuild_flag="${1:-}"
     log "🚀 Starting Pabulib production deployment..."
+    
+    # Pull latest code from git
+    log "Pulling latest code from git..."
+    cd "$PROJECT_DIR"
+    if git pull 2>&1 | tee -a "$LOG_DIR/deploy_$(date +'%Y%m%d').log"; then
+        success "Git pull completed successfully"
+    else
+        error "Git pull failed. Check if there are local changes or conflicts."
+        exit 1
+    fi
     
     setup_directories
     check_prerequisites
     backup_deployment
     stop_services
-    update_images
+    
+    # Only rebuild images if explicitly requested
+    if [[ "$rebuild_flag" == "rebuild" || "$rebuild_flag" == "--rebuild" ]]; then
+        log "Rebuild flag detected - rebuilding Docker images..."
+        update_images
+    else
+        log "Skipping image rebuild (use 'deploy rebuild' to rebuild images)"
+    fi
+    
     start_services
     cleanup
     
@@ -359,7 +379,7 @@ EOF
 main() {
     case "${1:-deploy}" in
         deploy)
-            deploy
+            deploy "${2:-}"
             ;;
         status)
             status
