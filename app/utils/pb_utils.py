@@ -161,9 +161,21 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
         vote_length_float = None
 
     # fully funded heuristic
+    # According to the pabulib format, fully_funded means the budget was greater than
+    # the total cost of ALL projects (not just selected), meaning all projects could be funded.
+    # Check: 1) explicit meta field, 2) all projects selected, 3) budget >= total cost of all projects
     fully_funded = False
     selected_count = 0
     has_selected_col = False
+    
+    # First check if there's an explicit fully_funded flag in metadata
+    fully_funded_meta = str(meta.get("fully_funded", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+    }
+    
     try:
         selected_flags = []
         for p in projects.values():
@@ -171,27 +183,34 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
                 has_selected_col = True
             selected_flags.append(str(p.get("selected", "0")).strip())
         all_selected = len(selected_flags) > 0 and all(v == "1" for v in selected_flags)
-        sum_selected_cost = 0
+        
+        # Count selected projects
         for p in projects.values():
             if str(p.get("selected", "0")).strip() == "1":
                 selected_count += 1
-                c = p.get("cost")
-                # Robust cost parsing: accept ints, floats, and numeric strings like '40000' or '40000.0'
-                try:
-                    if isinstance(c, (int, float)):
-                        sum_selected_cost += int(float(c))
-                    elif isinstance(c, str):
-                        # Normalize decimal comma and whitespace
-                        cs = c.strip().replace(",", ".")
-                        sum_selected_cost += int(float(cs))
-                except Exception:
-                    # Ignore non-parsable costs for the fully_funded heuristic
-                    pass
-        fully_funded = all_selected or (
-            budget is not None and sum_selected_cost >= budget
+        
+        # Calculate total cost of ALL projects (not just selected) for fully_funded check
+        total_all_projects_cost = 0
+        for p in projects.values():
+            c = p.get("cost")
+            # Robust cost parsing: accept ints, floats, and numeric strings like '40000' or '40000.0'
+            try:
+                if isinstance(c, (int, float)):
+                    total_all_projects_cost += int(float(c))
+                elif isinstance(c, str):
+                    # Normalize decimal comma and whitespace
+                    cs = c.strip().replace(",", ".")
+                    total_all_projects_cost += int(float(cs))
+            except Exception:
+                # Ignore non-parsable costs for the fully_funded heuristic
+                pass
+        
+        # Fully funded if: explicit meta flag, OR all projects selected, OR budget >= total cost of all projects
+        fully_funded = fully_funded_meta or all_selected or (
+            budget is not None and total_all_projects_cost > 0 and budget >= total_all_projects_cost
         )
     except Exception:
-        fully_funded = False
+        fully_funded = fully_funded_meta
         selected_count = 0
 
     # If there's no selected column, set selected_count to None
