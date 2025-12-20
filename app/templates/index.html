@@ -259,6 +259,29 @@
           </div>
           <div>{{ t.vote_length }}</div>
         </div>
+        {% if t.comments and t.comments|length > 0 %}
+        <div class="hidden md:block" style="padding: 0 16px 8px 16px;">
+          <details class="mt-1 comments-block">
+            <summary class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 cursor-pointer comments-toggle" onclick="event.stopPropagation()" title="Parsed from META 'comment' using #n: markers">{{ t.comments|length }} comment{{ 's' if t.comments|length != 1 else '' }}</summary>
+            <ul class="mt-1.5 text-[11px] text-slate-700 space-y-0.5">
+              {% set max_show = 3 %}
+              {% for c in t.comments[:max_show] %}
+              <li class="flex items-start gap-1"><span class="text-slate-400">•</span><span>{{ c }}</span></li>
+              {% endfor %}
+            </ul>
+            {% if t.comments|length > max_show %}
+            <details class="mt-1">
+              <summary class="text-[11px] text-indigo-600 cursor-pointer" onclick="event.stopPropagation()">Show {{ t.comments|length - max_show }} more</summary>
+              <ul class="mt-1 text-[11px] text-slate-700 space-y-1">
+                {% for c in t.comments[max_show:] %}
+                <li class="flex items-start gap-1"><span class="text-slate-400">•</span><span>{{ c }}</span></li>
+                {% endfor %}
+              </ul>
+            </details>
+            {% endif %}
+          </details>
+        </div>
+        {% endif %}
       </section>
       {% endfor %}
       <div id="sentinel" class="sentinel" aria-hidden="true"></div>
