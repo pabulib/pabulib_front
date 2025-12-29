@@ -1312,9 +1312,6 @@ def download_selected_start():
     excludes = set(request.form.getlist("exclude"))
 
     # Parse filter args from form (since we are POSTing)
-    print(f"DEBUG: request.form: {request.form}")
-    print(f"DEBUG: request.files: {request.files}")
-    print(f"DEBUG: request.args: {request.args}")
     
     query = request.form.get("search")
     country = request.form.get("country")
