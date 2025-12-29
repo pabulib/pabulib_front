@@ -243,6 +243,114 @@ def invalidate_caches() -> None:
     _TARGETS_CACHE = None
 
 
+def _apply_search_filters(
+    q,
+    query: Optional[str] = None,
+    country: Optional[str] = None,
+    city: Optional[str] = None,
+    year: Optional[str] = None,
+    votes_min: Optional[int] = None,
+    votes_max: Optional[int] = None,
+    projects_min: Optional[int] = None,
+    projects_max: Optional[int] = None,
+    len_min: Optional[float] = None,
+    len_max: Optional[float] = None,
+    vote_type: Optional[str] = None,
+    exclude_fully: bool = False,
+    exclude_experimental: bool = False,
+    require_geo: bool = False,
+    require_target: bool = False,
+    require_category: bool = False,
+):
+    if query:
+        term = f"%{query}%"
+        q = q.filter(or_(
+            PBFile.file_name.ilike(term),
+            PBFile.webpage_name.ilike(term),
+            PBFile.description.ilike(term),
+            PBFile.country.ilike(term),
+            PBFile.unit.ilike(term)
+        ))
+    
+    if country:
+        q = q.filter(PBFile.country == country)
+    if city:
+        q = q.filter(PBFile.unit == city)
+    if year:
+        try:
+            q = q.filter(PBFile.year == int(year))
+        except:
+            pass
+    
+    if votes_min is not None:
+        q = q.filter(PBFile.num_votes >= votes_min)
+    if votes_max is not None:
+        q = q.filter(PBFile.num_votes <= votes_max)
+        
+    if projects_min is not None:
+        q = q.filter(PBFile.num_projects >= projects_min)
+    if projects_max is not None:
+        q = q.filter(PBFile.num_projects <= projects_max)
+        
+    if len_min is not None:
+        q = q.filter(PBFile.vote_length >= len_min)
+    if len_max is not None:
+        q = q.filter(PBFile.vote_length <= len_max)
+        
+    if vote_type:
+        q = q.filter(PBFile.vote_type.ilike(vote_type))
+        
+    if exclude_fully:
+        q = q.filter(PBFile.fully_funded == False)  # noqa: E712
+    if exclude_experimental:
+        q = q.filter(PBFile.experimental == False)  # noqa: E712
+        
+    if require_geo:
+        q = q.filter(PBFile.has_geo == True)  # noqa: E712
+    if require_target:
+        q = q.filter(PBFile.has_target == True)  # noqa: E712
+    if require_category:
+        q = q.filter(PBFile.has_category == True)  # noqa: E712
+        
+    return q
+
+
+def get_filtered_file_paths(
+    query: Optional[str] = None,
+    country: Optional[str] = None,
+    city: Optional[str] = None,
+    year: Optional[str] = None,
+    votes_min: Optional[int] = None,
+    votes_max: Optional[int] = None,
+    projects_min: Optional[int] = None,
+    projects_max: Optional[int] = None,
+    len_min: Optional[float] = None,
+    len_max: Optional[float] = None,
+    vote_type: Optional[str] = None,
+    exclude_fully: bool = False,
+    exclude_experimental: bool = False,
+    require_geo: bool = False,
+    require_target: bool = False,
+    require_category: bool = False,
+) -> List[Tuple[str, Path]]:
+    
+    with get_session() as s:
+        q = s.query(PBFile.file_name).filter(PBFile.is_current == True)  # noqa: E712
+        q = _apply_search_filters(
+            q, query, country, city, year, votes_min, votes_max,
+            projects_min, projects_max, len_min, len_max, vote_type,
+            exclude_fully, exclude_experimental, require_geo, require_target, require_category
+        )
+        rows = q.all()
+        
+        results = []
+        for (name,) in rows:
+            p = get_current_file_path(name)
+            if p and p.exists():
+                results.append((name, p))
+        return results
+
+
 def search_tiles(
     query: Optional[str] = None,
     country: Optional[str] = None,
@@ -302,55 +410,25 @@ def search_tiles(
             PBFile.max_total_cost,
         ).filter(PBFile.is_current == True)  # noqa: E712
 
-        if query:
-            term = f"%{query}%"
-            q = q.filter(or_(
-                PBFile.file_name.ilike(term),
-                PBFile.webpage_name.ilike(term),
-                PBFile.description.ilike(term),
-                PBFile.country.ilike(term),
-                PBFile.unit.ilike(term)
-            ))
-        
-        if country:
-            q = q.filter(PBFile.country == country)
-        if city:
-            q = q.filter(PBFile.unit == city)
-        if year:
-            try:
-                q = q.filter(PBFile.year == int(year))
-            except:
-                pass
-        
-        if votes_min is not None:
-            q = q.filter(PBFile.num_votes >= votes_min)
-        if votes_max is not None:
-            q = q.filter(PBFile.num_votes <= votes_max)
-            
-        if projects_min is not None:
-            q = q.filter(PBFile.num_projects >= projects_min)
-        if projects_max is not None:
-            q = q.filter(PBFile.num_projects <= projects_max)
-            
-        if len_min is not None:
-            q = q.filter(PBFile.vote_length >= len_min)
-        if len_max is not None:
-            q = q.filter(PBFile.vote_length <= len_max)
-            
-        if vote_type:
-            q = q.filter(PBFile.vote_type.ilike(vote_type))
-            
-        if exclude_fully:
-            q = q.filter(PBFile.fully_funded == False)  # noqa: E712
-        if exclude_experimental:
-            q = q.filter(PBFile.experimental == False)  # noqa: E712
-            
-        if require_geo:
-            q = q.filter(PBFile.has_geo == True)  # noqa: E712
-        if require_target:
-            q = q.filter(PBFile.has_target == True)  # noqa: E712
-        if require_category:
-            q = q.filter(PBFile.has_category == True)  # noqa: E712
+        q = _apply_search_filters(
+            q,
+            query=query,
+            country=country,
+            city=city,
+            year=year,
+            votes_min=votes_min,
+            votes_max=votes_max,
+            projects_min=projects_min,
+            projects_max=projects_max,
+            len_min=len_min,
+            len_max=len_max,
+            vote_type=vote_type,
+            exclude_fully=exclude_fully,
+            exclude_experimental=exclude_experimental,
+            require_geo=require_geo,
+            require_target=require_target,
+            require_category=require_category,
+        )
 
         # Count total before pagination
         total_count = q.count()

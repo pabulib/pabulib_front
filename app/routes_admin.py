@@ -378,6 +378,10 @@ def _list_tmp_tiles() -> list[dict]:
         try:
             t = _parse_pb_to_tile(p)
             tile_data = _format_preview_tile(t)
+            # Add upload date
+            tile_data["upload_date"] = datetime.fromtimestamp(p.stat().st_mtime).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
             # Public submission marker
             try:
                 import json

@@ -220,6 +220,7 @@ from .services.pb_service import (
     get_tiles_cached as _get_tiles_cached,
     search_tiles as _search_tiles,
     get_filter_options as _get_filter_options,
+    get_filtered_file_paths as _get_filtered_file_paths,
 )
 from .services.snapshot_service import (
     add_link_to_existing_zip as _add_link_to_existing_zip,
@@ -1310,6 +1311,34 @@ def download_selected_start():
     # Optional exclude-mode: select_all=true with a small list of files to exclude
     excludes = set(request.form.getlist("exclude"))
 
+    # Parse filter args from form (since we are POSTing)
+    print(f"DEBUG: request.form: {request.form}")
+    print(f"DEBUG: request.files: {request.files}")
+    print(f"DEBUG: request.args: {request.args}")
+    
+    query = request.form.get("search")
+    country = request.form.get("country")
+    city = request.form.get("city")
+    year = request.form.get("year")
+    votes_min = request.form.get("votes_min", type=int)
+    votes_max = request.form.get("votes_max", type=int)
+    projects_min = request.form.get("projects_min", type=int)
+    projects_max = request.form.get("projects_max", type=int)
+    len_min = request.form.get("len_min", type=float)
+    len_max = request.form.get("len_max", type=float)
+    vote_type = request.form.get("type")
+    exclude_fully = request.form.get("exclude_fully") == "true"
+    exclude_experimental = request.form.get("exclude_experimental") == "true"
+    require_geo = request.form.get("require_geo") == "true"
+    require_target = request.form.get("require_target") == "true"
+    require_category = request.form.get("require_category") == "true"
+
+    has_filters = any([
+        query, country, city, year, votes_min, votes_max, projects_min, projects_max,
+        len_min, len_max, vote_type, exclude_fully, exclude_experimental,
+        require_geo, require_target, require_category
+    ])
+
     # If select_all is not set and no explicit names provided, reject.
     # Allow select_all=true to proceed even when names list is empty ("all" or exclude-mode).
     if not select_all and not names:
@@ -1324,6 +1353,7 @@ def download_selected_start():
     selected_all_current = (
         select_all
         and not excludes
+        and not has_filters
         and (len(names) == total_current_files or len(names) == 0)
     )
 
@@ -1363,6 +1393,48 @@ def download_selected_start():
         download_name = (
             f"all_pb_files_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.zip"
         )
+    elif select_all and has_filters:
+        # Filtered select all
+        file_pairs = _get_filtered_file_paths(
+            query=query, country=country, city=city, year=year,
+            votes_min=votes_min, votes_max=votes_max,
+            projects_min=projects_min, projects_max=projects_max,
+            len_min=len_min, len_max=len_max,
+            vote_type=vote_type,
+            exclude_fully=exclude_fully,
+            exclude_experimental=exclude_experimental,
+            require_geo=require_geo,
+            require_target=require_target,
+            require_category=require_category
+        )
+        # Apply excludes if any
+        if excludes:
+            file_pairs = [fp for fp in file_pairs if fp[0] not in excludes]
+            
+        if not file_pairs:
+             return jsonify({"ok": False, "error": "No files found matching filters"}), 404
+             
+        # Get IDs for snapshot
+        try:
+            with get_session() as s:
+                names = [name for (name, _p) in file_pairs]
+                rows = (
+                    s.query(PBFile.file_name, PBFile.id)
+                    .filter(PBFile.is_current == True)
+                    .filter(PBFile.file_name.in_(names))
+                    .all()
+                )
+                name_to_id = {fn: int(fid) for fn, fid in rows}
+                file_ids_for_snapshot = [
+                    name_to_id.get(n)
+                    for n in names
+                    if name_to_id.get(n) is not None
+                ]
+        except Exception:
+            file_ids_for_snapshot = []
+            
+        stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        download_name = f"pb_selected_{len(file_pairs)}_{stamp}.zip"
     else:
         # Either: exclude-mode (select all minus excludes) OR explicit list of names
         if select_all and excludes:

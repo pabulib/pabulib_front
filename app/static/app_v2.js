@@ -363,6 +363,12 @@
         currentOffset = 0;
         hasMore = true;
         $$('.tile').forEach(el => el.remove());
+        
+        // Clear selection on filter change
+        selectedFiles.clear();
+        isSelectAllActive = false;
+        if (selectAll) selectAll.checked = false;
+        updateSelectionUI();
     }
     if (!hasMore) return;
 
@@ -534,6 +540,10 @@
                       selectedFiles.add(file);
                   } else {
                       selectedFiles.delete(file);
+                      if (isSelectAllActive) {
+                          isSelectAllActive = false;
+                          if (selectAll) selectAll.checked = false;
+                      }
                   }
                   updateSelectionUI();
               }
@@ -547,6 +557,10 @@
                   selectedFiles.add(file);
               } else {
                   selectedFiles.delete(file);
+                  if (isSelectAllActive) {
+                      isSelectAllActive = false;
+                      if (selectAll) selectAll.checked = false;
+                  }
               }
               updateSelectionUI();
           }
@@ -571,7 +585,7 @@
 
   function updateSelectionUI() {
       const count = selectedFiles.size;
-      const isGlobal = isSelectAllActive && !isAnyFilterActive();
+      const isGlobal = isSelectAllActive;
 
       if (downloadBtn) {
           if (isGlobal) {
@@ -954,10 +968,19 @@
           const fd = new FormData(downloadForm);
           
           // Check if we should use "select_all" optimization
-          if (isSelectAllActive && !isAnyFilterActive()) {
+          if (isSelectAllActive) {
              fd.append('select_all', 'true');
              // If global select all, we don't need individual files
              fd.delete('files');
+             
+             // Append current filter values to FormData
+             const filters = getFilterValues();
+             console.log('DEBUG: Appending filters to download', filters);
+             for (const [key, value] of Object.entries(filters)) {
+                 if (value !== '' && value !== null && value !== undefined && value !== false) {
+                     fd.append(key, value);
+                 }
+             }
           }
 
           // Show progress UI
