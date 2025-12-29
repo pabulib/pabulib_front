@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from sqlalchemy import or_, and_, desc, asc
 from ..db import get_session
 from ..models import PBCategory, PBComment, PBFile, PBTarget, RefreshState
 from ..utils.formatting import (
@@ -242,6 +243,288 @@ def invalidate_caches() -> None:
     _TARGETS_CACHE = None
 
 
+def search_tiles(
+    query: Optional[str] = None,
+    country: Optional[str] = None,
+    city: Optional[str] = None,
+    year: Optional[str] = None,
+    votes_min: Optional[int] = None,
+    votes_max: Optional[int] = None,
+    projects_min: Optional[int] = None,
+    projects_max: Optional[int] = None,
+    len_min: Optional[float] = None,
+    len_max: Optional[float] = None,
+    vote_type: Optional[str] = None,
+    exclude_fully: bool = False,
+    exclude_experimental: bool = False,
+    require_geo: bool = False,
+    require_target: bool = False,
+    require_category: bool = False,
+    order_by: str = "quality",
+    order_dir: str = "desc",
+    limit: int = 50,
+    offset: int = 0,
+) -> Tuple[List[Dict[str, Any]], int]:
+    
+    with get_session() as s:
+        q = s.query(
+            PBFile.id,
+            PBFile.file_name,
+            PBFile.webpage_name,
+            PBFile.description,
+            PBFile.currency,
+            PBFile.num_votes,
+            PBFile.num_projects,
+            PBFile.num_selected_projects,
+            PBFile.budget,
+            PBFile.vote_type,
+            PBFile.vote_length,
+            PBFile.country,
+            PBFile.unit,
+            PBFile.year,
+            PBFile.fully_funded,
+            PBFile.experimental,
+            PBFile.quality,
+            PBFile.rule_raw,
+            PBFile.edition,
+            PBFile.language,
+            PBFile.instance,
+            PBFile.subunit,
+            PBFile.has_geo,
+            PBFile.has_category,
+            PBFile.has_target,
+            PBFile.min_length,
+            PBFile.max_length,
+            PBFile.min_sum_points,
+            PBFile.max_sum_points,
+            PBFile.max_sum_cost,
+            PBFile.max_sum_cost_per_category,
+            PBFile.max_total_cost,
+        ).filter(PBFile.is_current == True)  # noqa: E712
+
+        if query:
+            term = f"%{query}%"
+            q = q.filter(or_(
+                PBFile.file_name.ilike(term),
+                PBFile.webpage_name.ilike(term),
+                PBFile.description.ilike(term),
+                PBFile.country.ilike(term),
+                PBFile.unit.ilike(term)
+            ))
+        
+        if country:
+            q = q.filter(PBFile.country == country)
+        if city:
+            q = q.filter(PBFile.unit == city)
+        if year:
+            try:
+                q = q.filter(PBFile.year == int(year))
+            except:
+                pass
+        
+        if votes_min is not None:
+            q = q.filter(PBFile.num_votes >= votes_min)
+        if votes_max is not None:
+            q = q.filter(PBFile.num_votes <= votes_max)
+            
+        if projects_min is not None:
+            q = q.filter(PBFile.num_projects >= projects_min)
+        if projects_max is not None:
+            q = q.filter(PBFile.num_projects <= projects_max)
+            
+        if len_min is not None:
+            q = q.filter(PBFile.vote_length >= len_min)
+        if len_max is not None:
+            q = q.filter(PBFile.vote_length <= len_max)
+            
+        if vote_type:
+            q = q.filter(PBFile.vote_type.ilike(vote_type))
+            
+        if exclude_fully:
+            q = q.filter(PBFile.fully_funded == False)  # noqa: E712
+        if exclude_experimental:
+            q = q.filter(PBFile.experimental == False)  # noqa: E712
+            
+        if require_geo:
+            q = q.filter(PBFile.has_geo == True)  # noqa: E712
+        if require_target:
+            q = q.filter(PBFile.has_target == True)  # noqa: E712
+        if require_category:
+            q = q.filter(PBFile.has_category == True)  # noqa: E712
+
+        # Count total before pagination
+        total_count = q.count()
+
+        # Ordering
+        sort_col = getattr(PBFile, order_by, PBFile.quality)
+        if order_dir == "asc":
+            q = q.order_by(asc(sort_col))
+        else:
+            q = q.order_by(desc(sort_col))
+            
+        # Secondary sort
+        q = q.order_by(PBFile.file_name)
+
+        rows = q.offset(offset).limit(limit).all()
+        
+        # Fetch comments for these files
+        file_ids = [r[0] for r in rows]
+        comments_map = {}
+        if file_ids:
+            comments_rows = s.query(PBComment.file_id, PBComment.text).filter(PBComment.file_id.in_(file_ids), PBComment.is_active == True).order_by(PBComment.file_id, PBComment.idx).all()
+            for fid, text in comments_rows:
+                if fid not in comments_map:
+                    comments_map[fid] = []
+                comments_map[fid].append(text)
+        
+        tiles: List[Dict[str, Any]] = []
+        for r in rows:
+            (
+                file_id,
+                file_name,
+                webpage_name,
+                description,
+                currency,
+                num_votes,
+                num_projects,
+                num_selected_projects,
+                budget,
+                vote_type,
+                vote_length,
+                country,
+                unit,
+                year,
+                fully_funded,
+                experimental,
+                quality,
+                rule_raw,
+                edition,
+                language,
+                instance,
+                subunit,
+                has_geo,
+                has_category,
+                has_target,
+                min_length,
+                max_length,
+                min_sum_points,
+                max_sum_points,
+                max_sum_cost,
+                max_sum_cost_per_category,
+                max_total_cost,
+            ) = r
+
+            # Construct meta dict for label computation
+            meta = {"subunit": subunit}
+            if min_length is not None:
+                meta["min_length"] = min_length
+            if max_length is not None:
+                meta["max_length"] = max_length
+            if min_sum_points is not None:
+                meta["min_sum_points"] = min_sum_points
+            if max_sum_points is not None:
+                meta["max_sum_points"] = max_sum_points
+            if max_sum_cost is not None:
+                meta["max_sum_cost"] = max_sum_cost
+            if max_sum_cost_per_category is not None:
+                meta["max_sum_cost_per_category"] = max_sum_cost_per_category
+            if max_total_cost is not None:
+                meta["max_total_cost"] = max_total_cost
+
+            vtype = (vote_type or "").strip().lower()
+            approval_k_label = None
+            approval_knapsack = False
+            approval_k_type = None
+            ordinal_k_label = None
+            ordinal_k_type = None
+            cumulative_points_label = None
+
+            if vtype == "approval":
+                approval_k_label, approval_knapsack, approval_k_type = (
+                    _compute_approval_labels_from_meta(meta)
+                )
+            elif vtype == "ordinal":
+                ordinal_k_label, ordinal_k_type = _compute_ordinal_k_from_meta(meta)
+            elif vtype == "cumulative":
+                cumulative_points_label = _compute_cumulative_points_from_meta(meta)
+
+            tiles.append(
+                {
+                    "file_name": file_name,
+                    "title": webpage_name or file_name.replace("_", " "),
+                    "webpage_name": webpage_name or "",
+                    "description": description or "",
+                    "currency": currency or "",
+                    "num_votes": format_int(int(num_votes or 0)),
+                    "num_votes_raw": int(num_votes or 0),
+                    "num_projects": format_int(int(num_projects or 0)),
+                    "num_projects_raw": int(num_projects or 0),
+                    "num_selected_projects": format_int(int(num_selected_projects or 0)),
+                    "num_selected_projects_raw": int(num_selected_projects or 0),
+                    "budget": (
+                        format_budget(currency or "", int(float(budget or 0)))
+                        if budget is not None
+                        else "—"
+                    ),
+                    "budget_raw": budget,
+                    "vote_type": vote_type or "",
+                    "vote_length": format_vote_length(vote_length),
+                    "vote_length_raw": vote_length,
+                    "country": country or "",
+                    "city": unit or "",
+                    "year": str(year) if year is not None else "",
+                    "year_raw": year,
+                    "fully_funded": bool(fully_funded),
+                    "experimental": bool(experimental),
+                    "quality": quality or 0.0,
+                    "quality_short": format_short_number(quality or 0.0),
+                    "rule_raw": rule_raw or "",
+                    "edition": edition or "",
+                    "language": language or "",
+                    "comments": comments_map.get(file_id, []),
+                    "country_raw": country or "",
+                    "unit_raw": unit or "",
+                    "instance_raw": instance or "",
+                    "has_geo": bool(has_geo),
+                    "has_category": bool(has_category),
+                    "has_target": bool(has_target),
+                    "approval_k_label": approval_k_label,
+                    "approval_knapsack": approval_knapsack,
+                    "approval_k_type": approval_k_type,
+                    "ordinal_k_label": ordinal_k_label,
+                    "ordinal_k_type": ordinal_k_type,
+                    "cumulative_points_label": cumulative_points_label,
+                }
+            )
+            
+        return tiles, total_count
+
+
+def get_filter_options() -> Dict[str, Any]:
+    with get_session() as s:
+        countries = [r[0] for r in s.query(PBFile.country).filter(PBFile.is_current == True).distinct().order_by(PBFile.country).all() if r[0]]
+        cities = [r[0] for r in s.query(PBFile.unit).filter(PBFile.is_current == True).distinct().order_by(PBFile.unit).all() if r[0]]
+        years = [str(r[0]) for r in s.query(PBFile.year).filter(PBFile.is_current == True).distinct().order_by(PBFile.year.desc()).all() if r[0] is not None]
+        
+        # Get all valid combinations for client-side filtering
+        comb_rows = s.query(PBFile.country, PBFile.unit, PBFile.year).filter(PBFile.is_current == True).distinct().all()
+        combinations = [
+            {
+                "c": r[0],      # country
+                "u": r[1],      # unit/city
+                "y": str(r[2]) if r[2] is not None else None # year
+            }
+            for r in comb_rows
+        ]
+        
+    return {
+        "countries": countries,
+        "cities": cities,
+        "years": years,
+        "combinations": combinations
+    }
+
+
 def get_tiles_cached() -> List[Dict[str, Any]]:
     global _TILES_CACHE
     import time
@@ -256,6 +539,7 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
     with get_session() as s:
         rows = (
             s.query(
+                PBFile.id,
                 PBFile.file_name,
                 PBFile.webpage_name,
                 PBFile.description,
@@ -298,10 +582,21 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
             )
             .all()
         )
+        
+        # Fetch all comments
+        comments_rows = s.query(PBComment.file_id, PBComment.text).filter(PBComment.is_active == True).order_by(PBComment.file_id, PBComment.idx).all()
+
+    # Group comments
+    comments_map = {}
+    for fid, text in comments_rows:
+        if fid not in comments_map:
+            comments_map[fid] = []
+        comments_map[fid].append(text)
 
     tiles: List[Dict[str, Any]] = []
     for r in rows:
         (
+            file_id,
             file_name,
             webpage_name,
             description,
@@ -403,7 +698,7 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 "edition": edition or "",
                 "language": language or "",
                 # filled below with active comments for this file (strings)
-                "comments": [],
+                "comments": comments_map.get(file_id, []),
                 "country_raw": country or "",
                 "unit_raw": unit or "",
                 "instance_raw": instance or "",
@@ -422,30 +717,7 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
             }
         )
 
-    # Attach active comments to tiles so the public search can match them too
-    try:
-        with get_session() as s:
-            rows_c = (
-                s.query(PBFile.file_name, PBComment.text)
-                .join(PBComment, PBComment.file_id == PBFile.id)
-                .filter(PBFile.is_current == True)  # noqa: E712
-                .filter(PBComment.is_active == True)  # noqa: E712
-                .all()
-            )
-        by_file: Dict[str, List[str]] = {}
-        for fname, ctext in rows_c:
-            if not ctext:
-                continue
-            by_file.setdefault(fname, []).append(str(ctext))
-        idx_by_file: Dict[str, int] = {t["file_name"]: i for i, t in enumerate(tiles)}
-        for fname, clist in by_file.items():
-            i = idx_by_file.get(fname)
-            if i is None:
-                continue
-            tiles[i]["comments"] = clist
-    except Exception:
-        # Non-fatal: if comments fail to attach, keep tiles functional
-        pass
+
 
 
 

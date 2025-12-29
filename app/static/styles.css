@@ -28,7 +28,7 @@
     min-width:44px;
   }
 }
-body{margin:0;font-family: -apple-system,BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background:var(--bg); color:var(--text); overflow-x:hidden}
+body{margin:0;font-family: -apple-system,BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background:var(--bg); color:var(--text); overflow-x:hidden; display:flex; flex-direction:column; min-height:100vh}
 html{overflow-x:hidden}
 
 /* Navbar responsive fixes */
@@ -105,7 +105,7 @@ nav#mainNav {
 .nav .item{color:#cfe6fa;text-decoration:none;padding:6px 10px;border-radius:6px}
 .nav .item:hover{background:rgba(255,255,255,.12);color:#fff}
 .nav .item.active{background:#0b6ec5;color:#fff}
-.layout{display:grid;grid-template-columns:280px 1fr;gap:32px;max-width:1300px;margin:16px auto;padding:0 24px}
+.layout{display:grid;grid-template-columns:280px 1fr;gap:32px;max-width:1300px;margin:16px auto;padding:0 24px;flex:1;width:100%}
 .page-spacer{height:8px}
 .sidebar{
   background:#fff;

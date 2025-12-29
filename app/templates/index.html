@@ -97,7 +97,7 @@
         </div>
       </aside>
 
-      <div class="container mb-32">
+      <div class="container">
       <form id="downloadForm" method="post" action="{{ url_for('main.download_selected') }}" 
             data-track-form="batch_download" data-form-type="download">
         <header class="toolbar">
@@ -286,7 +286,7 @@
       {% endfor %}
       <div id="sentinel" class="sentinel" aria-hidden="true"></div>
     </form>
-    <script src="{{ url_for('main.static', filename='app.js') }}"></script>
+    <script src="{{ url_for('main.static', filename='app_v2.js') }}"></script>
   </div>
     </div>
     {% include 'footer.html' %}

@@ -1,27 +1,7 @@
-<div id="footer-spacer" style="display:none; height:64px;"></div>
-<footer id="scroll-footer" class="bg-slate-900 text-white py-8 mt-12 w-full fixed bottom-0 left-0" style="display:none;">
+<footer id="main-footer" class="bg-slate-900 text-white py-8 mt-12 w-full">
   <div class="max-w-7xl mx-auto px-4 flex flex-col items-center justify-center">
     <div class="text-sm mt-2 md:mt-0 text-slate-300">
       Made with ❤️ by the Pabulib team.
     </div>
   </div>
 </footer>
-<script>
-  function toggleFooter() {
-    var footer = document.getElementById('scroll-footer');
-    var showImmediately = document.body.scrollHeight <= window.innerHeight + 200;
-    if (showImmediately) {
-      footer.style.display = 'block';
-    } else {
-      var scrolledToBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 2;
-      if (scrolledToBottom) {
-        footer.style.display = 'block';
-      } else {
-        footer.style.display = 'none';
-      }
-    }
-  }
-  window.addEventListener('scroll', toggleFooter);
-  window.addEventListener('resize', toggleFooter);
-  document.addEventListener('DOMContentLoaded', toggleFooter);
-</script>

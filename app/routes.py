@@ -216,7 +216,11 @@ def _build_zip_in_background(
         _write_progress(token, progress)
 
 
-from .services.pb_service import get_tiles_cached as _get_tiles_cached
+from .services.pb_service import (
+    get_tiles_cached as _get_tiles_cached,
+    search_tiles as _search_tiles,
+    get_filter_options as _get_filter_options,
+)
 from .services.snapshot_service import (
     add_link_to_existing_zip as _add_link_to_existing_zip,
 )
@@ -249,10 +253,75 @@ bp = Blueprint(
 
 @bp.route("/")
 def home():
-    tiles = _get_tiles_cached()
-    return render_template("index.html", tiles=tiles, count=len(tiles))
+    # Initial load: get first 20 tiles
+    tiles, total = _search_tiles(limit=20)
+    return render_template("index.html", tiles=tiles, count=total)
 
 
+@bp.route("/api/search")
+def api_search():
+    # Parse args
+    query = request.args.get("search")
+    country = request.args.get("country")
+    city = request.args.get("city")
+    year = request.args.get("year")
+    
+    votes_min = request.args.get("votes_min", type=int)
+    votes_max = request.args.get("votes_max", type=int)
+    projects_min = request.args.get("projects_min", type=int)
+    projects_max = request.args.get("projects_max", type=int)
+    len_min = request.args.get("len_min", type=float)
+    len_max = request.args.get("len_max", type=float)
+    
+    vote_type = request.args.get("type")
+    
+    exclude_fully = request.args.get("exclude_fully") == "true"
+    exclude_experimental = request.args.get("exclude_experimental") == "true"
+    
+    require_geo = request.args.get("require_geo") == "true"
+    require_target = request.args.get("require_target") == "true"
+    require_category = request.args.get("require_category") == "true"
+    
+    order_by = request.args.get("order_by", "quality")
+    order_dir = request.args.get("order_dir", "desc")
+    
+    limit = request.args.get("limit", 50, type=int)
+    offset = request.args.get("offset", 0, type=int)
+    
+    tiles, total = _search_tiles(
+        query=query,
+        country=country,
+        city=city,
+        year=year,
+        votes_min=votes_min,
+        votes_max=votes_max,
+        projects_min=projects_min,
+        projects_max=projects_max,
+        len_min=len_min,
+        len_max=len_max,
+        vote_type=vote_type,
+        exclude_fully=exclude_fully,
+        exclude_experimental=exclude_experimental,
+        require_geo=require_geo,
+        require_target=require_target,
+        require_category=require_category,
+        order_by=order_by,
+        order_dir=order_dir,
+        limit=limit,
+        offset=offset,
+    )
+    
+    return jsonify({
+        "tiles": tiles,
+        "total": total,
+        "limit": limit,
+        "offset": offset
+    })
+
+
+@bp.route("/api/options")
+def api_options():
+    return jsonify(_get_filter_options())
 
 
 @bp.route("/api/tiles")
@@ -1038,6 +1107,10 @@ def download(filename: str):
 @bp.post("/download-selected")
 def download_selected():
     names = request.form.getlist("files")
+    # Deduplicate names to prevent issues with double submission (checkbox + hidden input)
+    if names:
+        names = list(set(names))
+        
     # Allow select_all via form or query for symmetry with background route
     select_all = (request.form.get("select_all") == "true") or (
         request.args.get("select_all") == "true"
@@ -1227,6 +1300,9 @@ def download_selected_start():
     """
     _cleanup_old_jobs()
     names = request.form.getlist("files")
+    if names:
+        names = list(set(names))
+        
     # Allow select_all via form or query string for robustness
     select_all = (request.form.get("select_all") == "true") or (
         request.args.get("select_all") == "true"
