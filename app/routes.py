@@ -32,6 +32,7 @@ from .routes_admin import _format_preview_tile  # reuse tile formatting
 from .routes_admin import _load_upload_settings  # reuse limits
 from .services.pb_service import (
     aggregate_categories_cached as _aggregate_categories_cached,
+    get_tiles_cached as _get_tiles_cached,
 )
 from .services.pb_service import aggregate_comments_cached as _aggregate_comments_cached
 from .services.pb_service import (
@@ -43,6 +44,9 @@ from .services.pb_service import get_all_current_file_paths, get_current_file_pa
 # Simple in-memory registry for zip jobs; zip files and progress json live on disk
 _ZIP_JOBS: Dict[str, Dict[str, Any]] = {}
 _ZIP_JOBS_LOCK = threading.Lock()
+
+
+
 
 
 def _zip_jobs_dir() -> Path:
@@ -247,6 +251,14 @@ bp = Blueprint(
 def home():
     tiles = _get_tiles_cached()
     return render_template("index.html", tiles=tiles, count=len(tiles))
+
+
+
+
+@bp.route("/api/tiles")
+def api_tiles():
+    tiles = _get_tiles_cached()
+    return jsonify(tiles)
 
 
 @bp.route("/format")

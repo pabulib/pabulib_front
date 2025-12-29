@@ -70,6 +70,15 @@ class PBFile(Base):
     has_target: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     has_category: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
+    # Meta constraints for fast filtering
+    min_length: Mapped[Optional[int]] = mapped_column(Integer)
+    max_length: Mapped[Optional[int]] = mapped_column(Integer)
+    min_sum_points: Mapped[Optional[int]] = mapped_column(Integer)
+    max_sum_points: Mapped[Optional[int]] = mapped_column(Integer)
+    max_sum_cost: Mapped[Optional[int]] = mapped_column(Integer)
+    max_sum_cost_per_category: Mapped[Optional[int]] = mapped_column(Integer)
+    max_total_cost: Mapped[Optional[int]] = mapped_column(Integer)
+
     # Versioning & timestamps
     file_mtime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     ingested_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

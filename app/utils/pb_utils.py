@@ -388,4 +388,12 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
         "targets_counts": target_counts,
         "categories_display": category_display,
         "targets_display": target_display,
+        # Meta constraints
+        "min_length": int(float(str(meta.get("min_length", "")).strip())) if str(meta.get("min_length", "")).strip().replace(".", "", 1).isdigit() else None,
+        "max_length": int(float(str(meta.get("max_length", "")).strip())) if str(meta.get("max_length", "")).strip().replace(".", "", 1).isdigit() else None,
+        "min_sum_points": int(float(str(meta.get("min_sum_points", "")).strip())) if str(meta.get("min_sum_points", "")).strip().replace(".", "", 1).isdigit() else None,
+        "max_sum_points": int(float(str(meta.get("max_sum_points", "")).strip())) if str(meta.get("max_sum_points", "")).strip().replace(".", "", 1).isdigit() else None,
+        "max_sum_cost": int(float(str(meta.get("max_sum_cost", "")).strip())) if str(meta.get("max_sum_cost", "")).strip().replace(".", "", 1).isdigit() else None,
+        "max_sum_cost_per_category": int(float(str(meta.get("max_sum_cost_per_category", "")).strip())) if str(meta.get("max_sum_cost_per_category", "")).strip().replace(".", "", 1).isdigit() else None,
+        "max_total_cost": int(float(str(meta.get("max_total_cost", "")).strip())) if str(meta.get("max_total_cost", "")).strip().replace(".", "", 1).isdigit() else None,
     }

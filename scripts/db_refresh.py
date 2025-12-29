@@ -138,6 +138,14 @@ def ingest_file(
     # Use UTC for file_mtime to be consistent across the app
     mtime = datetime.utcfromtimestamp(int(st.st_mtime))
 
+    def _pi(v):
+        try:
+            return int(float(str(v).strip()))
+        except (ValueError, TypeError):
+            return None
+
+    meta_lower = {str(k).strip().lower(): v for k, v in meta.items()}
+
     record = PBFile(
         file_name=p.name,
         path=str(p),
@@ -164,6 +172,13 @@ def ingest_file(
         has_geo=bool(tile.get("has_geo") or False),
         has_category=bool(tile.get("has_category") or False),
         has_target=bool(tile.get("has_target") or False),
+        min_length=_pi(meta_lower.get("min_length")),
+        max_length=_pi(meta_lower.get("max_length")),
+        min_sum_points=_pi(meta_lower.get("min_sum_points")),
+        max_sum_points=_pi(meta_lower.get("max_sum_points")),
+        max_sum_cost=_pi(meta_lower.get("max_sum_cost")),
+        max_sum_cost_per_category=_pi(meta_lower.get("max_sum_cost_per_category")),
+        max_total_cost=_pi(meta_lower.get("max_total_cost")),
         file_mtime=mtime,
         ingested_at=datetime.utcnow(),
         is_current=True,

@@ -244,10 +244,15 @@ def invalidate_caches() -> None:
 
 def get_tiles_cached() -> List[Dict[str, Any]]:
     global _TILES_CACHE
+    import time
+    t0 = time.time()
     db_sig = _db_signature()
     if _TILES_CACHE is not None and getattr(_TILES_CACHE, "_db_sig", None) == db_sig:
+        print(f"[PERF] get_tiles_cached hit cache ({len(_TILES_CACHE)} tiles) in {time.time()-t0:.4f}s")
         return _TILES_CACHE
 
+    print(f"[PERF] get_tiles_cached MISS - rebuilding cache...")
+    t1 = time.time()
     with get_session() as s:
         rows = (
             s.query(
@@ -275,6 +280,13 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 PBFile.has_geo,
                 PBFile.has_category,
                 PBFile.has_target,
+                PBFile.min_length,
+                PBFile.max_length,
+                PBFile.min_sum_points,
+                PBFile.max_sum_points,
+                PBFile.max_sum_cost,
+                PBFile.max_sum_cost_per_category,
+                PBFile.max_total_cost,
             )
             .filter(PBFile.is_current == True)  # noqa: E712
             .order_by(
@@ -314,7 +326,49 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
             has_geo,
             has_category,
             has_target,
+            min_length,
+            max_length,
+            min_sum_points,
+            max_sum_points,
+            max_sum_cost,
+            max_sum_cost_per_category,
+            max_total_cost,
         ) = r
+
+        # Construct meta dict for label computation
+        meta = {"subunit": subunit}
+        if min_length is not None:
+            meta["min_length"] = min_length
+        if max_length is not None:
+            meta["max_length"] = max_length
+        if min_sum_points is not None:
+            meta["min_sum_points"] = min_sum_points
+        if max_sum_points is not None:
+            meta["max_sum_points"] = max_sum_points
+        if max_sum_cost is not None:
+            meta["max_sum_cost"] = max_sum_cost
+        if max_sum_cost_per_category is not None:
+            meta["max_sum_cost_per_category"] = max_sum_cost_per_category
+        if max_total_cost is not None:
+            meta["max_total_cost"] = max_total_cost
+
+        vtype = (vote_type or "").strip().lower()
+        approval_k_label = None
+        approval_knapsack = False
+        approval_k_type = None
+        ordinal_k_label = None
+        ordinal_k_type = None
+        cumulative_points_label = None
+
+        if vtype == "approval":
+            approval_k_label, approval_knapsack, approval_k_type = (
+                _compute_approval_labels_from_meta(meta)
+            )
+        elif vtype == "ordinal":
+            ordinal_k_label, ordinal_k_type = _compute_ordinal_k_from_meta(meta)
+        elif vtype == "cumulative":
+            cumulative_points_label = _compute_cumulative_points_from_meta(meta)
+
         tiles.append(
             {
                 "file_name": file_name,
@@ -357,14 +411,14 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 "has_category": bool(has_category),
                 "has_target": bool(has_target),
                 # computed client labels (filled later for approvals)
-                "approval_k_label": None,
-                "approval_knapsack": False,
-                "approval_k_type": None,
+                "approval_k_label": approval_k_label,
+                "approval_knapsack": approval_knapsack,
+                "approval_k_type": approval_k_type,
                 # ordinal (computed from META)
-                "ordinal_k_label": None,
-                "ordinal_k_type": None,
+                "ordinal_k_label": ordinal_k_label,
+                "ordinal_k_type": ordinal_k_type,
                 # cumulative (computed from META)
-                "cumulative_points_label": None,
+                "cumulative_points_label": cumulative_points_label,
             }
         )
 
@@ -393,42 +447,14 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
         # Non-fatal: if comments fail to attach, keep tiles functional
         pass
 
-    # Compute approval/ordinal-specific labels by reading META of each file once
-    try:
-        # Build filename -> Path map for current files
-        file_pairs = get_all_current_file_paths()
-        path_by_name: Dict[str, Path] = {fn: p for fn, p in file_pairs}
-        for t in tiles:
-            try:
-                p = path_by_name.get(t.get("file_name", ""))
-                if not p or not p.exists():
-                    continue
-                meta = _read_meta_only(p)
-                vtype = (t.get("vote_type") or "").strip().lower()
-                if vtype == "approval":
-                    k_label, has_knap, k_type = _compute_approval_labels_from_meta(meta)
-                    t["approval_k_label"] = k_label
-                    t["approval_knapsack"] = bool(has_knap)
-                    t["approval_k_type"] = k_type
-                elif vtype == "ordinal":
-                    ok_label, ok_type = _compute_ordinal_k_from_meta(meta)
-                    t["ordinal_k_label"] = ok_label
-                    t["ordinal_k_type"] = ok_type
-                elif vtype == "cumulative":
-                    c_label = _compute_cumulative_points_from_meta(meta)
-                    t["cumulative_points_label"] = c_label
-            except Exception:
-                # If any single file fails, skip labels for it only
-                continue
-    except Exception:
-        # non-fatal
-        pass
+
 
     try:
         setattr(tiles, "_db_sig", db_sig)
     except Exception:
         pass
     _TILES_CACHE = tiles
+    print(f"[PERF] get_tiles_cached rebuilt in {time.time()-t1:.4f}s (total {time.time()-t0:.4f}s)")
     return _TILES_CACHE
 
 
