@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import sentry_sdk
 from flask import (
     Blueprint,
     Response,
@@ -785,6 +786,13 @@ def upload_submit_selected():
                 }
             )
 
+    if saved > 0:
+        uploaded_names = [r["name"] for r in results if r.get("ok")]
+        sentry_sdk.capture_message(
+            f"New Public Submission (Batch): {email} uploaded {saved} files: {', '.join(uploaded_names)}",
+            level="info",
+        )
+
     return jsonify({"ok": True, "saved": saved, "results": results})
 
 
@@ -975,6 +983,10 @@ def upload_submit():
         }
         (admin_tmp / f".{dest.name}.public.json").write_text(
             json.dumps(marker), encoding="utf-8"
+        )
+
+        sentry_sdk.capture_message(
+            f"New Public Submission: {dest.name} from {email}", level="info"
         )
 
         return jsonify(
