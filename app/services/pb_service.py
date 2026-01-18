@@ -263,14 +263,22 @@ def _apply_search_filters(
     require_category: bool = False,
 ):
     if query:
-        term = f"%{query}%"
-        q = q.filter(or_(
-            PBFile.file_name.ilike(term),
-            PBFile.webpage_name.ilike(term),
-            PBFile.description.ilike(term),
-            PBFile.country.ilike(term),
-            PBFile.unit.ilike(term)
-        ))
+        # Split query into tokens (AND logic for each token)
+        for token in query.split():
+            term = f"%{token}%"
+            criteria = [
+                PBFile.file_name.ilike(term),
+                PBFile.webpage_name.ilike(term),
+                PBFile.description.ilike(term),
+                PBFile.country.ilike(term),
+                PBFile.unit.ilike(term),
+                PBFile.instance.ilike(term),     # Added also instance/subunit just in case
+                PBFile.subunit.ilike(term)
+            ]
+            if token.isdigit():
+                criteria.append(PBFile.year == int(token))
+            
+            q = q.filter(or_(*criteria))
     
     if country:
         q = q.filter(PBFile.country == country)
