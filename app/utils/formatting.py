@@ -54,6 +54,6 @@ def format_vote_length(val: Any) -> str:
     if val is None:
         return "—"
     try:
-        return f"{float(val):.3f}"
+        return f"{float(val):.2f}"
     except Exception:
         return "—"
