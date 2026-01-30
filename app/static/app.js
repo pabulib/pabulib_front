@@ -481,7 +481,9 @@
         let timeout;
         el.addEventListener('input', () => {
             clearTimeout(timeout);
-            timeout = setTimeout(updateFilters, 500);
+            const inputMode = (el.getAttribute('inputmode') || '').toLowerCase();
+            const delay = (inputMode === 'numeric' || inputMode === 'decimal') ? 700 : 500;
+            timeout = setTimeout(updateFilters, delay);
         });
     }
   });
