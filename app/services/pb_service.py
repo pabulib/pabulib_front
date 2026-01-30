@@ -51,6 +51,17 @@ _TARGETS_CACHE: Optional[
     ]
 ] = None
 
+_SEARCH_ORDER_COLUMNS = {
+    "quality": PBFile.quality,
+    "votes": PBFile.num_votes,
+    "num_votes": PBFile.num_votes,
+    "projects": PBFile.num_projects,
+    "num_projects": PBFile.num_projects,
+    "budget": PBFile.budget,
+    "year": PBFile.year,
+    "vote_length": PBFile.vote_length,
+}
+
 
 def _read_meta_only(path: Path) -> Dict[str, Any]:
     """Read only the META section of a PB file and return its key/value map.
@@ -442,7 +453,7 @@ def search_tiles(
         total_count = q.count()
 
         # Ordering
-        sort_col = getattr(PBFile, order_by, PBFile.quality)
+        sort_col = _SEARCH_ORDER_COLUMNS.get(order_by, PBFile.quality)
         if order_dir == "asc":
             q = q.order_by(asc(sort_col))
         else:
