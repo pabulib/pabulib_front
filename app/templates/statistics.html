@@ -78,6 +78,10 @@
       <div class="bg-gray-200 px-4 py-3 text-sm font-medium text-gray-700">Top cities by votes</div>
       <div class="p-4"><canvas id="chartTopCities" class="h-36"></canvas></div>
     </div>
+    <div class="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+      <div class="bg-gray-200 px-4 py-3 text-sm font-medium text-gray-700">Votes vs Projects (per dataset)</div>
+      <div class="p-4"><canvas id="chartVotesProjects" class="h-48"></canvas></div>
+    </div>
   </div>
     </div>
   </div>
@@ -184,6 +188,45 @@
       type: 'bar',
       data: { labels, datasets: [{ label: 'Votes', data, backgroundColor: mkColors(data.length, 0.7), maxBarThickness: 32 }] },
       options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { font: { size: 10 } } }, x: { ticks: { font: { size: 10 } } } }, plugins: { legend: { display: false } } }
+    });
+  })();
+
+  // Votes vs Projects (scatter)
+  (function(){
+    const ctx = document.getElementById('chartVotesProjects');
+    const points = statsSeries.votes_projects_scatter || [];
+    new Chart(ctx, {
+      type: 'scatter',
+      data: {
+        datasets: [{
+          label: 'Datasets',
+          data: points,
+          backgroundColor: 'rgba(14, 116, 144, 0.7)',
+          borderColor: 'rgba(14, 116, 144, 1)',
+          borderWidth: 1,
+          pointRadius: 3
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                const raw = context.raw || {};
+                const name = raw.label || '—';
+                return `${name}: ${context.parsed.y} votes, ${context.parsed.x} projects`;
+              }
+            }
+          },
+          legend: { labels: { font: { size: 10 } } }
+        },
+        scales: {
+          x: { beginAtZero: true, title: { display: true, text: 'Number of Projects', font: { size: 10 } }, ticks: { font: { size: 10 } } },
+          y: { beginAtZero: true, title: { display: true, text: 'Number of Votes', font: { size: 10 } }, ticks: { font: { size: 10 } } }
+        },
+      }
     });
   })();
 </script>

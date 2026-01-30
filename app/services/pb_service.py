@@ -1114,6 +1114,7 @@ def aggregate_statistics_cached() -> Tuple[Dict[str, Any], Dict[str, Any]]:
         budget_by_country_by_currency: Dict[str, Dict[str, int]] = {}
         vote_types: Dict[str, int] = {}
         votes_by_city: Dict[str, int] = {}
+        votes_projects_scatter: List[Dict[str, Any]] = []
 
         for r in pb_files:
             country = r.country or ""
@@ -1134,6 +1135,12 @@ def aggregate_statistics_cached() -> Tuple[Dict[str, Any], Dict[str, Any]]:
             sum_projects += num_projects
             sum_votes += num_votes
             sum_selected += num_selected
+
+            if num_projects or num_votes:
+                city_label = f"{city}, {country}".strip(", ")
+                votes_projects_scatter.append(
+                    {"x": num_projects, "y": num_votes, "label": city_label or "—"}
+                )
             if isinstance(budget, int):
                 sum_budget += budget
                 budget_by_currency_total[currency] = (
@@ -1206,6 +1213,7 @@ def aggregate_statistics_cached() -> Tuple[Dict[str, Any], Dict[str, Any]]:
             key=lambda d: d["value"],
             reverse=True,
         )[:15],
+        "votes_projects_scatter": votes_projects_scatter,
     }
 
     _STATS_CACHE = (totals, series)
