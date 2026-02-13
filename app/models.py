@@ -222,3 +222,29 @@ class DownloadSnapshotFile(Base):
         Index("ix_download_snapshot_files_snapshot", "snapshot_id"),
         Index("ix_download_snapshot_files_file_id", "file_id"),
     )
+
+
+class PBVisualization(Base):
+    """Cache for computed visualization data per PB file."""
+
+    __tablename__ = "pb_visualizations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    
+    # Link to specific file version (each version has unique file_id)
+    file_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("pb_files.id"), unique=True, nullable=False, index=True
+    )
+    
+    # JSON blob containing all visualization data
+    data: Mapped[str] = mapped_column(Text, nullable=False)
+    
+    # When this was computed
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    
+    # Track file modification time for cache invalidation
+    file_mtime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    __table_args__ = (Index("ix_pb_visualizations_computed_at", "computed_at"),)

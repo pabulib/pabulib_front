@@ -40,6 +40,7 @@ from .models import (
 )
 from .services import export_service, pb_service
 from .services.pb_service import get_comment_usages as _get_comment_usages
+from .services.visualization_service import get_or_compute_visualization_data
 from .services.snapshot_service import (
     add_link_to_existing_zip,
     create_download_snapshot,
@@ -1203,6 +1204,27 @@ def upload_tiles_ingest():
         export_service.trigger_build_if_changed_background()
     except Exception:
         pass
+
+    # Pre-compute visualization data for the new file in background
+    try:
+        with get_session() as s:
+            new_file = s.query(PBFile).filter(
+                PBFile.file_name == name,
+                PBFile.is_current == True
+            ).first()
+            if new_file and target.exists():
+                logger.debug("Pre-computing visualization for %s", name)
+                get_or_compute_visualization_data(
+                    file_id=new_file.id,
+                    filename=name,
+                    file_path=target,
+                    file_mtime=file_mtime,
+                    session=s,
+                )
+                logger.debug("Visualization computed for %s", name)
+    except Exception as e:
+        # Non-fatal - visualization will be computed on first view
+        logger.warning("Failed to pre-compute visualization for %s: %s", name, e)
 
     # If called via fetch, return JSON ok; otherwise redirect with a message
     if request.headers.get("X-Requested-With") == "fetch" or request.is_json:

@@ -232,6 +232,7 @@ from .services.snapshot_service import (
 from .services.snapshot_service import (
     serve_snapshot_download as _serve_snapshot_download,
 )
+from .services.visualization_service import get_or_compute_visualization_data
 from sklearn.manifold import MDS
 import numpy as np
 from .utils.file_helpers import is_safe_filename as _is_safe_filename
@@ -2028,557 +2029,55 @@ def visualize_file(filename: str):
     # Validate and locate file
     if not _is_safe_filename(filename):
         abort(400, description="Invalid filename")
-    # Read path from DB record only (DB is the source of truth)
-    path = get_current_file_path(filename)
-    if not path or not path.exists() or not path.is_file():
-        abort(404)
-    try:
-        with path.open("r", encoding="utf-8", newline="") as f:
-            lines = [line.rstrip("\n") for line in f]
-        meta, projects, votes, votes_in_projects, scores_in_projects = parse_pb_lines(
-            lines
-        )
-    except Exception as e:
-        abort(400, description=f"Failed to parse file: {e}")
-
-    # Basic counts for header
-    counts = {
-        "projects": len(projects),
-        "votes": len(votes),
-    }
-
-    # Prepare data for visualization
-    # Project costs for histogram
-    project_costs = [
-        float(proj.get("cost", 0)) for proj in projects.values() if proj.get("cost")
-    ]
-
-    # Vote counts per project
-    vote_counts_per_project = {}
-    vote_lengths = []  # Track how many projects each voter selected
-    # Track voters per project for Jaccard distance calculation
-    voters_per_project = {}  # project_id -> set of voter_ids
-
-    # Process all votes to extract vote data
-    for vote_id, vote_data in votes.items():
-        # Look for the vote column - now only "vote"
-        vote_list = None
-        for possible_vote_key in ["vote"]:
-            if possible_vote_key in vote_data:
-                vote_list = vote_data[possible_vote_key]
-                break
-        # The 'vote' field is referenced here. It is a list of project IDs if present.
-        if vote_list is None:
-            continue
-
-        # Handle different vote data formats
-        voted_projects = []
-        if isinstance(vote_list, str) and vote_list.strip():
-            # Parse comma-separated project IDs OR single project ID
-            if "," in vote_list:
-                # Multiple projects separated by commas
-                voted_projects = [
-                    pid.strip()
-                    for pid in vote_list.split(",")
-                    if pid.strip() and pid.strip() != ""
-                ]
-            else:
-                # Single project ID (no comma) - could be a number or string
-                single_project = vote_list.strip()
-                if single_project and single_project != "":
-                    voted_projects = [single_project]
-        elif isinstance(vote_list, list) and vote_list:
-            # Handle case where vote is already a list (from load_pb_file.py)
-            voted_projects = [
-                str(pid).strip() for pid in vote_list if pid and str(pid).strip()
-            ]
-
-        # Only process if we have valid projects
-        if voted_projects:
-            vote_length = len(voted_projects)
-            vote_lengths.append(vote_length)
-
-            for pid in voted_projects:
-                pid_str = str(pid).strip()
-                if pid_str:  # Ensure we have a non-empty project ID
-                    vote_counts_per_project[pid_str] = (
-                        vote_counts_per_project.get(pid_str, 0) + 1
-                    )
-                    # Track which voter voted for this project
-                    if pid_str not in voters_per_project:
-                        voters_per_project[pid_str] = set()
-                    voters_per_project[pid_str].add(vote_id)
-        else:
-            # Debug: Log when we can't extract voted projects from a vote
-            if (
-                vote_list is not None
-            ):  # Only log if we found a vote column but couldn't parse it
-                print(
-                    f"DEBUG: Could not parse voted projects from vote {vote_id}: '{vote_list}' (type: {type(vote_list)})"
-                )
-
-    # removed debug prints
-
-    # Prepare data for charts
-    project_data = {
-        "costs": project_costs,
-        "scatter_data": [],  # Will be populated with {x: cost, y: votes} points
-    }
-
-    # Debug information
-    # removed debug prints
-
-    # Ensure we have data before creating the structure
-    if vote_counts_per_project:
-        vote_data = {
-            "project_labels": list(vote_counts_per_project.keys())[
-                :20
-            ],  # Limit for readability
-            "votes_per_project": list(vote_counts_per_project.values())[:20],
-        }
-    else:
-        vote_data = {"project_labels": [], "votes_per_project": []}
-
-    # Vote length distribution
-    vote_length_counts = {}
-    for length in vote_lengths:
-        vote_length_counts[length] = vote_length_counts.get(length, 0) + 1
-
-    vote_length_counts = dict(sorted(vote_length_counts.items()))
-    # Debug: Log the vote length distribution we found
-    if vote_length_counts:
-        print(
-            f"DEBUG: Vote length distribution: {dict(sorted(vote_length_counts.items()))}"
-        )
-        single_votes = vote_length_counts.get(1, 0)
-        total_votes = sum(vote_length_counts.values())
-        print(
-            f"DEBUG: Single-project votes: {single_votes}/{total_votes} ({single_votes/total_votes*100:.1f}%)"
-        )
-
-    vote_length_data = None
-    if vote_length_counts:
-        sorted_lengths = sorted(vote_length_counts.keys())
-        vote_length_data = {
-            "labels": [str(length) for length in sorted_lengths],
-            "counts": [vote_length_counts[length] for length in sorted_lengths],
-        }
-    else:
-        # Add debugging information when no vote length data is available
-        print(
-            f"DEBUG: No vote length data - total votes: {len(votes)}, vote_lengths: {len(vote_lengths)}"
-        )
-        # Check a few sample votes for debugging
-        if votes:
-            sample_votes = list(votes.items())[:3]
-            for vote_id, vote_data in sample_votes:
-                print(f"DEBUG: Sample vote {vote_id}: {vote_data}")
-                # Check all possible vote columns
-                for possible_vote_key in [
-                    "vote",
-                    "votes",
-                    "projects",
-                    "selected_projects",
-                ]:
-                    if possible_vote_key in vote_data:
-                        vote_value = vote_data[possible_vote_key]
-                        print(
-                            f"DEBUG: Found {possible_vote_key}: '{vote_value}' (type: {type(vote_value)})"
-                        )
-
-            # Also check what columns are available in votes
-            if votes:
-                first_vote = next(iter(votes.values()))
-                print(f"DEBUG: Available vote columns: {list(first_vote.keys())}")
-
-    # Top projects by votes
-    top_projects_data = None
-    if vote_counts_per_project:
-        # Get top 10 projects by vote count
-        sorted_projects = sorted(
-            vote_counts_per_project.items(), key=lambda x: x[1], reverse=True
-        )[:10]
-        project_names = []
-        project_votes = []
-
-        for pid, vote_count in sorted_projects:
-            # Try to get project name, fallback to ID
-            proj_name = projects.get(pid, {}).get("name", f"Project {pid}")
-            if len(proj_name) > 50:  # Truncate long names
-                proj_name = proj_name[:47] + "..."
-            project_names.append(proj_name)
-            project_votes.append(vote_count)
-
-        top_projects_data = {"labels": project_names, "votes": project_votes}
-
-    # Approval histogram: number of approvals per project
-    approval_counts = list(vote_counts_per_project.values())
-    approval_histogram = {}
-    for count in approval_counts:
-        approval_histogram[count] = approval_histogram.get(count, 0) + 1
-    approval_histogram = dict(sorted(approval_histogram.items()))
-    approval_histogram_data = None
-    if approval_histogram:
-        approval_histogram_data = {
-            "labels": [str(k) for k in approval_histogram.keys()],
-            "counts": [approval_histogram[k] for k in approval_histogram.keys()],
-        }
-
-    # Project selection analysis (cost vs votes scatter)
-    selection_data = None
-    selected_projects = set()
-
-    # Determine which projects were selected by inspecting project fields
-    # Some datasets include a 'selected' column in the PROJECTS section.
-    for proj_id, proj in projects.items():
-        selected_val = proj.get("selected")
-        if isinstance(selected_val, str):
-            sv = selected_val.strip().lower()
-            if sv in {"1", "true", "yes", "y"}:
-                selected_projects.add(proj_id)
-        elif selected_val:
-            # Any non-empty, non-string truthy value
-            selected_projects.add(proj_id)
-
-    if selected_projects or project_costs:
-        selected_points = []
-        not_selected_points = []
-
-        for pid, proj in projects.items():
-            cost = proj.get("cost")
-            votes_received = vote_counts_per_project.get(pid, 0)
-            if cost is not None:
-                try:
-                    point = {"x": float(cost), "y": votes_received}
-                    if pid in selected_projects:
-                        selected_points.append(point)
-                    else:
-                        not_selected_points.append(point)
-                except (ValueError, TypeError):
-                    continue
-
-        if selected_points or not_selected_points:
-            selection_data = {
-                "selected": selected_points,
-                "not_selected": not_selected_points,
-            }
-
-    # Create scatter plot data (cost vs votes) - for original scatter chart
-    for pid, proj in projects.items():
-        cost = proj.get("cost")
-        votes_received = vote_counts_per_project.get(pid, 0)
-        if cost is not None:
-            try:
-                project_data["scatter_data"].append(
-                    {"x": float(cost), "y": votes_received}
-                )
-            except (ValueError, TypeError):
-                continue
-
-    # Category analysis (if available)
-    category_data = None
-    if any("category" in proj for proj in projects.values()):
-        category_counts = {}
-        for proj in projects.values():
-            categories = proj.get("category", "")
-            if categories:
-                # Handle comma-separated categories
-                cats = [
-                    cat.strip() for cat in str(categories).split(",") if cat.strip()
-                ]
-                for cat in cats:
-                    category_counts[cat] = category_counts.get(cat, 0) + 1
-
-        if category_counts:
-            category_data = {
-                "labels": list(category_counts.keys()),
-                "counts": list(category_counts.values()),
-            }
-
-    # Demographic analysis (if available)
-    demographic_data = None
-    if votes:
-        age_counts = {}
-        sex_counts = {}
-
-        for vote_data in votes.values():
-            age = vote_data.get("age")
-            sex = vote_data.get("sex")
-
-            if age is not None:
-                try:
-                    age_int = int(age)
-                    # Group ages into ranges
-                    if age_int < 18:
-                        age_group = "Under 18"
-                    elif age_int < 30:
-                        age_group = "18-29"
-                    elif age_int < 45:
-                        age_group = "30-44"
-                    elif age_int < 65:
-                        age_group = "45-64"
-                    else:
-                        age_group = "65+"
-
-                    age_counts[age_group] = age_counts.get(age_group, 0) + 1
-                except (ValueError, TypeError):
-                    pass
-
-            if sex:
-                sex_str = str(sex).upper()
-                if sex_str in ["M", "MALE"]:
-                    sex_counts["Male"] = sex_counts.get("Male", 0) + 1
-                elif sex_str in ["F", "FEMALE"]:
-                    sex_counts["Female"] = sex_counts.get("Female", 0) + 1
-
-        if age_counts or sex_counts:
-            demographic_data = {}
-            if age_counts:
-                demographic_data["age"] = {
-                    "labels": list(age_counts.keys()),
-                    "counts": list(age_counts.values()),
-                }
-            if sex_counts:
-                demographic_data["sex"] = {
-                    "labels": list(sex_counts.keys()),
-                    "counts": list(sex_counts.values()),
-                }
-
-    # Category cost analysis
-    category_cost_data = None
-    if any("category" in proj for proj in projects.values()):
-        category_costs = {}
-        category_counts_for_avg = {}
-
-        for proj in projects.values():
-            categories = proj.get("category", "")
-            cost = proj.get("cost")
-            if categories and cost is not None:
-                try:
-                    cost_float = float(cost)
-                    cats = [
-                        cat.strip() for cat in str(categories).split(",") if cat.strip()
-                    ]
-                    for cat in cats:
-                        if cat not in category_costs:
-                            category_costs[cat] = 0
-                            category_counts_for_avg[cat] = 0
-                        category_costs[cat] += cost_float
-                        category_counts_for_avg[cat] += 1
-                except (ValueError, TypeError):
-                    continue
-
-        if category_costs:
-            avg_costs = []
-            labels = []
-            for cat in category_costs:
-                if category_counts_for_avg[cat] > 0:
-                    labels.append(cat)
-                    avg_costs.append(category_costs[cat] / category_counts_for_avg[cat])
-
-            if labels:
-                category_cost_data = {"labels": labels, "avg_costs": avg_costs}
-
-    # Voting timeline (simplified - group by vote ID order as proxy for time)
-    timeline_data = None
-    if len(votes) > 10:  # Only create timeline if we have enough votes
-        # Since we don't have actual timestamps, create a synthetic timeline
-        vote_ids = list(votes.keys())
-        votes_per_period = []
-        period_labels = []
-
-        # Group votes into 10 periods
-        period_size = max(1, len(vote_ids) // 10)
-        for i in range(0, len(vote_ids), period_size):
-            period_end = min(i + period_size, len(vote_ids))
-            votes_in_period = period_end - i
-            votes_per_period.append(votes_in_period)
-            period_labels.append(f"Period {len(period_labels) + 1}")
-
-        timeline_data = {"dates": period_labels, "votes_per_day": votes_per_period}
-
-    # Summary statistics
-    summary_stats = {
-        "total_voters": len(votes),
-        "total_projects": len(projects),
-        "selected_projects": len(selected_projects) if selected_projects else 0,
-        "avg_vote_length": sum(vote_lengths) / len(vote_lengths) if vote_lengths else 0,
-        "total_budget": sum(project_costs) if project_costs else 0,
-        "avg_project_cost": (
-            sum(project_costs) / len(project_costs) if project_costs else 0
-        ),
-        "most_popular_project_votes": (
-            max(vote_counts_per_project.values()) if vote_counts_per_project else 0
-        ),
-    }
-
-    # Correlation analysis (simplified)
-    correlation_data = None
-    if project_costs and vote_counts_per_project:
-        # Calculate simple correlations between available metrics
-        correlations = []
-        labels = []
-
-        # Cost vs Votes correlation
-        costs_for_corr = []
-        votes_for_corr = []
-        for pid, proj in projects.items():
-            cost = proj.get("cost")
-            votes_received = vote_counts_per_project.get(pid, 0)
-            if cost is not None:
-                try:
-                    costs_for_corr.append(float(cost))
-                    votes_for_corr.append(votes_received)
-                except (ValueError, TypeError):
-                    continue
-
-        if len(costs_for_corr) > 1:
-            # Simple correlation calculation
-            import statistics
-
-            mean_cost = statistics.mean(costs_for_corr)
-            mean_votes = statistics.mean(votes_for_corr)
-
-            numerator = sum(
-                (c - mean_cost) * (v - mean_votes)
-                for c, v in zip(costs_for_corr, votes_for_corr)
-            )
-            sum_sq_cost = sum((c - mean_cost) ** 2 for c in costs_for_corr)
-            sum_sq_votes = sum((v - mean_votes) ** 2 for v in votes_for_corr)
-
-            if sum_sq_cost > 0 and sum_sq_votes > 0:
-                correlation = numerator / (sum_sq_cost * sum_sq_votes) ** 0.5
-                correlations.append(correlation)
-                labels.append("Cost vs Popularity")
-
-        # Add more dummy correlations for demonstration
-        if correlations:
-            correlations.extend([0.1, -0.2, 0.3])  # Dummy values
-            labels.extend(
-                ["Budget vs Selection", "Category vs Votes", "Time vs Activity"]
-            )
-
-            correlation_data = {"labels": labels, "values": correlations}
-
-    # Project similarity scatter plot using Jaccard distances and MDS
-    # Each project is a point with:
-    # - x, y coordinates computed from Jaccard distances via MDS
-    # - radius proportional to cost
-    # - alpha (transparency) proportional to votes received
     
-    project_similarity_data = []
-    if projects and voters_per_project:
-        # Get list of project IDs that have voters
-        project_ids = list(voters_per_project.keys())
-        n_projects = len(project_ids)
+    # Get file info from database
+    with get_session() as session:
+        pb_file = (
+            session.query(PBFile)
+            .filter(PBFile.file_name == filename, PBFile.is_current == True)
+            .first()
+        )
         
-        # Calculate Jaccard distance matrix
-        if n_projects >= 2:
-            # Build distance matrix
-            distance_matrix = np.zeros((n_projects, n_projects))
-            
-            for i in range(n_projects):
-                for j in range(i+1, n_projects):
-                    pid_i = project_ids[i]
-                    pid_j = project_ids[j]
-                    
-                    voters_i = voters_per_project[pid_i]
-                    voters_j = voters_per_project[pid_j]
-                    
-                    # Jaccard similarity: |A ∩ B| / |A ∪ B|
-                    intersection = len(voters_i & voters_j)
-                    union = len(voters_i | voters_j)
-                    
-                    if union > 0:
-                        jaccard_similarity = intersection / union
-                        # Jaccard distance = 1 - similarity
-                        jaccard_distance = 1 - jaccard_similarity
-                    else:
-                        jaccard_distance = 1.0
-                    
-                    distance_matrix[i, j] = jaccard_distance
-                    distance_matrix[j, i] = jaccard_distance
-            
-            # Use MDS to embed in 2D
-            try:
-                mds = MDS(n_components=2, dissimilarity='precomputed', random_state=42, normalized_stress='auto')
-                coords_2d = mds.fit_transform(distance_matrix)
-                
-                # Normalize coordinates to [0, 1] range for visualization
-                x_min, x_max = coords_2d[:, 0].min(), coords_2d[:, 0].max()
-                y_min, y_max = coords_2d[:, 1].min(), coords_2d[:, 1].max()
-                
-                if x_max > x_min:
-                    coords_2d[:, 0] = (coords_2d[:, 0] - x_min) / (x_max - x_min)
-                if y_max > y_min:
-                    coords_2d[:, 1] = (coords_2d[:, 1] - y_min) / (y_max - y_min)
-                
-                # Normalize costs and votes for better visualization
-                max_votes = max(vote_counts_per_project.values()) if vote_counts_per_project else 1
-                max_cost = max(project_costs) if project_costs else 1
-                
-                # Build visualization data with MDS coordinates
-                for idx, pid in enumerate(project_ids):
-                    proj = projects.get(pid)
-                    if proj is None:
-                        continue
-                    
-                    cost = proj.get("cost")
-                    votes_received = vote_counts_per_project.get(pid, 0)
-                    
-                    if cost is not None:
-                        try:
-                            cost_float = float(cost)
-                            # Use MDS coordinates
-                            x = float(coords_2d[idx, 0])
-                            y = float(coords_2d[idx, 1])
-                            
-                            # Normalize radius (size) based on cost
-                            radius = 5 + (cost_float / max_cost) * 25 if max_cost > 0 else 5
-                            
-                            # Alpha based on votes
-                            alpha = 0.2 + (votes_received / max_votes) * 0.8 if max_votes > 0 else 0.2
-                            
-                            project_name = proj.get("name", f"Project {pid}")
-                            is_selected = pid in selected_projects
-                            
-                            project_similarity_data.append({
-                                "x": x,
-                                "y": y,
-                                "r": radius,
-                                "alpha": alpha,
-                                "cost": cost_float,
-                                "votes": votes_received,
-                                "name": project_name,
-                                "id": pid,
-                                "selected": is_selected
-                            })
-                        except (ValueError, TypeError):
-                            continue
-            except Exception as e:
-                # If MDS fails, log and fall back to empty data
-                print(f"MDS failed: {e}")
-                project_similarity_data = []
-
+        if not pb_file:
+            abort(404)
+        
+        # Get path from DB record
+        path = Path(pb_file.path)
+        if not path.exists() or not path.is_file():
+            abort(404)
+        
+        # Get or compute visualization data (with caching)
+        try:
+            viz_data = get_or_compute_visualization_data(
+                file_id=pb_file.id,
+                filename=filename,
+                file_path=path,
+                file_mtime=pb_file.file_mtime,
+                session=session,
+            )
+        except Exception as e:
+            abort(400, description=f"Failed to generate visualization: {e}")
+    
+    # Extract data from cached viz_data for template
     return render_template(
         "visualize.html",
-        filename=filename,
-        counts=counts,
-        project_data=project_data,
-        vote_data=vote_data,
-        category_data=category_data,
-        demographic_data=demographic_data,
-        vote_length_data=vote_length_data,
-        top_projects_data=top_projects_data,
-        selection_data=selection_data,
-        category_cost_data=category_cost_data,
-        timeline_data=timeline_data,
-        summary_stats=summary_stats,
-        correlation_data=correlation_data,
-        approval_histogram_data=approval_histogram_data,
-        project_similarity_data=project_similarity_data,
-        project_categories=category_data is not None,
-        voter_demographics=demographic_data is not None,
+        filename=viz_data.get("filename", filename),
+        counts=viz_data.get("counts", {}),
+        project_data=viz_data.get("project_data"),
+        vote_data=viz_data.get("vote_data"),
+        category_data=viz_data.get("category_data"),
+        demographic_data=viz_data.get("demographic_data"),
+        vote_length_data=viz_data.get("vote_length_data"),
+        top_projects_data=viz_data.get("top_projects_data"),
+        selection_data=viz_data.get("selection_data"),
+        category_cost_data=viz_data.get("category_cost_data"),
+        timeline_data=viz_data.get("timeline_data"),
+        summary_stats=viz_data.get("summary_stats", {}),
+        correlation_data=viz_data.get("correlation_data"),
+        approval_histogram_data=viz_data.get("approval_histogram_data"),
+        project_similarity_data=viz_data.get("project_similarity_data", []),
+        project_categories=viz_data.get("project_categories", False),
+        voter_demographics=viz_data.get("voter_demographics", False),
     )
 
 
