@@ -384,7 +384,9 @@ voter_id; age; sex; vote
             "datatype": "str",
             "description": "the rule applied to the voting results. Options:",
             "options": [
-                {"value": "greedy", "description": ""},
+                {"value": "greedy", "description": "selects projects sorted by the number of votes (from highest to lowest) and funds them until the budget runs out. If a project doesn't fit the remaining budget, it skips to the next one until all projects are checked or the budget is exhausted."},
+                {"value": "greedy-hold", "description": "similar to greedy, but stops immediately when there is not enough money for the next project (instead of skipping and trying further projects)."},
+                {"value": "greedy*", "description": "similar to greedy, but with modifications due to special circumstances, such as budget reallocations between districts and citywide projects or other local regulations."},
                 {"value": "equalshares", "description": ""},
                 {"value": "equalshares/add1", "description": ""},
                 {"value": "unknown", "description": "either the information is not available, or there were multiple possibilities, and it is unclear which one applies."},

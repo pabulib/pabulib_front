@@ -232,6 +232,8 @@ from .services.snapshot_service import (
 from .services.snapshot_service import (
     serve_snapshot_download as _serve_snapshot_download,
 )
+from sklearn.manifold import MDS
+import numpy as np
 from .utils.file_helpers import is_safe_filename as _is_safe_filename
 from .utils.formatting import format_int as _format_int
 from .utils.load_pb_file import parse_pb_lines
@@ -2054,6 +2056,8 @@ def visualize_file(filename: str):
     # Vote counts per project
     vote_counts_per_project = {}
     vote_lengths = []  # Track how many projects each voter selected
+    # Track voters per project for Jaccard distance calculation
+    voters_per_project = {}  # project_id -> set of voter_ids
 
     # Process all votes to extract vote data
     for vote_id, vote_data in votes.items():
@@ -2100,6 +2104,10 @@ def visualize_file(filename: str):
                     vote_counts_per_project[pid_str] = (
                         vote_counts_per_project.get(pid_str, 0) + 1
                     )
+                    # Track which voter voted for this project
+                    if pid_str not in voters_per_project:
+                        voters_per_project[pid_str] = set()
+                    voters_per_project[pid_str].add(vote_id)
         else:
             # Debug: Log when we can't extract voted projects from a vote
             if (
@@ -2452,6 +2460,106 @@ def visualize_file(filename: str):
 
             correlation_data = {"labels": labels, "values": correlations}
 
+    # Project similarity scatter plot using Jaccard distances and MDS
+    # Each project is a point with:
+    # - x, y coordinates computed from Jaccard distances via MDS
+    # - radius proportional to cost
+    # - alpha (transparency) proportional to votes received
+    
+    project_similarity_data = []
+    if projects and voters_per_project:
+        # Get list of project IDs that have voters
+        project_ids = list(voters_per_project.keys())
+        n_projects = len(project_ids)
+        
+        # Calculate Jaccard distance matrix
+        if n_projects >= 2:
+            # Build distance matrix
+            distance_matrix = np.zeros((n_projects, n_projects))
+            
+            for i in range(n_projects):
+                for j in range(i+1, n_projects):
+                    pid_i = project_ids[i]
+                    pid_j = project_ids[j]
+                    
+                    voters_i = voters_per_project[pid_i]
+                    voters_j = voters_per_project[pid_j]
+                    
+                    # Jaccard similarity: |A ∩ B| / |A ∪ B|
+                    intersection = len(voters_i & voters_j)
+                    union = len(voters_i | voters_j)
+                    
+                    if union > 0:
+                        jaccard_similarity = intersection / union
+                        # Jaccard distance = 1 - similarity
+                        jaccard_distance = 1 - jaccard_similarity
+                    else:
+                        jaccard_distance = 1.0
+                    
+                    distance_matrix[i, j] = jaccard_distance
+                    distance_matrix[j, i] = jaccard_distance
+            
+            # Use MDS to embed in 2D
+            try:
+                mds = MDS(n_components=2, dissimilarity='precomputed', random_state=42, normalized_stress='auto')
+                coords_2d = mds.fit_transform(distance_matrix)
+                
+                # Normalize coordinates to [0, 1] range for visualization
+                x_min, x_max = coords_2d[:, 0].min(), coords_2d[:, 0].max()
+                y_min, y_max = coords_2d[:, 1].min(), coords_2d[:, 1].max()
+                
+                if x_max > x_min:
+                    coords_2d[:, 0] = (coords_2d[:, 0] - x_min) / (x_max - x_min)
+                if y_max > y_min:
+                    coords_2d[:, 1] = (coords_2d[:, 1] - y_min) / (y_max - y_min)
+                
+                # Normalize costs and votes for better visualization
+                max_votes = max(vote_counts_per_project.values()) if vote_counts_per_project else 1
+                max_cost = max(project_costs) if project_costs else 1
+                
+                # Build visualization data with MDS coordinates
+                for idx, pid in enumerate(project_ids):
+                    proj = projects.get(pid)
+                    if proj is None:
+                        continue
+                    
+                    cost = proj.get("cost")
+                    votes_received = vote_counts_per_project.get(pid, 0)
+                    
+                    if cost is not None:
+                        try:
+                            cost_float = float(cost)
+                            # Use MDS coordinates
+                            x = float(coords_2d[idx, 0])
+                            y = float(coords_2d[idx, 1])
+                            
+                            # Normalize radius (size) based on cost
+                            radius = 5 + (cost_float / max_cost) * 25 if max_cost > 0 else 5
+                            
+                            # Alpha based on votes
+                            alpha = 0.2 + (votes_received / max_votes) * 0.8 if max_votes > 0 else 0.2
+                            
+                            project_name = proj.get("name", f"Project {pid}")
+                            is_selected = pid in selected_projects
+                            
+                            project_similarity_data.append({
+                                "x": x,
+                                "y": y,
+                                "r": radius,
+                                "alpha": alpha,
+                                "cost": cost_float,
+                                "votes": votes_received,
+                                "name": project_name,
+                                "id": pid,
+                                "selected": is_selected
+                            })
+                        except (ValueError, TypeError):
+                            continue
+            except Exception as e:
+                # If MDS fails, log and fall back to empty data
+                print(f"MDS failed: {e}")
+                project_similarity_data = []
+
     return render_template(
         "visualize.html",
         filename=filename,
@@ -2468,6 +2576,7 @@ def visualize_file(filename: str):
         summary_stats=summary_stats,
         correlation_data=correlation_data,
         approval_histogram_data=approval_histogram_data,
+        project_similarity_data=project_similarity_data,
         project_categories=category_data is not None,
         voter_demographics=demographic_data is not None,
     )

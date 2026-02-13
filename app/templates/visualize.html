@@ -141,7 +141,7 @@
     {% if category_cost_data %}
     <div class="bg-white rounded-lg shadow-lg p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Average Project Cost by Category</h3>
-      <div class="h-96">
+      <div class="h-[460px]">
         <canvas id="categoryCostChart"></canvas>
       </div>
     </div>
@@ -177,6 +177,46 @@
     </div>
     {% endif %} -->
 
+    <!-- Project Similarity Map (using Jaccard distance) -->
+    <div class="bg-white rounded-lg shadow-lg p-6">
+      <h3 class="text-xl font-bold text-slate-800 mb-4">Project Similarity Map</h3>
+      <p class="text-sm text-gray-600 mb-4">
+        Each circle represents a project. Circle size shows cost, darkness shows votes received (more votes = darker).
+        <br><strong>Positioning:</strong> Projects are positioned using Jaccard distance based on voter overlap. Projects voted for by similar groups of voters appear closer together. 
+        MDS (Multidimensional Scaling) is used to embed the distance matrix into 2D space.
+      </p>
+      <div class="w-full flex justify-center">
+        <div class="w-full max-w-xl aspect-square">
+          <canvas id="projectSimilarityChart" class="w-full h-full"></canvas>
+        </div>
+      </div>
+      <div id="projectSimilarityLegend" class="mt-6 grid gap-4 sm:grid-cols-2 max-w-3xl mx-auto">
+        <div>
+          <div class="flex items-center justify-between text-xs text-slate-500 mb-1">
+            <span class="font-medium text-green-700">Selected projects · vote intensity</span>
+            <span class="font-medium">100%</span>
+          </div>
+          <div class="h-2 rounded-full" style="background: linear-gradient(90deg, rgba(187, 247, 208, 1) 0%, rgba(22, 163, 74, 1) 100%);"></div>
+          <div class="flex justify-between text-[10px] text-slate-400 mt-1">
+            <span>0%</span>
+            <span>Votes</span>
+            <span>100%</span>
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center justify-between text-xs text-slate-500 mb-1">
+            <span class="font-medium text-blue-700">Not selected · vote intensity</span>
+            <span class="font-medium">100%</span>
+          </div>
+          <div class="h-2 rounded-full" style="background: linear-gradient(90deg, rgba(191, 219, 254, 1) 0%, rgba(37, 99, 235, 1) 100%);"></div>
+          <div class="flex justify-between text-[10px] text-slate-400 mt-1">
+            <span>0%</span>
+            <span>Votes</span>
+            <span>100%</span>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Extra margin below last plot -->
     <div style="height: 96px;"></div>
@@ -209,13 +249,71 @@ const approvalHistogramData = {{ approval_histogram_data|tojson | safe }};
 const approvalHistogramData = null;
 {% endif %}
 
+// Project Similarity Data
+{% if project_similarity_data %}
+const projectSimilarityData = {{ project_similarity_data|tojson | safe }};
+{% else %}
+const projectSimilarityData = null;
+{% endif %}
+
+// Visualization loading helpers
+const loadingIndicator = document.getElementById('visualizationLoading');
+const loadingProgressBar = document.getElementById('visualizationProgressBar');
+const loadingProgressLabel = document.getElementById('visualizationProgressLabel');
+
+const visualizationProgress = {
+  total: 0,
+  completed: 0
+};
+
+function updateVisualizationProgress() {
+  if (!loadingIndicator) {
+    return;
+  }
+  const percent = visualizationProgress.total === 0
+    ? 0
+    : Math.round((visualizationProgress.completed / visualizationProgress.total) * 100);
+  if (loadingProgressBar) {
+    loadingProgressBar.style.width = `${percent}%`;
+  }
+  if (loadingProgressLabel) {
+    loadingProgressLabel.textContent = `${percent}%`;
+  }
+}
+
+function registerVisualization(condition) {
+  if (!condition || !loadingIndicator) {
+    return false;
+  }
+  visualizationProgress.total += 1;
+  loadingIndicator.classList.remove('hidden');
+  updateVisualizationProgress();
+  return true;
+}
+
+function completeVisualization(tracked) {
+  if (!tracked || !loadingIndicator) {
+    return;
+  }
+  visualizationProgress.completed = Math.min(
+    visualizationProgress.total,
+    visualizationProgress.completed + 1
+  );
+  updateVisualizationProgress();
+  if (visualizationProgress.completed >= visualizationProgress.total) {
+    setTimeout(() => loadingIndicator.classList.add('hidden'), 300);
+  }
+}
+
 // Chart configurations
 Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 Chart.defaults.color = '#64748b';
 
 // Project Cost Distribution
+const hasProjectCostData = projectData && projectData.costs && projectData.costs.length > 0;
+const trackCostChart = registerVisualization(hasProjectCostData);
 try {
-  if (projectData && projectData.costs && projectData.costs.length > 0) {
+  if (hasProjectCostData) {
     const ctx1 = document.getElementById('costChart').getContext('2d');
     
     // Create histogram bins
@@ -286,11 +384,15 @@ try {
   }
 } catch (e) {
   console.error('Error rendering cost chart:', e);
+} finally {
+  completeVisualization(trackCostChart);
 }
 
 // Vote Distribution
+const hasVoteChartData = voteData && voteData.votes_per_project && voteData.votes_per_project.length > 0;
+const trackVoteChart = registerVisualization(hasVoteChartData);
 try {
-  if (voteData && voteData.votes_per_project && voteData.votes_per_project.length > 0) {
+  if (hasVoteChartData) {
     console.log('MY LOG:', voteData);
     console.log('Creating vote chart with data:', voteData);
     const ctx2 = document.getElementById('voteChart').getContext('2d');
@@ -351,11 +453,15 @@ try {
   }
 } catch (e) {
   console.error('Error rendering vote chart:', e);
+} finally {
+  completeVisualization(trackVoteChart);
 }
 
 // Category Distribution
+const hasCategoryChartData = !!categoryData;
+const trackCategoryChart = registerVisualization(hasCategoryChartData);
 try {
-  if (categoryData) {
+  if (hasCategoryChartData) {
     const ctx3 = document.getElementById('categoryChart').getContext('2d');
     new Chart(ctx3, {
       type: 'pie',
@@ -383,12 +489,16 @@ try {
   }
 } catch (e) {
   console.error('Error rendering category chart:', e);
+} finally {
+  completeVisualization(trackCategoryChart);
 }
 
 
 // Vote Length Distribution
+const hasVoteLengthData = voteLengthData && voteLengthData.labels && voteLengthData.labels.length > 0 && voteLengthData.counts && voteLengthData.counts.length > 0;
+const trackVoteLengthChart = registerVisualization(hasVoteLengthData);
 try {
-  if (voteLengthData && voteLengthData.labels && voteLengthData.labels.length > 0 && voteLengthData.counts && voteLengthData.counts.length > 0) {
+  if (hasVoteLengthData) {
     const ctx7 = document.getElementById('voteLengthChart').getContext('2d');
     new Chart(ctx7, {
       type: 'bar',
@@ -441,12 +551,16 @@ try {
   }
 } catch (e) {
   console.error('Error rendering vote length chart:', e);
+} finally {
+  completeVisualization(trackVoteLengthChart);
 }
 
 
 // Age Distribution
+const hasAgeData = demographicData && demographicData.age;
+const trackAgeChart = registerVisualization(hasAgeData);
 try {
-  if (demographicData && demographicData.age) {
+  if (hasAgeData) {
     const ctx4 = document.getElementById('ageChart').getContext('2d');
     new Chart(ctx4, {
       type: 'bar',
@@ -488,11 +602,15 @@ try {
   }
 } catch (e) {
   console.error('Error rendering age chart:', e);
+} finally {
+  completeVisualization(trackAgeChart);
 }
 
 // Gender Distribution
+const hasGenderData = demographicData && demographicData.sex;
+const trackGenderChart = registerVisualization(hasGenderData);
 try {
-  if (demographicData && demographicData.sex) {
+  if (hasGenderData) {
     const ctx5 = document.getElementById('genderChart').getContext('2d');
     new Chart(ctx5, {
       type: 'doughnut',
@@ -514,11 +632,15 @@ try {
   }
 } catch (e) {
   console.error('Error rendering gender chart:', e);
+} finally {
+  completeVisualization(trackGenderChart);
 }
 
 // Scatter Plot: Cost vs Votes
+const hasScatterData = projectData && projectData.scatter_data;
+const trackScatterChart = registerVisualization(hasScatterData);
 try {
-  if (projectData && projectData.scatter_data) {
+  if (hasScatterData) {
     const ctx6 = document.getElementById('scatterChart').getContext('2d');
     new Chart(ctx6, {
       type: 'scatter',
@@ -559,11 +681,15 @@ try {
   }
 } catch (e) {
   console.error('Error rendering scatter chart:', e);
+} finally {
+  completeVisualization(trackScatterChart);
 }
 
 // Top Projects Chart
+const hasTopProjectsData = !!topProjectsData;
+const trackTopProjectsChart = registerVisualization(hasTopProjectsData);
 try {
-  if (topProjectsData) {
+  if (hasTopProjectsData) {
     const ctx8 = document.getElementById('topProjectsChart').getContext('2d');
     new Chart(ctx8, {
       type: 'bar',
@@ -597,11 +723,15 @@ try {
   }
 } catch (e) {
   console.error('Error rendering top projects chart:', e);
+} finally {
+  completeVisualization(trackTopProjectsChart);
 }
 
 // Project Selection Scatter Plot
+const hasSelectionData = !!selectionData;
+const trackSelectionChart = registerVisualization(hasSelectionData);
 try {
-  if (selectionData) {
+  if (hasSelectionData) {
     const ctx9 = document.getElementById('selectionChart').getContext('2d');
     new Chart(ctx9, {
       type: 'scatter',
@@ -648,11 +778,15 @@ try {
   }
 } catch (e) {
   console.error('Error rendering selection chart:', e);
+} finally {
+  completeVisualization(trackSelectionChart);
 }
 
 // Category Cost Chart
+const hasCategoryCostChartData = !!categoryCostData;
+const trackCategoryCostChart = registerVisualization(hasCategoryCostChartData);
 try {
-  if (categoryCostData) {
+  if (hasCategoryCostChartData) {
     const ctx10 = document.getElementById('categoryCostChart').getContext('2d');
     new Chart(ctx10, {
       type: 'bar',
@@ -671,6 +805,11 @@ try {
         maintainAspectRatio: false,
         scales: {
           x: {
+            ticks: {
+              maxRotation: 35,
+              minRotation: 35,
+              align: 'end'
+            },
             title: {
               display: true,
               text: 'Category',
@@ -694,11 +833,15 @@ try {
   }
 } catch (e) {
   console.error('Error rendering category cost chart:', e);
+} finally {
+  completeVisualization(trackCategoryCostChart);
 }
 
 // Correlation Heatmap (simplified as bar chart)
+const hasCorrelationChartData = !!correlationData;
+const trackCorrelationChart = registerVisualization(hasCorrelationChartData);
 try {
-  if (correlationData) {
+  if (hasCorrelationChartData) {
     const ctx12 = document.getElementById('correlationChart').getContext('2d');
     new Chart(ctx12, {
       type: 'bar',
@@ -736,11 +879,15 @@ try {
   }
 } catch (e) {
   console.error('Error rendering correlation chart:', e);
+} finally {
+  completeVisualization(trackCorrelationChart);
 }
 
 // Approval Histogram
+const hasApprovalHistogramData = approvalHistogramData && approvalHistogramData.labels && approvalHistogramData.counts;
+const trackApprovalHistogram = registerVisualization(hasApprovalHistogramData);
 try {
-  if (approvalHistogramData && approvalHistogramData.labels && approvalHistogramData.counts) {
+  if (hasApprovalHistogramData) {
     // Always make 20 buckets
     const numBuckets = 20;
     const rawLabels = approvalHistogramData.labels.map(Number);
@@ -802,6 +949,105 @@ try {
   }
 } catch (e) {
   console.error('Error rendering approval histogram chart:', e);
+} finally {
+  completeVisualization(trackApprovalHistogram);
+}
+
+// Project Similarity Scatter Plot
+const hasProjectSimilarityData = projectSimilarityData && projectSimilarityData.length > 0;
+const trackProjectSimilarityChart = registerVisualization(hasProjectSimilarityData);
+try {
+  if (hasProjectSimilarityData) {
+    const ctxSimilarity = document.getElementById('projectSimilarityChart').getContext('2d');
+
+    const maxVotes = projectSimilarityData.reduce((max, project) => Math.max(max, project.votes || 0), 0) || 1;
+
+    const bubblePoints = projectSimilarityData.map(project => {
+      const voteRatio = Math.min(1, Math.max(0, project.votes / maxVotes));
+      const baseColor = project.selected ? { r: 34, g: 197, b: 94 } : { r: 59, g: 130, b: 246 };
+      const alpha = 0.2 + voteRatio * 0.8;
+      const borderAlpha = 0.8;
+
+      return {
+        x: project.x,
+        y: project.y,
+        r: project.r,
+        projectName: project.name,
+        projectId: project.id,
+        cost: project.cost,
+        votes: project.votes,
+        selected: project.selected,
+        voteRatio,
+        backgroundColor: `rgba(${baseColor.r}, ${baseColor.g}, ${baseColor.b}, ${alpha})`,
+        borderColor: `rgba(${baseColor.r}, ${baseColor.g}, ${baseColor.b}, ${borderAlpha})`
+      };
+    });
+
+    new Chart(ctxSimilarity, {
+      type: 'bubble',
+      data: {
+        datasets: [
+          {
+            label: 'Projects',
+            data: bubblePoints,
+            borderWidth: 1,
+            backgroundColor: context => context.raw.backgroundColor,
+            borderColor: context => context.raw.borderColor
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: {
+          padding: {
+            top: 20,
+            bottom: 40,
+            left: 60,
+            right: 60
+          }
+        },
+        plugins: {
+          title: {
+            display: false
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const point = context.raw;
+                const status = point.selected ? 'Selected project' : 'Not selected';
+                return [
+                  `Project: ${point.projectName}`,
+                  `Status: ${status}`,
+                  `Cost: ${point.cost}`,
+                  `Votes: ${point.votes}`
+                ];
+              }
+            }
+          },
+          legend: {
+            display: false
+          }
+        },
+        scales: {
+          x: {
+            display: false,
+            min: -0.05,
+            max: 1.05
+          },
+          y: {
+            display: false,
+            min: -0.05,
+            max: 1.05
+          }
+        }
+      }
+    });
+  }
+} catch (e) {
+  console.error('Error rendering project similarity chart:', e);
+} finally {
+  completeVisualization(trackProjectSimilarityChart);
 }
 </script>
 
