@@ -11,6 +11,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base
@@ -236,8 +237,8 @@ class PBVisualization(Base):
         Integer, ForeignKey("pb_files.id"), unique=True, nullable=False, index=True
     )
     
-    # JSON blob containing all visualization data
-    data: Mapped[str] = mapped_column(Text, nullable=False)
+    # JSON blob containing all visualization data (MEDIUMTEXT for large datasets)
+    data: Mapped[str] = mapped_column(MEDIUMTEXT, nullable=False)
     
     # When this was computed
     computed_at: Mapped[datetime] = mapped_column(
