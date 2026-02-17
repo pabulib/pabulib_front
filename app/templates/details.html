@@ -35,25 +35,25 @@
         {% set groups_country = groups_comments_country %}
         {% set groups_country_unit = groups_comments_country_unit %}
         {% set groups_country_unit_instance = groups_comments_country_unit_instance %}
-        <p class="text-gray-600 mb-4">Parsed from META key <code class="bg-gray-100 px-2 py-1 rounded text-sm">comment</code> using pattern <code class="bg-gray-100 px-2 py-1 rounded text-sm">#n:</code> segments. Showing how many PB files share each comment.</p>
+        <p class="text-gray-600 mb-4">Parsed from META key <code class="bg-gray-100 px-2 py-1 rounded text-sm">comment</code> using pattern <code class="bg-gray-100 px-2 py-1 rounded text-sm">#n:</code> segments. Showing how many PB files share each comment. <a href="{{ url_for('main.format_page') }}#comment-field" class="text-blue-700 hover:text-blue-900 underline text-sm">→ View field specification</a></p>
       {% elif tab=='categories' %}
         {% set rows = rows_categories %}
         {% set groups_country = groups_categories_country %}
         {% set groups_country_unit = groups_categories_country_unit %}
         {% set groups_country_unit_instance = groups_categories_country_unit_instance %}
-        <p class="text-gray-600 mb-4">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">PROJECTS.category</code> (comma-separated or lists). Grouped by distinct token per file.</p>
+        <p class="text-gray-600 mb-4">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">PROJECTS.category</code> (comma-separated or lists). Grouped by distinct token per file. <a href="{{ url_for('main.format_page') }}#category-field" class="text-blue-700 hover:text-blue-900 underline text-sm">→ View field specification</a></p>
       {% elif tab=='targets' %}
         {% set rows = rows_targets %}
         {% set groups_country = groups_targets_country %}
         {% set groups_country_unit = groups_targets_country_unit %}
         {% set groups_country_unit_instance = groups_targets_country_unit_instance %}
-        <p class="text-gray-600 mb-4">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">PROJECTS.target</code> (comma-separated or lists). Grouped by distinct token per file.</p>
+        <p class="text-gray-600 mb-4">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">PROJECTS.target</code> (comma-separated or lists). Grouped by distinct token per file. <a href="{{ url_for('main.format_page') }}#target-field" class="text-blue-700 hover:text-blue-900 underline text-sm">→ View field specification</a></p>
       {% else %}
         {% set rows = rows_rules %}
         {% set groups_country = groups_rules_country %}
         {% set groups_country_unit = groups_rules_country_unit %}
         {% set groups_country_unit_instance = groups_rules_country_unit_instance %}
-        <p class="text-gray-600 mb-4">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">META.rule</code>. Shows which PB files use each voting rule, grouped by location.</p>
+        <p class="text-gray-600 mb-4">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">META.rule</code>. Shows which PB files use each voting rule, grouped by location. <a href="{{ url_for('main.format_page') }}#rule-field" class="text-blue-700 hover:text-blue-900 underline text-sm">→ View field specification</a></p>
       {% endif %}
 
       <div class="overflow-x-auto">
@@ -124,15 +124,18 @@
       container.innerHTML = preview + more;
       container.dataset.expanded = '0';
     }
+    
+    // Show/hide button based on whether there are more files to show
+    const wrap = container.closest('.files-cell');
+    const btn = wrap && wrap.querySelector('.btn-expand');
+    if(btn){ btn.style.display = files.length > PREVIEW_COUNT ? '' : 'none'; }
   }
   function renderFilesGrouped(container, groups, expanded){
     let html = '';
-    const toRender = expanded ? groups : groups.slice(0, 3);
+    const toRender = expanded ? groups : groups.slice(0, 5);
     toRender.forEach(g => {
-      const list = (expanded ? g.files : g.files.slice(0, Math.max(2, Math.ceil(PREVIEW_COUNT/Math.max(1, toRender.length)))));
       html += `<div class="group">
         <div class="group-head"><span class="group-label">${g.label || '—'}</span><span class="group-count">${g.count}</span></div>
-        <div class="group-files">${list.map(f=>`<span class=\"file-item\">${f}</span>`).join('')}</div>
       </div>`;
     });
     if(!expanded){
@@ -141,6 +144,11 @@
     }
     container.innerHTML = html;
     container.dataset.expanded = expanded ? '1' : '0';
+    
+    // Show/hide button based on whether there are more groups to show
+    const wrap = container.closest('.files-cell');
+    const btn = wrap && wrap.querySelector('.btn-expand');
+    if(btn){ btn.style.display = groups.length > 10 ? '' : 'none'; }
   }
   function render(container, expanded){
     let files = [], groups = [];
@@ -157,6 +165,14 @@
     }
     const grouped = (mode !== 'none') && groups && groups.length;
     if(grouped){ renderFilesGrouped(container, groups, expanded); } else { renderFilesFlat(container, files, expanded); }
+    
+    // Show/hide the expand button based on whether there's more to show
+    const wrap = container.closest('.files-cell');
+    const btn = wrap && wrap.querySelector('.btn-expand');
+    if(btn){
+      const hasMore = grouped ? groups.length > 5 : files.length > PREVIEW_COUNT;
+      btn.style.display = hasMore ? '' : 'none';
+    }
   }
   document.querySelectorAll('.file-list').forEach(el => render(el, false));
   addEventListener('change', (e)=>{

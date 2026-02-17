@@ -382,7 +382,7 @@ voter_id; age; sex; vote
         {
             "field_name": "rule",
             "datatype": "str",
-            "description": "the algorithm used to select winning projects based on the votes. The following values are supported:",
+            "description": "the algorithm used to select winning projects based on the votes. The following values are supported: <a href='/details?tab=rules' class='text-blue-700 hover:text-blue-900 text-xs' style='white-space: nowrap;'>(see actual usage →)</a>",
             "options": [
                 {"value": "greedy", "description": "the standard Knapsack-style approximation approach. Projects are sorted by vote count (descending). The algorithm iterates through the list, selecting projects that fit into the remaining budget. If a project is too expensive for the current remaining funds, it is skipped, and the algorithm continues to the next project to see if it fits."},
                 {"value": "greedy-no-skip", "description": "projects are sorted by vote count (descending). The algorithm selects projects that fit into the remaining budget but stops immediately at the first project that does not fit. No subsequent projects are considered, even if they would fit."},
@@ -497,7 +497,7 @@ voter_id; age; sex; vote
         {
             "field_name": "comment",
             "datatype": "str",
-            "description": "a comment (or comments) for the file. It can address various issues such as data inconsistencies, errors in voting, or mistakes in vote counting. Sometimes there is more than one comment, and they may repeat. For this reason, each comment gets a sequential number (#1:, #2:, #3:, etc.). These numbers allow for easy identification and referencing of specific comments.",
+            "description": "a comment (or comments) for the file. It can address various issues such as data inconsistencies, errors in voting, or mistakes in vote counting. Sometimes there is more than one comment, and they may repeat. For this reason, each comment gets a sequential number (#1:, #2:, #3:, etc.). These numbers allow for easy identification and referencing of specific comments. <a href='/details?tab=comments' class='text-blue-700 hover:text-blue-900 text-xs' style='white-space: nowrap;'>(see actual comments →)</a>",
             "example": ["#1: Project 586 was free (cost 0). To keep data consistent and not to have 0-cost projects (may cause problems when processing data) we set its cost to an artificial value of 1. #2: If a given project has multiple coordinates, then the average over these coordinates is taken."],
             "if_obligatory": false
         },
@@ -578,7 +578,7 @@ voter_id; age; sex; vote
         {
             "field_name": "category",
             "datatype": "list",
-            "description": "categories assigned to the project, separated by commas",
+            "description": "categories assigned to the project, separated by commas. <a href='/details?tab=categories' class='text-blue-700 hover:text-blue-900 text-xs' style='white-space: nowrap;'>(see actual categories →)</a>",
             "options": null,
             "example": "urban greenery,public space,environmental protection",
             "additional_info": [
@@ -590,7 +590,7 @@ voter_id; age; sex; vote
         {
             "field_name": "target",
             "datatype": "list",
-            "description": "target group, beneficiaries for whom the project is intended. Separated by commas.",
+            "description": "target group, beneficiaries for whom the project is intended. Separated by commas. <a href='/details?tab=targets' class='text-blue-700 hover:text-blue-900 text-xs' style='white-space: nowrap;'>(see actual targets →)</a>",
             "options": null,
             "example": "people with disabilities,seniors",
             "additional_info": [
@@ -812,6 +812,11 @@ voter_id; age; sex; vote
         }
         fields.forEach(field => {
             const fieldItem = document.createElement('li');
+            // Add anchor ID for linking from other pages
+            const anchorId = field.field_name.replace(/[^a-z0-9]/gi, '-').toLowerCase() + '-field';
+            fieldItem.id = anchorId;
+            // Add scroll margin for better UX when jumping to anchors
+            fieldItem.style.scrollMarginTop = '100px';
             // Special case: force 'vote_type' to use 'required header' (red)
             let fieldClass = field.if_obligatory ? 'required header' : 'optional header';
             if (field.field_name === 'vote_type') fieldClass = 'required header';
@@ -841,6 +846,31 @@ voter_id; age; sex; vote
         renderFields(metaFields, 'fields-container');
         renderFields(projectFields, 'projects-container');
         renderFields(voteFields, 'votes-container');
+
+        // Handle anchor/hash navigation after fields are rendered
+        const hash = window.location.hash;
+        if (hash) {
+            setTimeout(() => {
+                const element = document.querySelector(hash);
+                if (element) {
+                    // Find which section contains this element and expand it if needed
+                    const sectionOne = document.getElementById('section-one');
+                    const sectionTwo = document.getElementById('section-two');
+                    const sectionThree = document.getElementById('section-three');
+                    
+                    if (sectionTwo && sectionTwo.contains(element) && sectionTwo.classList.contains('hidden')) {
+                        toggleAccordion('section-two');
+                    } else if (sectionThree && sectionThree.contains(element) && sectionThree.classList.contains('hidden')) {
+                        toggleAccordion('section-three');
+                    }
+                    
+                    // Wait a bit for accordion animation, then scroll
+                    setTimeout(() => {
+                        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 150);
+                }
+            }, 100);
+        }
 
         // Render LaTeX math via KaTeX auto-render after dynamic content is injected
         const tryRenderMath = () => {
