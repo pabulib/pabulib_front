@@ -50,6 +50,15 @@ _TARGETS_CACHE: Optional[
         Dict[str, List[Dict[str, Any]]],
     ]
 ] = None
+_RULES_CACHE: Optional[
+    Tuple[
+        Dict[str, List[str]],
+        List[Tuple[str, int, List[str]]],
+        Dict[str, List[Dict[str, Any]]],
+        Dict[str, List[Dict[str, Any]]],
+        Dict[str, List[Dict[str, Any]]],
+    ]
+] = None
 
 _SEARCH_ORDER_COLUMNS = {
     "quality": PBFile.quality,
@@ -246,12 +255,13 @@ def _db_signature() -> Optional[str]:
 
 
 def invalidate_caches() -> None:
-    global _TILES_CACHE, _COMMENTS_CACHE, _STATS_CACHE, _CATEGORIES_CACHE, _TARGETS_CACHE
+    global _TILES_CACHE, _COMMENTS_CACHE, _STATS_CACHE, _CATEGORIES_CACHE, _TARGETS_CACHE, _RULES_CACHE
     _TILES_CACHE = None
     _COMMENTS_CACHE = None
     _STATS_CACHE = None
     _CATEGORIES_CACHE = None
     _TARGETS_CACHE = None
+    _RULES_CACHE = None
 
 
 def _apply_search_filters(
@@ -1072,6 +1082,119 @@ def aggregate_targets_cached() -> Tuple[
     Dict[str, List[Dict[str, Any]]],
 ]:
     return _aggregate_label_cached("target")
+
+
+def aggregate_rules_cached() -> Tuple[
+    Dict[str, List[str]],
+    List[Tuple[str, int, List[str]]],
+    Dict[str, List[Dict[str, Any]]],
+    Dict[str, List[Dict[str, Any]]],
+    Dict[str, List[Dict[str, Any]]],
+]:
+    """Aggregate rules (from PBFile.rule_raw field) with smart grouping.
+
+    For common rules like 'greedy', show location summaries instead of all files.
+    Returns same tuple shape as aggregate_categories_cached.
+    """
+    global _RULES_CACHE
+    db_sig = _db_signature()
+    if _RULES_CACHE is not None and getattr(_RULES_CACHE, "_db_sig", None) == db_sig:
+        return _RULES_CACHE
+
+    with get_session() as s:
+        q = s.query(
+            PBFile.rule_raw,
+            PBFile.file_name,
+            PBFile.country,
+            PBFile.unit,
+            PBFile.instance,
+        ).filter(PBFile.is_current == True)  # noqa: E712
+        rows = q.all()
+
+    # Map rule -> list of files
+    mapping: Dict[str, List[str]] = {}
+    # Track unique locations per rule for smart display
+    groups_temp_country: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    groups_temp_country_unit: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    groups_temp_country_unit_instance: Dict[str, Dict[str, Dict[str, Any]]] = {}
+
+    for rule_raw, fname, country, unit, instance in rows:
+        key = (rule_raw or "unknown").strip()
+        if not key:
+            key = "unknown"
+
+        mapping.setdefault(key, []).append(fname)
+        country = (country or "").strip()
+        unit = (unit or "").strip()
+        instance = (instance or "").strip()
+
+        # Group by country
+        if country:
+            cm_c = groups_temp_country.setdefault(key, {})
+            key_c = country.lower()
+            bucket_c = cm_c.setdefault(key_c, {"label": country, "files": []})
+            bucket_c["files"].append(fname)
+
+        # Group by country + unit
+        if country or unit:
+            cm_cu = groups_temp_country_unit.setdefault(key, {})
+            key_cu = f"{country.lower()}::{unit.lower()}"
+            label_cu = f"{country} – {unit}".strip(" –") if (country or unit) else "—"
+            bucket_cu = cm_cu.setdefault(key_cu, {"label": label_cu, "files": []})
+            bucket_cu["files"].append(fname)
+
+        # Group by country + unit + instance
+        if country or unit or instance:
+            cm_cui = groups_temp_country_unit_instance.setdefault(key, {})
+            key_cui = f"{country.lower()}::{unit.lower()}::{instance.lower()}"
+            label_cui = (
+                f"{country} – {unit} – {instance}".strip(" –")
+                if (country or unit or instance)
+                else "—"
+            )
+            bucket_cui = cm_cui.setdefault(key_cui, {"label": label_cui, "files": []})
+            bucket_cui["files"].append(fname)
+
+    # Build rows list
+    rows_list: List[Tuple[str, int, List[str]]] = []
+    for rule_key, flist in mapping.items():
+        rows_list.append((rule_key, len(flist), sorted(flist)))
+    rows_list.sort(key=lambda t: (-t[1], t[0].lower()))
+
+    def finalize_groups(
+        src: Dict[str, Dict[str, Dict[str, Any]]],
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        out: Dict[str, List[Dict[str, Any]]] = {}
+        for rule_key, by_key in src.items():
+            items: List[Dict[str, Any]] = []
+            for _k, v in by_key.items():
+                files_list = sorted(v.get("files", []))
+                items.append(
+                    {
+                        "label": v.get("label", "—"),
+                        "count": len(files_list),
+                        "files": files_list,
+                    }
+                )
+            items.sort(
+                key=lambda d: (-int(d.get("count", 0)), str(d.get("label", "")).lower())
+            )
+            out[rule_key] = items
+        return out
+
+    result = (
+        {k: v for k, v in mapping.items()},
+        rows_list,
+        finalize_groups(groups_temp_country),
+        finalize_groups(groups_temp_country_unit),
+        finalize_groups(groups_temp_country_unit_instance),
+    )
+    try:
+        setattr(result, "_db_sig", db_sig)  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    _RULES_CACHE = result
+    return _RULES_CACHE
 
 
 def aggregate_statistics_cached() -> Tuple[Dict[str, Any], Dict[str, Any]]:

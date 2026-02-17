@@ -7,7 +7,7 @@ worker_class = "sync"
 worker_connections = 1000
 max_requests = 1000
 max_requests_jitter = 50
-timeout = 60
+timeout = 300  # Increased for file upload validation (5 minutes)
 keepalive = 5
 
 # Process naming

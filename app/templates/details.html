@@ -9,7 +9,7 @@
     <div class="w-full max-w-5xl bg-white rounded-lg shadow-lg p-8 mt-8 mb-32">
       <div class="flex items-baseline justify-between mb-6">
         <h1 class="text-3xl font-bold text-slate-800">Details</h1>
-        <div class="text-sm text-gray-500">Explore comments, categories and targets used across the library</div>
+        <div class="text-sm text-gray-500">Explore comments, categories, targets and rules used across the library</div>
       </div>
 
       <!-- Tabs -->
@@ -18,6 +18,7 @@
           {'id':'comments','label':'Comments','desc':'from META.comment, split by #n:'},
           {'id':'categories','label':'Categories','desc':'from PROJECTS.category/categories'},
           {'id':'targets','label':'Targets','desc':'from PROJECTS.target/targets'},
+          {'id':'rules','label':'Rules','desc':'from META.rule'},
         ] %}
         {% for t in tabs %}
           <a href="{{ url_for('main.details_page') }}?tab={{ t.id }}" 
@@ -25,7 +26,7 @@
              data-tab-target="{{ t.id }}" data-track="tab_switch" data-track-category="navigation">{{ t.label }}</a>
         {% endfor %}
         <span class="ml-3 text-xs text-gray-500">
-          {% if tab=='comments' %}{{ total_comments }} items{% elif tab=='categories' %}{{ total_categories }} items{% else %}{{ total_targets }} items{% endif %}
+          {% if tab=='comments' %}{{ total_comments }} items{% elif tab=='categories' %}{{ total_categories }} items{% elif tab=='targets' %}{{ total_targets }} items{% else %}{{ total_rules }} items{% endif %}
         </span>
       </div>
 
@@ -41,19 +42,25 @@
         {% set groups_country_unit = groups_categories_country_unit %}
         {% set groups_country_unit_instance = groups_categories_country_unit_instance %}
         <p class="text-gray-600 mb-4">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">PROJECTS.category</code> (comma-separated or lists). Grouped by distinct token per file.</p>
-      {% else %}
+      {% elif tab=='targets' %}
         {% set rows = rows_targets %}
         {% set groups_country = groups_targets_country %}
         {% set groups_country_unit = groups_targets_country_unit %}
         {% set groups_country_unit_instance = groups_targets_country_unit_instance %}
         <p class="text-gray-600 mb-4">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">PROJECTS.target</code> (comma-separated or lists). Grouped by distinct token per file.</p>
+      {% else %}
+        {% set rows = rows_rules %}
+        {% set groups_country = groups_rules_country %}
+        {% set groups_country_unit = groups_rules_country_unit %}
+        {% set groups_country_unit_instance = groups_rules_country_unit_instance %}
+        <p class="text-gray-600 mb-4">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">META.rule</code>. Shows which PB files use each voting rule, grouped by location.</p>
       {% endif %}
 
       <div class="overflow-x-auto">
         <table class="min-w-full bg-white border border-gray-200 rounded-lg overflow-hidden">
           <thead class="bg-gray-100">
             <tr>
-              <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-b border-gray-200" style="width:45%">{{ 'Comment' if tab=='comments' else ( 'Category' if tab=='categories' else 'Target' ) }}</th>
+              <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-b border-gray-200" style="width:45%">{{ 'Comment' if tab=='comments' else ( 'Category' if tab=='categories' else ( 'Target' if tab=='targets' else 'Rule' ) ) }}</th>
               <th class="px-4 py-4 text-center text-sm font-semibold text-gray-700 border-b border-gray-200" style="width:10%"># files</th>
               <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-b border-gray-200" style="width:45%">
                 <div class="flex items-center gap-3">

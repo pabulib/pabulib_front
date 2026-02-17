@@ -86,12 +86,27 @@
         <!-- How it works / Checker info -->
         {% include 'partials/upload_how_it_works.html' %}
 
-        <!-- Subtle legend -->
-        <div class="text-xs text-slate-500 mb-4 flex items-center gap-3">
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-emerald-200 bg-emerald-100 text-emerald-800" title="Valid file">✓ Valid</span>
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-red-200 bg-red-100 text-red-800" title="Invalid file">✗ Invalid</span>
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-700" title="File will be uploaded as a new dataset">New</span>
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-orange-200 bg-orange-50 text-orange-700" title="File will overwrite an existing dataset">Overwrite</span>
+        <!-- Filter buttons with counts -->
+        <div class="mb-4 flex items-center gap-3">
+          <button type="button" id="filterBtnValid" class="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 cursor-pointer transition-colors text-sm font-medium shadow-sm" title="Click to filter valid files">
+            <span class="text-base">✓</span>
+            <span>Valid</span>
+            <span id="validCount" class="ml-1 px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 text-xs font-semibold">0</span>
+          </button>
+          <button type="button" id="filterBtnInvalid" class="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-red-300 bg-red-100 text-red-800 hover:bg-red-200 cursor-pointer transition-colors text-sm font-medium shadow-sm" title="Click to filter invalid files">
+            <span class="text-base">✗</span>
+            <span>Invalid</span>
+            <span id="invalidCount" class="ml-1 px-2 py-0.5 rounded-full bg-red-200 text-red-900 text-xs font-semibold">0</span>
+          </button>
+          <span class="text-xs text-slate-400">|</span>
+          <button type="button" id="filterBtnNew" class="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer transition-colors text-sm font-medium shadow-sm" title="Click to filter new files">
+            <span>New</span>
+            <span id="newCount" class="ml-1 px-2 py-0.5 rounded-full bg-blue-200 text-blue-900 text-xs font-semibold">0</span>
+          </button>
+          <button type="button" id="filterBtnOverwrite" class="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 cursor-pointer transition-colors text-sm font-medium shadow-sm" title="Click to filter files that will overwrite existing datasets">
+            <span>Overwrite</span>
+            <span id="overwriteCount" class="ml-1 px-2 py-0.5 rounded-full bg-orange-200 text-orange-900 text-xs font-semibold">0</span>
+          </button>
         </div>
 
         <!-- Toolbar: search + bulk actions (mirrors admin dashboard style) -->
@@ -426,6 +441,41 @@
   function updateCount(){
     const visible = tiles.filter(t => t.style.display !== 'none').length;
     if(countEl) countEl.textContent = `${visible} / ${total}`;
+    updateValidationCounts();
+  }
+
+  function updateValidationCounts() {
+    const validCountEl = document.getElementById('validCount');
+    const invalidCountEl = document.getElementById('invalidCount');
+    const newCountEl = document.getElementById('newCount');
+    const overwriteCountEl = document.getElementById('overwriteCount');
+    
+    let validCount = 0;
+    let invalidCount = 0;
+    let newCount = 0;
+    let overwriteCount = 0;
+    
+    tiles.forEach(t => {
+      const isValid = t.dataset.valid === '1';
+      const exists = t.dataset.exists === '1';
+      
+      if (isValid) {
+        validCount++;
+      } else {
+        invalidCount++;
+      }
+      
+      if (exists) {
+        overwriteCount++;
+      } else {
+        newCount++;
+      }
+    });
+    
+    if (validCountEl) validCountEl.textContent = validCount;
+    if (invalidCountEl) invalidCountEl.textContent = invalidCount;
+    if (newCountEl) newCountEl.textContent = newCount;
+    if (overwriteCountEl) overwriteCountEl.textContent = overwriteCount;
   }
 
   function filter(){
@@ -497,10 +547,10 @@
     searchClear.addEventListener('click', ()=>{ search.value=''; filter(); search.focus(); searchClear.classList.add('hidden'); });
   }
   if(statusSel){
-    statusSel.addEventListener('change', ()=>{ filter(); });
+    statusSel.addEventListener('change', ()=>{ updateFilterButtonStates(); filter(); });
   }
   if(validationSel){
-    validationSel.addEventListener('change', ()=>{ filter(); });
+    validationSel.addEventListener('change', ()=>{ updateFilterButtonStates(); filter(); });
   }
   if(sourceSel){
     sourceSel.addEventListener('change', ()=>{ filter(); });
@@ -517,7 +567,103 @@
     }
   }
   if(clearFilters){
-    clearFilters.addEventListener('click', ()=>{ if(statusSel) statusSel.value=''; if(validationSel) validationSel.value=''; if(sourceSel) sourceSel.value=''; if(emailSelect) emailSelect.value=''; if(search) search.value=''; if(searchClear) searchClear.classList.add('hidden'); filter(); });
+    clearFilters.addEventListener('click', ()=>{ if(statusSel) statusSel.value=''; if(validationSel) validationSel.value=''; if(sourceSel) sourceSel.value=''; if(emailSelect) emailSelect.value=''; if(search) search.value=''; if(searchClear) searchClear.classList.add('hidden'); updateFilterButtonStates(); filter(); });
+  }
+
+  // Filter button handlers for Valid/Invalid labels
+  const filterBtnValid = document.getElementById('filterBtnValid');
+  const filterBtnInvalid = document.getElementById('filterBtnInvalid');
+  const filterBtnNew = document.getElementById('filterBtnNew');
+  const filterBtnOverwrite = document.getElementById('filterBtnOverwrite');
+
+  function updateFilterButtonStates() {
+    const currentFilter = validationSel ? validationSel.value : '';
+    const currentStatus = statusSel ? statusSel.value : '';
+    
+    if (filterBtnValid) {
+      if (currentFilter === 'valid') {
+        filterBtnValid.classList.add('ring-2', 'ring-emerald-500', 'ring-offset-1');
+      } else {
+        filterBtnValid.classList.remove('ring-2', 'ring-emerald-500', 'ring-offset-1');
+      }
+    }
+    if (filterBtnInvalid) {
+      if (currentFilter === 'invalid') {
+        filterBtnInvalid.classList.add('ring-2', 'ring-red-500', 'ring-offset-1');
+      } else {
+        filterBtnInvalid.classList.remove('ring-2', 'ring-red-500', 'ring-offset-1');
+      }
+    }
+    if (filterBtnNew) {
+      if (currentStatus === 'new') {
+        filterBtnNew.classList.add('ring-2', 'ring-blue-500', 'ring-offset-1');
+      } else {
+        filterBtnNew.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-1');
+      }
+    }
+    if (filterBtnOverwrite) {
+      if (currentStatus === 'existing') {
+        filterBtnOverwrite.classList.add('ring-2', 'ring-orange-500', 'ring-offset-1');
+      } else {
+        filterBtnOverwrite.classList.remove('ring-2', 'ring-orange-500', 'ring-offset-1');
+      }
+    }
+  }
+
+  if (filterBtnValid) {
+    filterBtnValid.addEventListener('click', () => {
+      if (validationSel) {
+        if (validationSel.value === 'valid') {
+          validationSel.value = '';
+        } else {
+          validationSel.value = 'valid';
+        }
+        updateFilterButtonStates();
+        filter();
+      }
+    });
+  }
+
+  if (filterBtnInvalid) {
+    filterBtnInvalid.addEventListener('click', () => {
+      if (validationSel) {
+        if (validationSel.value === 'invalid') {
+          validationSel.value = '';
+        } else {
+          validationSel.value = 'invalid';
+        }
+        updateFilterButtonStates();
+        filter();
+      }
+    });
+  }
+
+  if (filterBtnNew) {
+    filterBtnNew.addEventListener('click', () => {
+      if (statusSel) {
+        if (statusSel.value === 'new') {
+          statusSel.value = '';
+        } else {
+          statusSel.value = 'new';
+        }
+        updateFilterButtonStates();
+        filter();
+      }
+    });
+  }
+
+  if (filterBtnOverwrite) {
+    filterBtnOverwrite.addEventListener('click', () => {
+      if (statusSel) {
+        if (statusSel.value === 'existing') {
+          statusSel.value = '';
+        } else {
+          statusSel.value = 'existing';
+        }
+        updateFilterButtonStates();
+        filter();
+      }
+    });
   }
   if(selectAll){
     selectAll.addEventListener('change', ()=>{
@@ -1561,6 +1707,8 @@
     }
   });
   updateUploadSelectedButton();
+  updateFilterButtonStates();
+  updateValidationCounts();
   filter();
 })();
 </script>

@@ -40,6 +40,7 @@ from .services.pb_service import (
     aggregate_statistics_cached as _aggregate_statistics_cached,
 )
 from .services.pb_service import aggregate_targets_cached as _aggregate_targets_cached
+from .services.pb_service import aggregate_rules_cached as _aggregate_rules_cached
 from .services.pb_service import get_all_current_file_paths, get_current_file_path
 
 # Simple in-memory registry for zip jobs; zip files and progress json live on disk
@@ -1029,7 +1030,7 @@ def comments_page():
 @bp.route("/details")
 def details_page():
     tab = (request.args.get("tab") or "comments").strip().lower()
-    if tab not in {"comments", "categories", "targets"}:
+    if tab not in {"comments", "categories", "targets", "rules"}:
         tab = "comments"
 
     # Always compute all three so tab switch is instant without extra calls
@@ -1057,6 +1058,14 @@ def details_page():
         groups_targets_country_unit_instance,
     ) = _aggregate_targets_cached()
 
+    (
+        _map_rules,
+        rows_rules,
+        groups_rules_country,
+        groups_rules_country_unit,
+        groups_rules_country_unit_instance,
+    ) = _aggregate_rules_cached()
+
     return render_template(
         "details.html",
         tab=tab,
@@ -1078,6 +1087,12 @@ def details_page():
         groups_targets_country_unit=groups_targets_country_unit,
         groups_targets_country_unit_instance=groups_targets_country_unit_instance,
         total_targets=len(rows_targets),
+        # rules
+        rows_rules=rows_rules,
+        groups_rules_country=groups_rules_country,
+        groups_rules_country_unit=groups_rules_country_unit,
+        groups_rules_country_unit_instance=groups_rules_country_unit_instance,
+        total_rules=len(rows_rules),
     )
 
 
