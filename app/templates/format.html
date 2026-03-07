@@ -93,7 +93,15 @@
     <section class="max-w-4xl mx-auto px-4">
         <div class="flex justify-center">
             <div class="w-full max-w-4xl bg-white rounded-lg shadow-lg p-8 mt-8 mb-32 format-content" style="margin-left:auto; margin-right:auto;">
-                <h1 class="text-3xl font-bold text-slate-800 mb-6">The <kbd>.pb</kbd> File Format</h1>
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-6">
+                    <h1 class="text-3xl font-bold text-slate-800">The <kbd>.pb</kbd> File Format</h1>
+                    <button id="copy-md-btn" onclick="copyFormatAsMarkdown()"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:border-gray-400 transition-colors shadow-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        Copy as Markdown
+                    </button>
+                </div>
+                <div id="format-intro">
                 <ul>
                     <li>
                         <p>The data concerning one instance of participatory budgeting is to be stored in a single UTF-8 text
@@ -119,6 +127,7 @@
                         </p>
                     </li>
                 </ul>
+                </div>
 
 
                 <div class="space-y-4">
@@ -170,7 +179,7 @@ voter_id; age; sex; vote
                     </div>
                 </div>
 <br>
-                <ul>
+                <ul id="format-csv-desc">
                     <li>
                         <p align="justify">
                             Although this is not a single standard CSV file, the format behaves similarly. Each <kbd>.pb</kbd> 
@@ -895,6 +904,127 @@ voter_id; age; sex; vote
         tryRenderMath();
         window.addEventListener('load', tryRenderMath);
     });
+
+    function htmlToMd(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+            return node.textContent.replace(/[ \t\r\n]+/g, ' ');
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) return '';
+        const tag = node.tagName.toLowerCase();
+        const children = () => Array.from(node.childNodes).map(htmlToMd).join('');
+        switch (tag) {
+            case 'strong': case 'b':
+                return `**${children().trim()}**`;
+            case 'em': case 'i':
+                return `*${children().trim()}*`;
+            case 'kbd':
+                return `\`${children().trim()}\``;
+            case 'code':
+                // Skip complex inline code blocks with coloured spans
+                if (node.querySelector('span')) return '';
+                return `\`${children().trim()}\``;
+            case 'br':
+                return '\n';
+            case 'p': {
+                const text = children().replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+                return text + '\n\n';
+            }
+            case 'li': {
+                // Collapse internal newlines so <p> double-newlines don't leak into list items
+                return children().replace(/\n+/g, ' ').trim();
+            }
+            case 'ul': {
+                const items = Array.from(node.children).filter(c => c.tagName === 'LI');
+                if (items.length === 1) {
+                    // Single-item list: treat as a plain paragraph
+                    return htmlToMd(items[0]).trim() + '\n\n';
+                }
+                return items.map(li => '- ' + htmlToMd(li).trim()).join('\n') + '\n\n';
+            }
+            default:
+                return children();
+        }
+    }
+
+    function copyFormatAsMarkdown() {
+        function stripHtml(html) {
+            const tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            return (tmp.textContent || tmp.innerText || '').trim();
+        }
+
+        // Title from the live DOM
+        const h1El = document.querySelector('.format-content h1');
+        let md = '# ' + (h1El ? htmlToMd(h1El).trim() : 'The `.pb` File Format') + '\n\n';
+
+        // Intro paragraphs from the live HTML
+        const introEl = document.getElementById('format-intro');
+        if (introEl) md += htmlToMd(introEl).trim() + '\n\n';
+
+        // Simple example from the live <pre>
+        const examplePb = (document.querySelector('#code pre') || {}).textContent || '';
+        md += '## Simple Example\n\n```\n' + examplePb.trim() + '\n```\n\n';
+
+        // CSV-encoding description from the live HTML
+        const csvDescEl = document.getElementById('format-csv-desc');
+        if (csvDescEl) md += htmlToMd(csvDescEl).trim() + '\n\n';
+
+        const fieldsToMd = (fields, sectionTitle) => {
+            let s = `## ${sectionTitle}\n\n`;
+            fields.forEach(field => {
+                const name = stripHtml(field.field_name);
+                const required = field.if_obligatory;
+                const marker = required ? ' *(required)*' : ' *(optional)*';
+
+                if (name.startsWith('if ')) {
+                    s += `**${name}**\n`;
+                } else if (name === 'other, non-standard fields:') {
+                    s += `- **other, non-standard fields:**\n`;
+                } else {
+                    s += `- **\`${name}\`**`;
+                    if (field.datatype) s += ` *(${field.datatype})*`;
+                    s += marker;
+                    if (field.description) s += ` \u2013 ${stripHtml(field.description)}`;
+                    s += '\n';
+                }
+
+                if (field.options) {
+                    field.options.forEach(opt => {
+                        const optVal = stripHtml(opt.value);
+                        s += `  - \`${optVal}\``;
+                        if (opt.description) s += ` \u2013 ${stripHtml(opt.description)}`;
+                        s += '\n';
+                    });
+                }
+                if (field.additional_info) {
+                    field.additional_info.forEach(info => {
+                        s += `  - ${stripHtml(info)}\n`;
+                    });
+                }
+                if (Array.isArray(field.example)) {
+                    s += `  e.g.: ${field.example.map(e => `\`${e}\``).join(' or ')}\n`;
+                } else if (field.example) {
+                    s += `  e.g.: \`${field.example}\`\n`;
+                }
+            });
+            return s + '\n';
+        };
+
+        md += fieldsToMd(metaFields, 'Section 1: META');
+        md += fieldsToMd(projectFields, 'Section 2: PROJECTS');
+        md += fieldsToMd(voteFields, 'Section 3: VOTES');
+
+        navigator.clipboard.writeText(md).then(() => {
+            const btn = document.getElementById('copy-md-btn');
+            const original = btn.innerHTML;
+            btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-check"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!';
+            btn.classList.add('text-emerald-700', 'border-emerald-400', 'bg-emerald-50');
+            setTimeout(() => {
+                btn.innerHTML = original;
+                btn.classList.remove('text-emerald-700', 'border-emerald-400', 'bg-emerald-50');
+            }, 2000);
+        });
+    }
 </script>
 
 
