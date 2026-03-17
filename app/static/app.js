@@ -189,25 +189,46 @@
             </div>
           </div>
           <span class="qs" title="QS = (avg vote length)³ × (projects)² × (votes). Higher is better.">QS ${t.quality_short}</span>
-          <a class="doc" href="/preview/${t.file_name}" title="Preview" data-track="file_preview" data-track-category="engagement"></a>
-          <a class="visualization" href="/visualize/${t.file_name}" title="Visualize" data-track="file_visualize" data-track-category="engagement"></a>
-          <a class="download" href="/download/${t.file_name}" title="Download" 
-             data-track="file_download" data-track-category="download" 
-             data-filename="${t.file_name}" data-download-type="single"></a>
+          <div class="tile-actions">
+            <a class="doc" href="/preview/${t.file_name}" title="Preview" data-track="file_preview" data-track-category="engagement"></a>
+            <a class="visualization" href="/visualize/${t.file_name}" title="Visualize" data-track="file_visualize" data-track-category="engagement"></a>
+            <a class="download" href="/download/${t.file_name}" title="Download" 
+               data-track="file_download" data-track-category="download" 
+               data-filename="${t.file_name}" data-download-type="single"></a>
+          </div>
+          </div>
         </div>
-        <!-- Mobile compact meta row (hidden on desktop) -->
-        <div class="mobile-meta" aria-hidden="true">
-          <div>
-            <span># votes</span>
-            <strong>${t.num_votes}</strong>
+        <!-- Mobile: summary bar with votes/projects + expand toggle (hidden on desktop) -->
+        <div class="tile-infobar">
+          <div class="tile-infobar-stats">
+            <span class="tis-item"><span class="tis-label"># votes</span><strong>${t.num_votes}</strong></span>
+            <span class="tis-sep">·</span>
+            <span class="tis-item"><span class="tis-label"># projects</span><strong>${t.num_projects}</strong></span>
           </div>
-          <div>
-            <span># projects</span>
-            <strong>${t.num_projects}</strong>
+          <button class="tile-expand-btn" type="button"><span class="tile-expand-label">More</span><svg class="tile-expand-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+        </div>
+        <!-- Mobile: expanded panel with full stats + actions (hidden on desktop) -->
+        <div class="tile-expandable">
+          <div class="mobile-meta">
+            ${t.description ? `<div class="mobile-meta-desc"><span>Description</span><p>${escapeHtml(t.description)}</p></div>` : ''}
+            ${t.vote_type ? `<div><span>Vote type</span><strong>${escapeHtml(t.vote_type)}</strong></div>` : ''}
+            ${t.budget ? `<div><span>Budget</span><strong>${escapeHtml(t.budget)}</strong></div>` : ''}
+            <div><span>Vote length</span><strong>${t.vote_length}</strong></div>
+            ${(t.comments && t.comments.length > 0) ? `
+            <div class="mobile-meta-comment-cell">
+              <button class="mobile-comments-toggle" type="button" onclick="event.stopPropagation();var u=this.closest('.mobile-meta').querySelector('.mobile-comments-list');u.classList.toggle('open');this.classList.toggle('active')">${t.comments.length} comment${t.comments.length !== 1 ? 's' : ''}</button>
+            </div>
+            <ul class="mobile-comments-list">
+              ${t.comments.map(c => `<li><span>•</span><span>${escapeHtml(c)}</span></li>`).join('')}
+            </ul>
+            ` : ''}
           </div>
-          <div>
-            <span>Vote length</span>
-            <strong>${t.vote_length}</strong>
+          <div class="tile-actions-mobile">
+            <a class="doc" href="/preview/${t.file_name}" title="Preview"><span>Preview</span></a>
+            <a class="visualization" href="/visualize/${t.file_name}" title="Visualize"><span>Charts</span></a>
+            <a class="download" href="/download/${t.file_name}" title="Download"
+               data-track="file_download" data-track-category="download"
+               data-filename="${t.file_name}" data-download-type="single"><span>Download</span></a>
           </div>
         </div>
         <div class="grid head">
@@ -522,6 +543,18 @@
   // Selection Logic
   if (container) {
       container.addEventListener('click', (e) => {
+          // Expand button for mobile
+          const expandBtn = e.target.closest('.tile-expand-btn');
+          if (expandBtn) {
+              const parentTile = expandBtn.closest('.tile');
+              if (parentTile) {
+                  parentTile.classList.toggle('expanded');
+                  const label = expandBtn.querySelector('.tile-expand-label');
+                  if (label) label.textContent = parentTile.classList.contains('expanded') ? 'Less' : 'More';
+              }
+              return;
+          }
+
           // Handle tile click for selection (ignoring interactive elements)
           const tile = e.target.closest('.tile');
           if (tile) {
@@ -954,6 +987,16 @@
     scheduleMiniHide();
   }, true);
   window.addEventListener('scroll', ()=>{ if(mini) mini.classList.remove('show'); }, {passive:true});
+
+  // Collapse info-panel to icon-only when scrolled down
+  const infoPanel = document.querySelector('.info-panel');
+  if(infoPanel){
+    const onInfoScroll = () => {
+      infoPanel.classList.toggle('collapsed', window.scrollY > 80);
+    };
+    window.addEventListener('scroll', onInfoScroll, {passive:true});
+    onInfoScroll();
+  }
 
   // Download Form Handler (Progress Bar & Polling)
   const downloadForm = document.getElementById('downloadForm');

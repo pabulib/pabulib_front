@@ -487,6 +487,10 @@ nav#mainNav {
   flex-direction:column;
   gap:6px;
   z-index:20;
+  transition:width .25s ease;
+}
+.info-panel.collapsed{
+  width:38px;
 }
 .info-item{
   position:relative;
@@ -498,11 +502,30 @@ nav#mainNav {
   border:1px solid #e2e8f0;
   background:#f8fafc;
   cursor:default;
-  transition:background .15s;
+  transition:background .15s, padding .25s ease;
+  overflow:hidden;
+}
+.info-panel.collapsed .info-item{
+  padding:8px 9px;
+  justify-content:center;
 }
 .info-item:hover{ background:#f1f5f9; }
 .info-item-icon{ font-size:15px; flex-shrink:0; line-height:1; }
-.info-item-label{ font-size:12px; font-weight:600; color:#475569; line-height:1.2; }
+.info-item-label{
+  font-size:12px;
+  font-weight:600;
+  color:#475569;
+  line-height:1.2;
+  white-space:nowrap;
+  overflow:hidden;
+  max-width:120px;
+  opacity:1;
+  transition:max-width .25s ease, opacity .2s ease;
+}
+.info-panel.collapsed .info-item-label{
+  max-width:0;
+  opacity:0;
+}
 /* Tooltip – floats to the left of the row */
 .info-item-tooltip{
   display:none;
@@ -679,70 +702,62 @@ nav#mainNav {
 /* Tile header responsiveness */
 @media (max-width:768px){
   .tile-header{
+    display:flex;
     flex-direction:row;
-    align-items:flex-start;
+    align-items:center;
     gap:8px;
-    padding:12px 16px;
-    flex-wrap:wrap;
+    padding:12px 14px;
+    flex-wrap:nowrap;
     position:relative;
   }
-  
-  /* First row: checkbox + title + QS */
+
+  /* Checkbox: left, vertically centered */
   .tile-header .row-check{
-    order:1;
     flex-shrink:0;
-    margin-right:8px;
-    margin-top:2px;
+    align-self:center;
+    margin:0;
+  }
+
+  /* Title: fills remaining space, up to 2 lines */
+  .tile-header .title-row{
+    flex:1 1 0;
+    min-width:0;
   }
   .tile-header h2{
     font-size:16px;
-    order:2;
-    flex:0 1 auto;
     margin:0;
     line-height:1.3;
-    word-wrap:break-word;
-    overflow-wrap:break-word;
-    word-break:break-word;
-    white-space:normal;
+    flex:1 1 auto;
     min-width:0;
-    /* Remove desktop limitations */
-    -webkit-line-clamp:unset !important;
-    line-clamp:unset !important;
-    overflow:visible !important;
-    display:block !important;
-    -webkit-box-orient:unset !important;
-    max-width:none !important;
+    max-width:none;
+    display:block;
+    white-space:normal;
+    overflow:visible;
+    word-break:normal;
+    overflow-wrap:break-word;
   }
+
+  /* QS: right, shrink-proof */
   .tile-header .qs{
-    order:3;
+    flex-shrink:0;
     font-size:11px;
     color:#0b6ec5;
     font-weight:700;
-    flex-shrink:0;
-    margin-left:8px;
+    margin-left:auto;
+    white-space:nowrap;
   }
-  
-  /* Hide labels on mobile - unnecessary! */
+
+  /* Hide labels on mobile */
   .tile-header .labels{
     display:none !important;
   }
-  
-  /* Second row: buttons only */
+
+  /* Hide desktop action buttons — moved to expandable */
   .tile-header .doc,
   .tile-header .visualization,
-  .tile-header .download{
-    order:4;
-    margin-top:8px;
-    margin-left:4px;
-    display:inline-block;
-  }
-  
-  /* Ensure action buttons are visible */
-  .tile-header .doc,
-  .tile-header .visualization,
-  .tile-header .download{
-    width:32px;
-    height:32px;
+  .tile-header .download,
+  .tile-actions{
+    display:none;
   }
 }
 
@@ -787,6 +802,8 @@ nav#mainNav {
 
 /* Hidden by default; shown only on mobile breakpoint */
 .mobile-meta{display:none}
+.tile-infobar{display:none}
+.tile-expandable{display:none}
 
 .grid{display:grid;grid-template-columns:2.5fr 0.65fr 0.65fr 0.75fr 1fr 0.65fr;gap:16px;padding:12px 16px}
 .grid.head{font-weight:700;border-bottom:1px solid var(--border)}
@@ -848,6 +865,7 @@ nav#mainNav {
   
   /* Hide full details rows on mobile to avoid duplication with compact meta */
   .tile > .grid:not(.head){display:none}
+  .tile > div > .comments-block{display:none}
   .grid>div{padding:6px 0;border-bottom:1px dashed var(--border)}
   .grid>div:nth-child(odd){font-weight:600}
   
@@ -858,23 +876,165 @@ nav#mainNav {
   .tile-header .qs{font-size:11px;padding:0}
   /* Labels are hidden on mobile so we don't need their styles */
   
-  /* Mobile-only compact meta row */
+  /* ── Info bar: votes/projects left, expand button right ── */
+  .tile-infobar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 14px;
+    border-top:1px solid var(--border);
+    min-height:40px;
+  }
+  .tile-infobar-stats{
+    display:flex;
+    align-items:baseline;
+    gap:6px;
+    font-size:13px;
+  }
+  .tis-item{display:inline-flex;align-items:baseline;gap:3px}
+  .tis-label{font-size:11px;color:#94a3b8}
+  .tis-sep{color:#cbd5e1}
+
+  /* Expand button — right side, minimal */
+  .tile-expand-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    padding:6px 8px;
+    background:none;
+    border:none;
+    font-size:12px;
+    font-family:inherit;
+    color:#64748b;
+    cursor:pointer;
+    border-radius:6px;
+    transition:background .15s, color .15s;
+    flex-shrink:0;
+  }
+  .tile-expand-btn:hover{background:#f1f5f9;color:#374151}
+  .tile-expand-chevron{transition:transform .2s}
+  .tile.expanded .tile-expand-chevron{transform:rotate(180deg)}
+
+  /* Expandable panel */
+  .tile-expandable{display:none}
+  .tile.expanded .tile-expandable{display:block}
+
+  /* Stats grid inside expandable */
   .mobile-meta{
     display:grid;
-    grid-template-columns:repeat(3,1fr);
-    gap:8px;
-    padding:8px 12px;
-    border-bottom:1px solid var(--border);
-    background:#fcfcfe
+    grid-template-columns:repeat(2,1fr);
+    gap:10px 16px;
+    padding:12px 14px 10px;
+    border-top:1px solid var(--border);
   }
   .mobile-meta > div{
     display:flex;
     flex-direction:column;
     gap:2px;
-    align-items:flex-start
   }
-  .mobile-meta span{font-size:11px;color:#64748b}
-  .mobile-meta strong{font-size:14px;color:#0f172a}
+  /* Description: full-width, first row */
+  .mobile-meta-desc{
+    grid-column:1 / -1;
+  }
+  .mobile-meta-desc p{
+    margin:2px 0 0;
+    font-size:13px;
+    color:#374151;
+    line-height:1.45;
+    font-weight:400;
+    display:-webkit-box;
+    -webkit-line-clamp:3;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+  }
+  .mobile-meta span{font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+  .mobile-meta strong{font-size:13px;font-weight:600;color:#1e293b}
+
+  /* Vote length (left col) + comment button (right col) as natural grid cells */
+  .mobile-meta-comment-cell{
+    display:flex;
+    align-items:center;
+  }
+  .mobile-comments-toggle{
+    font-size:11px;
+    color:#64748b;
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    padding:3px 8px;
+    background:#f1f5f9;
+    border:1px solid #e2e8f0;
+    border-radius:999px;
+    white-space:nowrap;
+    font-family:inherit;
+    font-weight:400;
+    line-height:1.4;
+  }
+  .mobile-comments-toggle.active{background:#e2e8f0;border-color:#cbd5e1}
+  .mobile-comments-list{
+    display:none;
+    grid-column:1 / -1;
+    margin:0;
+    padding:0;
+    list-style:none;
+    flex-direction:column;
+    gap:4px;
+  }
+  .mobile-comments-list.open{
+    display:flex;
+  }
+  .mobile-comments-list li{
+    display:flex;
+    gap:6px;
+    font-size:12px;
+    color:#475569;
+    line-height:1.4;
+  }
+  .mobile-comments-list li span:first-child{color:#94a3b8;flex-shrink:0}
+
+  /* Action buttons row inside expandable */
+  .tile-actions-mobile{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:8px;
+    padding:10px 14px 14px;
+    border-top:1px solid var(--border);
+  }
+  .tile-actions-mobile .doc,
+  .tile-actions-mobile .visualization,
+  .tile-actions-mobile .download{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    padding:10px 8px;
+    border:1px solid var(--border);
+    border-radius:10px;
+    background:#fff;
+    color:#374151;
+    font-size:12px;
+    font-weight:500;
+    text-decoration:none;
+    transition:background .15s;
+  }
+  .tile-actions-mobile .doc:hover,
+  .tile-actions-mobile .visualization:hover,
+  .tile-actions-mobile .download:hover{background:#f8fafc}
+  .tile-actions-mobile .doc::before,
+  .tile-actions-mobile .visualization::before,
+  .tile-actions-mobile .download::before{
+    content:'';
+    display:block;
+    width:22px;
+    height:22px;
+    background-size:contain;
+    background-repeat:no-repeat;
+    background-position:center;
+  }
+  .tile-actions-mobile .doc::before{background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="%23374151" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>')}
+  .tile-actions-mobile .visualization::before{background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="%23374151" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/></svg>')}
+  .tile-actions-mobile .download::before{background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="%23374151" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>')}
 }
 
 /* Extra small screens */
@@ -890,7 +1050,6 @@ nav#mainNav {
   
   .tile-header h2{
     font-size:14px;
-    max-width:calc(100% - 140px); /* space for QS + buttons */
   }
   
   /* QS and labels already hidden above */
@@ -908,16 +1067,6 @@ nav#mainNav {
     min-width:auto;
     padding:10px 12px;
     font-size:14px;
-  }
-  
-  .mobile-meta{
-    grid-template-columns:1fr 1fr;
-    gap:6px;
-  }
-  
-  .mobile-meta > div:nth-child(3){
-    grid-column:1 / -1;
-    text-align:center;
   }
 }
 
