@@ -5,13 +5,7 @@
 
 {% block body %}
     <div class="layout">
-      <!-- Mobile-only Filter toggle button -->
-      <div class="md:hidden flex items-center justify-between -mt-2 mb-2">
-        <button id="openFilters" aria-expanded="false" class="inline-flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg shadow-sm text-slate-700">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12 10 19 14 21 14 12 22 3"></polygon></svg>
-          Filters
-        </button>
-      </div>
+
   <aside class="sidebar" id="filtersPanel" aria-hidden="true">
         <!-- Drawer header (mobile) with close button -->
         <div class="md:hidden flex items-center justify-between sticky top-0 bg-white pb-2 pt-1 -mt-1" style="z-index:1">
@@ -33,14 +27,6 @@
             </select>
             <button type="button" id="orderDir" title="Toggle sort direction">⇅</button>
           </div>
-          <details class="micro-note">
-            <summary>Quality score (QS)</summary>
-            <div>
-              QS is a simple heuristic to surface richer datasets. Higher is better.
-              <br><br>
-              <span class="formula">QS = (avg vote length)<sup>2</sup> × (projects) × (votes)<sup>1/2</sup></span>.
-            </div>
-          </details>
         </div>
 
         <div class="field">
@@ -102,35 +88,40 @@
       <form id="downloadForm" method="post" action="{{ url_for('main.download_selected') }}" 
             data-track-form="batch_download" data-form-type="download">
         <header class="toolbar">
-          <input id="search" class="search" placeholder="Search..." />
-          <label class="select-all"><input id="selectAll" type="checkbox" /> Select all</label>
-          <div class="spacer"></div>
-          <div class="count"><span id="count">{{ count }}</span> PBs found</div>
-          <button id="downloadBtn" class="primary" type="submit" disabled 
-                  data-track="batch_download" data-track-category="download">Download selected</button>
-        </header>
-
-        <!-- Small hint about faster "Select all" download using pre-built archive -->
-        <div class="mt-2 text-xs text-slate-500">
-          Tip: Selecting "Select all" will use a pre-built archive (all_pb_files.zip) and starts faster. Individual selections are zipped on the server and may take a bit longer.
-        </div>
-
-        <!-- Information about permanent download links -->
-        <div class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <div class="flex items-start gap-2">
-            <svg class="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
-            </svg>
-            <div class="text-xs text-blue-800">
-              <div class="font-medium mb-1">📄 Permanent Download Links</div>
-              <div class="text-blue-700">
-                Multi-file downloads include a <code class="px-1 py-0.5 bg-blue-100 rounded text-blue-900 font-mono">_PERMANENT_DOWNLOAD_LINK.txt</code> with a permanent URL.
-                This link will always download the exact same files, even if they are updated later.
-                <span class="inline-block ml-1 text-blue-600 hover:text-blue-800 cursor-help" title="The same set of files always generates the same permanent URL">♻️</span>
-              </div>
+          <div class="toolbar-search-row">
+            <input id="search" class="search" placeholder="Search..." />
+            <button id="openFilters" type="button" class="filter-toggle-btn" aria-expanded="false" aria-label="Open filters">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12 10 19 14 21 14 12 22 3"></polygon></svg>
+            </button>
+          </div>
+          <div class="count"><span id="count">{{ count }}</span><span class="count-label"> PBs found</span></div>
+          <div class="toolbar-actions">
+            <label class="select-all"><input id="selectAll" type="checkbox" /> Select all</label>
+            <button id="downloadBtn" class="primary" type="submit" disabled
+                    data-track="batch_download" data-track-category="download">Download selected</button>
+          </div>
+          <div class="toolbar-mobile-info">
+            <div class="tb-chips-row">
+              <button type="button" class="tb-chip" data-tip="tb-tip-tip">💡 Tip</button>
+              <button type="button" class="tb-chip" data-tip="tb-tip-links">🔗 Links</button>
+              <button type="button" class="tb-chip" data-tip="tb-tip-qs">⭐ QS</button>
+            </div>
+            <div class="tb-tip-panel" id="tb-tip-tip">
+              <button type="button" class="tb-tip-close" aria-label="Close">✕</button>
+              Downloading <em>all</em> files is faster — the full archive is pre-built on the server. Individual files are zipped on demand, which may take a moment.
+            </div>
+            <div class="tb-tip-panel" id="tb-tip-links">
+              <button type="button" class="tb-tip-close" aria-label="Close">✕</button>
+              Multi-file downloads include a <code>_PERMANENT_DOWNLOAD_LINK.txt</code> with a permanent URL that always downloads the exact same files.
+            </div>
+            <div class="tb-tip-panel" id="tb-tip-qs">
+              <button type="button" class="tb-tip-close" aria-label="Close">✕</button>
+              Quality score — a heuristic to surface richer datasets. Higher is better, used as the default sort order.<br><span class="formula">QS = (avg vote length)<sup>2</sup> × (projects) × (votes)<sup>1/2</sup></span>
             </div>
           </div>
-        </div>
+        </header>
+
+
 
         <!-- Download progress (hidden by default) -->
         <div id="downloadProgress" class="hidden mt-4">
@@ -290,5 +281,22 @@
     <script src="{{ url_for('main.static', filename='app.js') }}"></script>
   </div>
     </div>
+  <aside class="info-panel">
+    <div class="info-item">
+      <span class="info-item-icon">💡</span>
+      <span class="info-item-label">Tip</span>
+      <div class="info-item-tooltip">Downloading <em>all</em> files is faster — the full archive is pre-built on the server. Selecting individual files requires zipping them on demand, which may take a moment.</div>
+    </div>
+    <div class="info-item">
+      <span class="info-item-icon">🔗</span>
+      <span class="info-item-label">Permanent links</span>
+      <div class="info-item-tooltip">Multi-file downloads include a <code>_PERMANENT_DOWNLOAD_LINK.txt</code> with a permanent URL. It always downloads the exact same files, even if they are updated later.</div>
+    </div>
+    <div class="info-item">
+      <span class="info-item-icon">⭐</span>
+      <span class="info-item-label">Quality score&nbsp;(QS)</span>
+      <div class="info-item-tooltip">A heuristic to surface richer datasets. Higher is better — used as the default sort order so the most data-rich datasets appear first.<br><br><span class="formula">QS = (avg vote length)<sup>2</sup> × (projects) × (votes)<sup>1/2</sup></span></div>
+    </div>
+  </aside>
     {% include 'footer.html' %}
 {% endblock %}

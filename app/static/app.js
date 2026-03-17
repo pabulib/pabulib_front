@@ -573,9 +573,6 @@
       selectAll.addEventListener('change', (e) => {
           const checked = e.target.checked;
           isSelectAllActive = checked;
-          
-          // If global select all is active, we don't need to manually add every file to the set
-          // But we should visually check visible boxes
           $$('.row-check').forEach(cb => {
               cb.checked = checked;
               const file = cb.dataset.file;
@@ -1138,6 +1135,30 @@
             fetchTiles(true);
         }
         updateFilterAvailability();
+
+        // Mobile info chips toggle
+        const chips = document.querySelectorAll('.tb-chip');
+        const panels = document.querySelectorAll('.tb-tip-panel');
+        chips.forEach(chip => {
+            chip.addEventListener('click', () => {
+                const targetId = chip.dataset.tip;
+                const panel = document.getElementById(targetId);
+                const isOpen = panel.classList.contains('open');
+                panels.forEach(p => p.classList.remove('open'));
+                chips.forEach(c => c.classList.remove('active'));
+                if (!isOpen) {
+                    panel.classList.add('open');
+                    chip.classList.add('active');
+                }
+            });
+        });
+        panels.forEach(panel => {
+            const closeBtn = panel.querySelector('.tb-tip-close');
+            if (closeBtn) closeBtn.addEventListener('click', () => {
+                panel.classList.remove('open');
+                chips.forEach(c => c.classList.remove('active'));
+            });
+        });
     });
     // Re-run when new content is loaded dynamically
     document.addEventListener('contentLoaded', interceptDownloads);
