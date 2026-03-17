@@ -988,16 +988,6 @@
   }, true);
   window.addEventListener('scroll', ()=>{ if(mini) mini.classList.remove('show'); }, {passive:true});
 
-  // Collapse info-panel to icon-only when scrolled down
-  const infoPanel = document.querySelector('.info-panel');
-  if(infoPanel){
-    const onInfoScroll = () => {
-      infoPanel.classList.toggle('collapsed', window.scrollY > 80);
-    };
-    window.addEventListener('scroll', onInfoScroll, {passive:true});
-    onInfoScroll();
-  }
-
   // Download Form Handler (Progress Bar & Polling)
   const downloadForm = document.getElementById('downloadForm');
   if (downloadForm) {
@@ -1178,6 +1168,16 @@
             fetchTiles(true);
         }
         updateFilterAvailability();
+
+        // Collapse info-panel to icon-only when scrolled down
+        const infoPanel = document.querySelector('.info-panel');
+        if(infoPanel){
+          const onInfoScroll = () => {
+            infoPanel.classList.toggle('collapsed', window.scrollY > 80);
+          };
+          window.addEventListener('scroll', onInfoScroll, {passive:true});
+          onInfoScroll();
+        }
 
         // Mobile info chips toggle
         const chips = document.querySelectorAll('.tb-chip');
