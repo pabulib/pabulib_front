@@ -6,14 +6,15 @@
 {% block body %}
 <section class="max-w-5xl mx-auto px-4">
   <div class="flex justify-center">
-    <div class="w-full max-w-5xl bg-white rounded-lg shadow-lg p-8 mt-8 mb-32">
+    <div class="w-full max-w-5xl bg-white rounded-lg shadow-lg p-4 sm:p-8 mt-8 mb-32 overflow-x-hidden">
       <div class="flex items-baseline justify-between mb-6">
         <h1 class="text-3xl font-bold text-slate-800">Details</h1>
-        <div class="text-sm text-gray-500">Explore comments, categories, targets and rules used across the library</div>
+        <div class="text-sm text-gray-500 hidden sm:block">Explore comments, categories, targets and rules used across the library</div>
       </div>
 
       <!-- Tabs -->
-      <div class="flex items-center gap-2 mb-6">
+      <div class="overflow-x-auto pb-1 mb-6">
+        <div class="flex items-center gap-2 w-max">
         {% set tabs = [
           {'id':'comments','label':'Comments','desc':'from META.comment, split by #n:'},
           {'id':'categories','label':'Categories','desc':'from PROJECTS.category/categories'},
@@ -25,9 +26,10 @@
              class="px-3 py-1.5 rounded-md text-sm border transition-colors {{ 'bg-indigo-600 text-white border-indigo-600' if tab==t.id else 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50' }}"
              data-tab-target="{{ t.id }}" data-track="tab_switch" data-track-category="navigation">{{ t.label }}</a>
         {% endfor %}
-        <span class="ml-3 text-xs text-gray-500">
+        <span class="ml-3 text-xs text-gray-500 whitespace-nowrap">
           {% if tab=='comments' %}{{ total_comments }} items{% elif tab=='categories' %}{{ total_categories }} items{% elif tab=='targets' %}{{ total_targets }} items{% else %}{{ total_rules }} items{% endif %}
         </span>
+        </div>
       </div>
 
       {% if tab=='comments' %}
@@ -35,34 +37,45 @@
         {% set groups_country = groups_comments_country %}
         {% set groups_country_unit = groups_comments_country_unit %}
         {% set groups_country_unit_instance = groups_comments_country_unit_instance %}
-        <p class="text-gray-600 mb-4">Parsed from META key <code class="bg-gray-100 px-2 py-1 rounded text-sm">comment</code> using pattern <code class="bg-gray-100 px-2 py-1 rounded text-sm">#n:</code> segments. Showing how many PB files share each comment. <a href="{{ url_for('main.format_page') }}#comment-field" class="text-blue-700 hover:text-blue-900 underline text-sm">→ View field specification</a></p>
+        <p class="text-gray-600 mb-4 break-words">Parsed from META key <code class="bg-gray-100 px-2 py-1 rounded text-sm">comment</code> using pattern <code class="bg-gray-100 px-2 py-1 rounded text-sm">#n:</code> segments. Showing how many PB files share each comment. <a href="{{ url_for('main.format_page') }}#comment-field" class="text-blue-700 hover:text-blue-900 underline text-sm">→ View field specification</a></p>
       {% elif tab=='categories' %}
         {% set rows = rows_categories %}
         {% set groups_country = groups_categories_country %}
         {% set groups_country_unit = groups_categories_country_unit %}
         {% set groups_country_unit_instance = groups_categories_country_unit_instance %}
-        <p class="text-gray-600 mb-4">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">PROJECTS.category</code> (comma-separated or lists). Grouped by distinct token per file. <a href="{{ url_for('main.format_page') }}#category-field" class="text-blue-700 hover:text-blue-900 underline text-sm">→ View field specification</a></p>
+        <p class="text-gray-600 mb-4 break-words">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">PROJECTS.category</code> (comma-separated or lists). Grouped by distinct token per file. <a href="{{ url_for('main.format_page') }}#category-field" class="text-blue-700 hover:text-blue-900 underline text-sm">→ View field specification</a></p>
       {% elif tab=='targets' %}
         {% set rows = rows_targets %}
         {% set groups_country = groups_targets_country %}
         {% set groups_country_unit = groups_targets_country_unit %}
         {% set groups_country_unit_instance = groups_targets_country_unit_instance %}
-        <p class="text-gray-600 mb-4">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">PROJECTS.target</code> (comma-separated or lists). Grouped by distinct token per file. <a href="{{ url_for('main.format_page') }}#target-field" class="text-blue-700 hover:text-blue-900 underline text-sm">→ View field specification</a></p>
+        <p class="text-gray-600 mb-4 break-words">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">PROJECTS.target</code> (comma-separated or lists). Grouped by distinct token per file. <a href="{{ url_for('main.format_page') }}#target-field" class="text-blue-700 hover:text-blue-900 underline text-sm">→ View field specification</a></p>
       {% else %}
         {% set rows = rows_rules %}
         {% set groups_country = groups_rules_country %}
         {% set groups_country_unit = groups_rules_country_unit %}
         {% set groups_country_unit_instance = groups_rules_country_unit_instance %}
-        <p class="text-gray-600 mb-4">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">META.rule</code>. Shows which PB files use each voting rule, grouped by location. <a href="{{ url_for('main.format_page') }}#rule-field" class="text-blue-700 hover:text-blue-900 underline text-sm">→ View field specification</a></p>
+        <p class="text-gray-600 mb-4 break-words">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">META.rule</code>. Shows which PB files use each voting rule, grouped by location. <a href="{{ url_for('main.format_page') }}#rule-field" class="text-blue-700 hover:text-blue-900 underline text-sm">→ View field specification</a></p>
       {% endif %}
+
+      <!-- Group by selector for mobile (shown above table on mobile, hidden on desktop) -->
+      <div class="flex items-center gap-2 mb-3 sm:hidden">
+        <span class="text-xs text-gray-500">Group by</span>
+        <select id="groupModeMobile" class="text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-700">
+          <option value="none">None</option>
+          <option value="country">Country</option>
+          <option value="country_unit" selected>Country + Unit</option>
+          <option value="country_unit_instance">Country + Unit + Instance</option>
+        </select>
+      </div>
 
       <div class="overflow-x-auto">
         <table class="min-w-full bg-white border border-gray-200 rounded-lg overflow-hidden">
           <thead class="bg-gray-100">
             <tr>
-              <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-b border-gray-200" style="width:45%">{{ 'Comment' if tab=='comments' else ( 'Category' if tab=='categories' else ( 'Target' if tab=='targets' else 'Rule' ) ) }}</th>
-              <th class="px-4 py-4 text-center text-sm font-semibold text-gray-700 border-b border-gray-200" style="width:10%"># files</th>
-              <th class="px-6 py-4 text-left text-sm font-semibold text-gray-700 border-b border-gray-200" style="width:45%">
+              <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-sm font-semibold text-gray-700 border-b border-gray-200">{{ 'Comment' if tab=='comments' else ( 'Category' if tab=='categories' else ( 'Target' if tab=='targets' else 'Rule' ) ) }}</th>
+              <th class="px-3 sm:px-4 py-3 sm:py-4 text-center text-sm font-semibold text-gray-700 border-b border-gray-200"># files</th>
+              <th class="hidden sm:table-cell px-6 py-4 text-left text-sm font-semibold text-gray-700 border-b border-gray-200">
                 <div class="flex items-center gap-3">
                   <span>Files</span>
                   <label class="flex items-center gap-2 text-xs font-normal text-gray-500">
@@ -81,11 +94,11 @@
           <tbody class="divide-y divide-gray-200">
             {% for label, count, files in rows %}
             <tr class="hover:bg-gray-50">
-              <td class="px-6 py-4 text-sm text-gray-900">{{ label }}</td>
-              <td class="px-4 py-4 text-center">
+              <td class="px-3 sm:px-6 py-3 sm:py-4 text-sm text-gray-900">{{ label }}</td>
+              <td class="px-3 sm:px-4 py-3 sm:py-4 text-center">
                 <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800">{{ count }}</span>
               </td>
-              <td class="px-6 py-4">
+              <td class="hidden sm:table-cell px-6 py-4">
                 {% set preview = files[:5] %}
                 <div class="files-cell">
                   <div class="file-list text-sm"
@@ -112,7 +125,12 @@
 // Expand/collapse and grouping behavior (reused from comments)
 (function(){
   const PREVIEW_COUNT = 5;
-  function getGroupMode(){ const el = document.getElementById('groupMode'); return el ? el.value : 'none'; }
+  function getGroupMode(){
+    const mob = document.getElementById('groupModeMobile');
+    const desk = document.getElementById('groupMode');
+    if(mob && mob.offsetParent !== null) return mob.value;
+    return desk ? desk.value : 'none';
+  }
   function renderFilesFlat(container, files, expanded){
     if(expanded){
       container.innerHTML = files.map(f => `<span class="file-item">${f}</span>`).join('');
@@ -176,7 +194,7 @@
   }
   document.querySelectorAll('.file-list').forEach(el => render(el, false));
   addEventListener('change', (e)=>{
-    if(e.target && e.target.id === 'groupMode'){
+    if(e.target && (e.target.id === 'groupMode' || e.target.id === 'groupModeMobile')){
       document.querySelectorAll('.file-list').forEach(el => {
         const expanded = el.dataset.expanded === '1';
         render(el, expanded);

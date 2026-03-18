@@ -705,6 +705,11 @@ nav#mainNav {
 .sidebar #filtersClear:active{
   transform:translateY(0.5px);
 }
+.sidebar #filtersClear:disabled{
+  opacity:0.38;
+  cursor:not-allowed;
+  pointer-events:none;
+}
 /* Drawer layout — hidden on desktop, visible on mobile */
 .drawer-header{display:none;}
 .drawer-footer{display:none;}

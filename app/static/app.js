@@ -123,6 +123,15 @@
       badge.classList.toggle('visible', n > 0);
     }
     if (openFiltersBtn) openFiltersBtn.classList.toggle('active', n > 0);
+    const clearBtn = document.getElementById('filtersClear');
+    if (clearBtn) {
+      clearBtn.textContent = n > 0 ? `Clear filters (${n})` : 'Clear filters';
+      clearBtn.disabled = n === 0;
+    }
+    const drawerClear = document.getElementById('drawerClearAll');
+    if (drawerClear) {
+      drawerClear.textContent = n > 0 ? `Clear all filters (${n})` : 'Clear all filters';
+    }
   }
 
   function updateDrawerFooter() {

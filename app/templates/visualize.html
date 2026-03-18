@@ -16,10 +16,10 @@
   </div>
 
   <!-- File header with name, stats, and actions -->
-  <div class="bg-white rounded-lg shadow-lg mb-6 p-6">
-    <div class="flex justify-between items-start">
-      <div>
-        <h2 class="text-2xl font-bold text-slate-800 mb-2">Visualization: {{ filename }}</h2>
+  <div class="bg-white rounded-lg shadow-lg mb-6 p-4 sm:p-6 overflow-hidden">
+    <div class="flex flex-col sm:flex-row sm:flex-wrap sm:justify-between sm:items-start gap-3">
+      <div class="min-w-0 w-full sm:w-auto sm:flex-1">
+        <h2 class="text-lg sm:text-2xl font-bold text-slate-800 mb-2" style="overflow-wrap:anywhere;word-break:break-all;">Visualization: {{ filename }}</h2>
         <div class="flex gap-2">
           <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800">Projects: {{ counts.projects }}</span>
           <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800">Votes: {{ counts.votes }}</span>
@@ -36,10 +36,10 @@
   <div class="space-y-6">
     
     <!-- Vote Length Distribution -->
-    <div class="bg-white rounded-lg shadow-lg p-6">
+    <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Vote Length Distribution</h3>
       <p class="text-sm text-gray-600 mb-4">Distribution of how many projects each voter selected</p>
-      <div class="h-96">
+      <div class="h-64 sm:h-96">
         <!-- voteLengthChart shows the distribution of the number of projects selected per voter,
              using vote_length_data from the backend -->
         <canvas id="voteLengthChart"></canvas>
@@ -47,46 +47,46 @@
     </div>
 
     <!-- Project Cost Distribution -->
-    <div class="bg-white rounded-lg shadow-lg p-6">
+    <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Project Cost Distribution</h3>
-      <div class="h-96">
+      <div class="h-64 sm:h-96">
         <canvas id="costChart"></canvas>
       </div>
     </div>
 
 
     <!-- Approval Histogram -->
-    <div class="bg-white rounded-lg shadow-lg p-6">
+    <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Histogram: Number of Approvals per Project</h3>
       <p class="text-sm text-gray-600 mb-4">Shows how many projects received a given number of approvals</p>
-      <div class="h-96">
+      <div class="h-64 sm:h-96">
         <canvas id="approvalHistogramChart"></canvas>
       </div>
     </div>
 
 
     <!-- Budget vs Votes Scatter Plot -->
-    <div class="bg-white rounded-lg shadow-lg p-6">
+    <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Project Cost vs Votes Received</h3>
-      <div class="h-96">
+      <div class="h-64 sm:h-96">
         <canvas id="scatterChart"></canvas>
       </div>
     </div>
 
 
     <!-- Vote Distribution -->
-    <!-- <div class="bg-white rounded-lg shadow-lg p-6">
+    <!-- <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Vote Distribution by Project</h3>
-      <div class="h-96">
+      <div class="h-64 sm:h-96">
         <canvas id="voteChart"></canvas>
       </div>
     </div> -->
 
     <!-- Project Categories (if available) -->
     {% if project_categories %}
-    <div class="bg-white rounded-lg shadow-lg p-6">
+    <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Projects by Category</h3>
-      <div class="h-96">
+      <div class="h-64 sm:h-96">
         <canvas id="categoryChart"></canvas>
       </div>
     </div>
@@ -97,7 +97,7 @@
     {% if voter_demographics %}
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       {% if voter_demographics.age %}
-      <div class="bg-white rounded-lg shadow-lg p-6">
+      <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
         <h3 class="text-xl font-bold text-slate-800 mb-4">Voter Age Distribution</h3>
         <div class="h-64">
           <canvas id="ageChart"></canvas>
@@ -106,7 +106,7 @@
       {% endif %}
       
       {% if voter_demographics.sex %}
-      <div class="bg-white rounded-lg shadow-lg p-6">
+      <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
         <h3 class="text-xl font-bold text-slate-800 mb-4">Voter Gender Distribution</h3>
         <div class="h-64">
           <canvas id="genderChart"></canvas>
@@ -118,9 +118,9 @@
 
 
     <!-- Top Projects by Votes -->
-    <div class="bg-white rounded-lg shadow-lg p-6">
+    <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Top 15 Most Popular Projects</h3>
-      <div class="h-96">
+      <div class="h-64 sm:h-96">
         <canvas id="topProjectsChart"></canvas>
       </div>
     </div>
@@ -128,10 +128,10 @@
 
     <!-- Project Selection Rate -->
     <!-- {% if selection_data %}
-    <div class="bg-white rounded-lg shadow-lg p-6">
+    <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Project Selection vs Cost Efficiency</h3>
       <p class="text-sm text-gray-600 mb-4">Selected projects (green) vs not selected (red) by cost and votes</p>
-      <div class="h-96">
+      <div class="h-64 sm:h-96">
         <canvas id="selectionChart"></canvas>
       </div>
     </div>
@@ -139,16 +139,16 @@
 
     <!-- Cost Distribution by Category -->
     {% if category_cost_data %}
-    <div class="bg-white rounded-lg shadow-lg p-6">
+    <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Average Project Cost by Category</h3>
-      <div class="h-[460px]">
+      <div class="h-72 sm:h-[460px]">
         <canvas id="categoryCostChart"></canvas>
       </div>
     </div>
     {% endif %}
 
     <!-- Summary Statistics -->
-    <!-- <div class="bg-white rounded-lg shadow-lg p-6">
+    <!-- <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Summary Statistics</h3>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div class="text-center">
@@ -168,7 +168,7 @@
 
     <!-- Correlation Heatmap
     {% if correlation_data %}
-    <div class="bg-white rounded-lg shadow-lg p-6">
+    <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Project Metrics Correlation</h3>
       <p class="text-sm text-gray-600 mb-4">Correlation between cost, votes, and selection status</p>
       <div class="h-64">
@@ -178,7 +178,7 @@
     {% endif %} -->
 
     <!-- Project Similarity Map (using Jaccard distance) -->
-    <div class="bg-white rounded-lg shadow-lg p-6">
+    <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
       <h3 class="text-xl font-bold text-slate-800 mb-4">Project Similarity Map</h3>
       <p class="text-sm text-gray-600 mb-4">
         Each circle represents a project. Circle size shows cost, darkness shows votes received (more votes = darker).
