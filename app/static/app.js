@@ -96,6 +96,40 @@
     return false;
   }
 
+  function countActiveFilters() {
+    const v = getFilterValues();
+    let n = 0;
+    if (v.search) n++;
+    if (v.country) n++;
+    if (v.city) n++;
+    if (v.year) n++;
+    if (v.votes_min || v.votes_max) n++;
+    if (v.projects_min || v.projects_max) n++;
+    if (v.len_min || v.len_max) n++;
+    if (v.type) n++;
+    if (v.exclude_fully) n++;
+    if (v.exclude_experimental) n++;
+    if (v.require_geo) n++;
+    if (v.require_target) n++;
+    if (v.require_category) n++;
+    return n;
+  }
+
+  function updateFilterBadge() {
+    const n = countActiveFilters();
+    const badge = document.getElementById('filterBadge');
+    if (badge) {
+      badge.textContent = n > 0 ? n : '';
+      badge.classList.toggle('visible', n > 0);
+    }
+    if (openFiltersBtn) openFiltersBtn.classList.toggle('active', n > 0);
+  }
+
+  function updateDrawerFooter() {
+    const el = document.getElementById('drawerResultsCount');
+    if (el) el.textContent = totalCount;
+  }
+
   function escapeHtml(text) {
     if (text == null) return '';
     return String(text)
@@ -406,6 +440,7 @@
         
         totalCount = data.total;
         if (countEl) countEl.textContent = totalCount;
+        updateDrawerFooter();
 
         if (data.tiles.length < limit) {
             hasMore = false;
@@ -489,6 +524,7 @@
 
   function updateFilters() {
     updateFilterAvailability();
+    updateFilterBadge();
     fetchTiles(true);
   }
 
@@ -663,6 +699,11 @@
   }
 
   // Mobile Drawer
+  const drawerShowBtn = document.getElementById('drawerShowResults');
+  const drawerClearBtn = document.getElementById('drawerClearAll');
+  if (drawerShowBtn) drawerShowBtn.addEventListener('click', closeDrawer);
+  if (drawerClearBtn) drawerClearBtn.addEventListener('click', () => { window.location.href = '/'; });
+
   function ensureBackdrop(){
     if (filtersBackdrop) return filtersBackdrop;
     filtersBackdrop = document.createElement('div');
@@ -1168,6 +1209,8 @@
             fetchTiles(true);
         }
         updateFilterAvailability();
+        updateFilterBadge();
+        updateDrawerFooter();
 
         // Collapse info-panel to icon-only when scrolled down
         const infoPanel = document.querySelector('.info-panel');

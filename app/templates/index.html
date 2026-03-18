@@ -7,13 +7,18 @@
     <div class="layout">
 
   <aside class="sidebar" id="filtersPanel" aria-hidden="true">
-        <!-- Drawer header (mobile) with close button -->
-        <div class="md:hidden flex items-center justify-between sticky top-0 bg-white pb-2 pt-1 -mt-1" style="z-index:1">
-          <div class="font-semibold text-slate-700">Filters</div>
-          <button id="closeFilters" class="inline-flex items-center justify-center w-8 h-8 rounded-md border border-slate-200 text-slate-600" aria-label="Close filters">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-          </button>
-        </div>
+    <!-- Drawer header (mobile only) -->
+    <div class="drawer-header">
+      <span class="drawer-title">Filters</span>
+      <button id="closeFilters" class="drawer-close-btn" aria-label="Close filters">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <!-- Scrollable filter body -->
+    <div class="drawer-body">
+
+      <div class="filter-section">
+        <div class="filter-section-title">Sort</div>
         <div class="field">
           <label>Order by</label>
           <div class="row">
@@ -28,7 +33,10 @@
             <button type="button" id="orderDir" title="Toggle sort direction">⇅</button>
           </div>
         </div>
+      </div>
 
+      <div class="filter-section">
+        <div class="filter-section-title">Location</div>
         <div class="field">
           <label>Country</label>
           <select id="filterCountry"><option value="">All countries</option></select>
@@ -41,20 +49,26 @@
           <label>Year of election</label>
           <select id="filterYear"><option value="">All years</option></select>
         </div>
+      </div>
 
+      <div class="filter-section">
+        <div class="filter-section-title">Metrics</div>
         <div class="field two">
           <label>Number of votes</label>
-          <div class="range"><input id="votesMin" placeholder="Min" inputmode="numeric"><span>–</span><input id="votesMax" placeholder="Max" inputmode="numeric"></div>
+          <div class="range"><input id="votesMin" type="number" min="0" step="1" placeholder="Min" inputmode="numeric"><span>–</span><input id="votesMax" type="number" min="0" step="1" placeholder="Max" inputmode="numeric"></div>
         </div>
         <div class="field two">
           <label>Number of projects</label>
-          <div class="range"><input id="projectsMin" placeholder="Min" inputmode="numeric"><span>–</span><input id="projectsMax" placeholder="Max" inputmode="numeric"></div>
+          <div class="range"><input id="projectsMin" type="number" min="0" step="1" placeholder="Min" inputmode="numeric"><span>–</span><input id="projectsMax" type="number" min="0" step="1" placeholder="Max" inputmode="numeric"></div>
         </div>
         <div class="field two">
           <label>Average vote length</label>
-          <div class="range"><input id="lenMin" placeholder="Min" inputmode="decimal"><span>–</span><input id="lenMax" placeholder="Max" inputmode="decimal"></div>
+          <div class="range"><input id="lenMin" type="number" min="0" step="0.01" placeholder="Min" inputmode="decimal"><span>–</span><input id="lenMax" type="number" min="0" step="0.01" placeholder="Max" inputmode="decimal"></div>
         </div>
+      </div>
 
+      <div class="filter-section">
+        <div class="filter-section-title">Vote type</div>
         <div class="field">
           <label>Vote type</label>
           <select id="filterType">
@@ -66,23 +80,35 @@
             <option value="choose-1">Choose-1</option>
           </select>
         </div>
+      </div>
+
+      <div class="filter-section">
+        <div class="filter-section-title">Features</div>
         <div class="field">
           <label>Show datasets with</label>
           <label class="checkbox"><input id="requireGeo" type="checkbox"> <span class="badge geo" title="Includes project coordinates">Geo</span> Project coordinates</label>
           <label class="checkbox"><input id="requireTarget" type="checkbox"> <span class="badge target" title="Includes project targets">Tgt</span> Project targets</label>
           <label class="checkbox"><input id="requireCategory" type="checkbox"> <span class="badge category" title="Includes project categories">Cat</span> Project categories</label>
         </div>
-
         <div class="field">
           <label>Exclude datasets if</label>
           <label class="checkbox"><input id="excludeFully" type="checkbox"> Fully funded</label>
           <label class="checkbox"><input id="excludeExperimental" type="checkbox"> Experimental</label>
         </div>
+      </div>
 
-        <div class="field">
-          <button id="filtersClear" type="button">Clear filters</button>
-        </div>
-      </aside>
+    </div><!-- /.drawer-body -->
+
+    <!-- Sticky footer (mobile drawer only) -->
+    <div class="drawer-footer">
+      <button id="drawerShowResults" type="button" class="drawer-show-btn">Show <span id="drawerResultsCount">...</span> results</button>
+      <button id="drawerClearAll" type="button" class="drawer-clear-btn">Clear all filters</button>
+    </div>
+    <!-- Desktop-only clear button (outside drawer body, clipped on mobile by overflow:hidden) -->
+    <div class="sidebar-clear">
+      <button id="filtersClear" type="button">Clear filters</button>
+    </div>
+  </aside>
 
       <div class="container">
       <form id="downloadForm" method="post" action="{{ url_for('main.download_selected') }}" 
@@ -92,6 +118,7 @@
             <input id="search" class="search" placeholder="Search..." />
             <button id="openFilters" type="button" class="filter-toggle-btn" aria-expanded="false" aria-label="Open filters">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12 10 19 14 21 14 12 22 3"></polygon></svg>
+              <span id="filterBadge" class="filter-badge"></span>
             </button>
           </div>
           <div class="count"><span id="count">{{ count }}</span><span class="count-label"> PBs found</span></div>

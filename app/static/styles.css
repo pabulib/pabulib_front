@@ -111,7 +111,7 @@ nav#mainNav {
   background:#fff;
   border:1px solid var(--border);
   border-radius:16px;
-  padding:12px;
+  padding:10px;
   height:fit-content;
   box-shadow:0 4px 12px rgba(0,0,0,0.05);
   position:sticky;
@@ -129,7 +129,7 @@ nav#mainNav {
     padding-top:16px; /* breathing room below nav */
   }
 }
-.sidebar .field{display:flex;flex-direction:column;margin-bottom:8px}
+.sidebar .field{display:flex;flex-direction:column;margin-bottom:5px}
 .sidebar .field:last-child{margin-bottom:0}
 .sidebar .field.two .range{display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center}
 .sidebar .field.two .range > *{min-width:0}
@@ -179,6 +179,10 @@ nav#mainNav {
   transition:all 0.2s ease;
   box-shadow:0 1px 2px rgba(0,0,0,0.02);
 }
+/* Hide number input spinners */
+.sidebar .field.two input[type="number"]::-webkit-inner-spin-button,
+.sidebar .field.two input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+.sidebar .field.two input[type="number"]{-moz-appearance:textfield;}
 .sidebar select:focus,
 .sidebar input:focus{
   outline:none;
@@ -208,10 +212,10 @@ nav#mainNav {
   left:50%;
   transform:translate(-50%, -50%);
 }
-.sidebar .row{display:flex;gap:4px;align-items:center;flex-wrap:nowrap}
+.sidebar .row{display:flex;gap:4px;align-items:center;flex-wrap:nowrap;margin:0}
 /* Keep selects full-width by default, but inside the inline row (Order by)
    let the select flex while leaving room for a small icon button */
-.sidebar .row select{flex:1 1 auto;width:auto;min-width:0;margin-left:12px}
+.sidebar .row select{flex:1 1 auto;width:auto;min-width:0}
 .sidebar #orderDir{
   border:1px solid var(--border);
   background:#fff;
@@ -313,6 +317,7 @@ nav#mainNav {
   font-size:16px;
 }
 .filter-toggle-btn{
+  position:relative;
   display:none;
   flex-shrink:0;
   align-items:center;
@@ -329,6 +334,9 @@ nav#mainNav {
 }
 .filter-toggle-btn:hover{ background:#f1f5f9; }
 .filter-toggle-btn.active{ background:#3730a3; border-color:#3730a3; color:#fff; }
+/* Active filter count badge on the funnel button */
+.filter-badge{position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;background:#ef4444;color:#fff;border-radius:8px;font-size:10px;font-weight:700;display:none;align-items:center;justify-content:center;padding:0 3px;line-height:1;border:2px solid #fff;box-sizing:border-box;}
+.filter-badge.visible{display:flex;}
 /* Stat count – right-aligned, separated from search by a vertical rule */
 .toolbar .count{
   grid-area:count;
@@ -697,7 +705,16 @@ nav#mainNav {
 .sidebar #filtersClear:active{
   transform:translateY(0.5px);
 }
-
+/* Drawer layout — hidden on desktop, visible on mobile */
+.drawer-header{display:none;}
+.drawer-footer{display:none;}
+/* sidebar-clear — desktop-only clear button placed after drawer-footer */
+.sidebar-clear{padding:8px 0 0;}
+.sidebar-clear button{width:100%;}
+/* Filter section grouping */
+.filter-section{margin-bottom:4px;}
+/* no border-top on desktop — keep dividers only on mobile via drawer spacing */
+.filter-section-title{display:none;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#b8c4d0;margin-bottom:4px;}
 
 .tile{background:var(--card);border:1px solid var(--border);border-radius:14px;margin:18px 0;box-shadow:0 2px 6px rgba(0,0,0,.04)}
 .tile{content-visibility:auto;contain-intrinsic-size: 300px 600px}
@@ -755,9 +772,21 @@ nav#mainNav {
     white-space:nowrap;
   }
 
-  /* Hide labels on mobile */
+  /* Hide labels on mobile (shown when expanded) */
   .tile-header .labels{
     display:none !important;
+  }
+  /* Show compact labels when tile is expanded */
+  .tile.expanded .tile-header .labels{
+    display:flex !important;
+    gap:4px;
+    flex-wrap:wrap;
+    margin-top:2px;
+  }
+  .tile.expanded .tile-header .tag{
+    font-size:10px;
+    padding:1px 5px;
+    font-weight:600;
   }
 
   /* Hide desktop action buttons — moved to expandable */
@@ -840,26 +869,126 @@ nav#mainNav {
   
   /* Sidebar drawer fixes */
   .sidebar{
-    display:none; /* hidden by default on mobile */
+    display:flex;
+    flex-direction:column;
     position:fixed;
-    top:64px; /* below nav */
+    top:64px;
     left:0;
     right:0;
-    width:100vw; /* ensure no horizontal overflow */
+    width:100vw;
     height:calc(100vh - 64px);
-    overflow:auto;
+    overflow:hidden;
     z-index:40;
-    padding:12px;
+    padding:0;
     border-radius:12px 12px 0 0;
+    /* Closed state — invisible but layout-ready for smooth animation */
+    visibility:hidden;
+    pointer-events:none;
     transform:translateY(100%);
-    transition:transform .25s ease;
+    transition:transform .3s cubic-bezier(.32,.72,0,1), visibility 0s linear .3s;
   }
-  .sidebar.drawer-open{ 
-    display:block; 
-    transform:translateY(0); 
+  .sidebar.drawer-open{
+    visibility:visible;
+    pointer-events:auto;
+    transform:translateY(0);
+    transition:transform .3s cubic-bezier(.32,.72,0,1), visibility 0s linear 0s;
   }
   .sidebar .field{
-    margin-bottom:8px;
+    margin-bottom:12px;
+  }
+  /* Drawer layout elements */
+  .drawer-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:14px 16px 12px;
+    border-bottom:1px solid var(--border);
+    flex-shrink:0;
+    border-radius:12px 12px 0 0;
+    background:#fff;
+  }
+  .drawer-title{font-weight:700;font-size:16px;color:#1e293b;}
+  .drawer-close-btn{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:36px;
+    height:36px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    background:#f8fafc;
+    color:#64748b;
+    cursor:pointer;
+    padding:0;
+    transition:background .15s;
+  }
+  .drawer-close-btn:hover,.drawer-close-btn:active{background:#f1f5f9;}
+  .drawer-body{
+    flex:1;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding:12px 16px 8px;
+  }
+  .drawer-footer{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    padding:12px 16px;
+    border-top:1px solid var(--border);
+    flex-shrink:0;
+    background:#fff;
+  }
+  .drawer-show-btn{
+    width:100%;
+    padding:14px;
+    background:#3730a3;
+    color:#fff;
+    border:none;
+    border-radius:10px;
+    font-weight:700;
+    font-size:16px;
+    cursor:pointer;
+    transition:background .15s;
+    letter-spacing:.01em;
+  }
+  .drawer-show-btn:active{background:#312e81;}
+  .drawer-clear-btn{
+    width:100%;
+    padding:10px;
+    background:none;
+    color:#64748b;
+    border:1px solid var(--border);
+    border-radius:10px;
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+    transition:background .15s;
+  }
+  .drawer-clear-btn:active{background:#f8fafc;}
+  .sidebar-clear{display:none;}
+  /* Touch-friendly inputs — 16px prevents iOS auto-zoom, 44px min touch target */
+  .sidebar select,
+  .sidebar input[type="text"],
+  .sidebar input[type="number"],
+  .sidebar input[type="search"]{
+    font-size:16px;
+    padding:10px 12px;
+    min-height:44px;
+  }
+  .sidebar .field.two input{
+    font-size:16px;
+    padding:10px 8px;
+    min-height:44px;
+  }
+  .sidebar .checkbox{
+    padding:10px 6px;
+    font-size:14px;
+    min-height:44px;
+  }
+  .sidebar input[type="checkbox"]{
+    width:20px;
+    height:20px;
+    flex-shrink:0;
   }
   
   /* Grid responsive fixes */
@@ -1004,8 +1133,8 @@ nav#mainNav {
   .tile-actions-mobile{
     display:grid;
     grid-template-columns:repeat(3,1fr);
-    gap:8px;
-    padding:10px 14px 14px;
+    gap:6px;
+    padding:8px 12px 10px;
     border-top:1px solid var(--border);
   }
   .tile-actions-mobile .doc,
@@ -1015,13 +1144,13 @@ nav#mainNav {
     flex-direction:column;
     align-items:center;
     justify-content:center;
-    gap:6px;
-    padding:10px 8px;
+    gap:4px;
+    padding:7px 6px;
     border:1px solid var(--border);
-    border-radius:10px;
+    border-radius:8px;
     background:#fff;
     color:#374151;
-    font-size:12px;
+    font-size:11px;
     font-weight:500;
     text-decoration:none;
     transition:background .15s;
@@ -1034,8 +1163,8 @@ nav#mainNav {
   .tile-actions-mobile .download::before{
     content:'';
     display:block;
-    width:22px;
-    height:22px;
+    width:18px;
+    height:18px;
     background-size:contain;
     background-repeat:no-repeat;
     background-position:center;
