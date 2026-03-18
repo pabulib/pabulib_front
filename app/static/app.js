@@ -1012,6 +1012,7 @@
   }
   // Use mouseover/mouseout for reliable delegation
   document.addEventListener('mouseover', (e)=>{
+    if (window.innerWidth <= 768) return;
     const a = e.target && e.target.closest && e.target.closest('a.doc');
     if(!a) return;
     const tile = a.closest('.tile');

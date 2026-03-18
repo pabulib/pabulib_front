@@ -4,61 +4,62 @@
 {% block bodyClass %}preview{% endblock %}
 
 {% block body %}
-<section class="max-w-6xl mx-auto px-4">
-  <div class="mt-4 mb-6">
-    <a class="text-blue-800 hover:text-blue-900 underline" href="{{ url_for('main.home') }}">← Back to search</a>
+<div class="pv-wrap">
+
+  <!-- Back -->
+  <div class="pv-back">
+    <a href="{{ url_for('main.home') }}">← Back to search</a>
   </div>
 
-  <!-- File header with name, stats, and download -->
-  <div class="bg-white rounded-lg shadow-lg mb-6 p-4 sm:p-6 overflow-hidden">
-    <div class="flex flex-col sm:flex-row sm:flex-wrap sm:justify-between sm:items-start gap-3">
-      <div class="min-w-0 w-full sm:w-auto sm:flex-1">
-        <h2 class="text-lg sm:text-2xl font-bold text-slate-800 mb-2" style="overflow-wrap:anywhere;word-break:break-all;">File: {{ filename }}</h2>
-        <div class="flex gap-2">
-          <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800">Projects: {{ counts.projects }}</span>
-          <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800">Votes: {{ counts.votes }}</span>
-        </div>
+  <!-- Header card -->
+  <div class="pv-card">
+    <h1 class="pv-title">{{ filename }}</h1>
+    <div class="pv-stats">
+      <div class="pv-stat">
+        <span class="pv-stat-num">{{ counts.projects }}</span>
+        <span class="pv-stat-lbl">projects</span>
       </div>
-      <div class="flex gap-2">
-        <a class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" href="{{ url_for('main.visualize_file', filename=filename) }}">Visualize</a>
-        <a class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" href="{{ url_for('main.download', filename=filename) }}">Download</a>
+      <div class="pv-stat-sep"></div>
+      <div class="pv-stat">
+        <span class="pv-stat-num">{{ counts.votes }}</span>
+        <span class="pv-stat-lbl">votes</span>
       </div>
+    </div>
+    <div class="pv-actions">
+      <a class="pv-btn" href="{{ url_for('main.download', filename=filename) }}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download
+      </a>
+      <a class="pv-btn" href="{{ url_for('main.visualize_file', filename=filename) }}">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/></svg>
+        Visualize
+      </a>
     </div>
   </div>
 
-  <!-- Meta section (collapsible) -->
-  <div class="bg-white rounded-lg shadow-lg mb-6">
-    <div class="border-b border-gray-200">
-      <button class="w-full px-4 sm:px-6 py-3 sm:py-4 text-left hover:bg-gray-50 focus:outline-none focus:bg-gray-50" onclick="toggleSection('meta-section')">
-        <div class="flex justify-between items-center">
-          <h2 class="text-xl font-bold text-slate-800">Meta</h2>
-          <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200" id="meta-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-          </svg>
-        </div>
-      </button>
-    </div>
-    <div id="meta-section" class="block">
-      <div class="p-3 sm:p-6 overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
+  <!-- Meta -->
+  <div class="pv-card pv-section">
+    <button class="pv-section-toggle" onclick="pvToggle('meta')" aria-expanded="true">
+      <span class="pv-section-title">Meta</span>
+      <svg class="pv-chevron" id="meta-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <div class="pv-section-body" id="meta-body">
+      <div class="pv-frozen-head" id="meta-frozen" aria-hidden="true"></div>
+      <div class="pv-scroll pv-scroll-meta" id="meta-scroll">
+        <table class="pv-table pv-table-meta">
+          <thead>
             <tr>
-              <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style="width:180px">Meta Key</th>
-              <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+              <th>Key</th>
+              <th>Value</th>
             </tr>
           </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
+          <tbody>
           {% for k, v in meta_items %}
             <tr>
-              <td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ k }}</td>
-              <td class="px-3 sm:px-6 py-2 sm:py-4 text-sm text-gray-700 break-words">
-                {# Render comments as multiple lines when preprocessed into a list #}
+              <td class="pv-key">{{ k }}</td>
+              <td>
                 {% if k == 'comment' and v and (v is sequence) and not (v is string) %}
-                  <div class="space-y-1">
-                    {% for c in v %}
-                      <div class="break-words">{{ c }}</div>
-                    {% endfor %}
-                  </div>
+                  {% for c in v %}<div class="pv-comment">{{ c }}</div>{% endfor %}
                 {% else %}
                   {{ v }}
                 {% endif %}
@@ -71,38 +72,37 @@
     </div>
   </div>
 
-  <div class="bg-white rounded-lg shadow-lg mb-6">
-    <div class="border-b border-gray-200">
-      <button class="w-full px-4 sm:px-6 py-3 sm:py-4 text-left hover:bg-gray-50 focus:outline-none focus:bg-gray-50" onclick="toggleSection('projects-section')">
-        <div class="flex justify-between items-center">
-          <div>
-            <h2 class="text-xl font-bold text-slate-800">Projects ({{ counts.projects }})</h2>
-            <div class="flex gap-2 mt-1">
-              {% if votes_in_projects %}<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">votes in projects</span>{% endif %}
-              {% if scores_in_projects %}<span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">scores in projects</span>{% endif %}
-            </div>
-          </div>
-          <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200" id="projects-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-          </svg>
-        </div>
-      </button>
-    </div>
-    <div id="projects-section" class="block">
-      <div class="p-3 sm:p-6 overflow-x-auto">
-        <table class="w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
+  <!-- Projects -->
+  <div class="pv-card pv-section">
+    <button class="pv-section-toggle" onclick="pvToggle('projects')" aria-expanded="true">
+      <span class="pv-section-title">Projects <span class="pv-cnt">{{ counts.projects }}</span></span>
+      <div class="pv-section-badges">
+        {% if votes_in_projects %}<span class="pv-badge blue">votes in projects</span>{% endif %}
+        {% if scores_in_projects %}<span class="pv-badge green">scores in projects</span>{% endif %}
+      </div>
+      <svg class="pv-chevron" id="projects-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <div class="pv-section-body" id="projects-body">
+      <div class="pv-frozen-head" id="projects-frozen" aria-hidden="true"></div>
+      <div class="pv-scroll" id="projects-scroll">
+        <table class="pv-table">
+          <thead>
             <tr>
-              {% for c in project_columns %}
-                <th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ c }}</th>
-              {% endfor %}
+              {% for c in project_columns %}<th>{{ c }}</th>{% endfor %}
             </tr>
           </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
+          <tbody>
             {% for row in project_rows %}
-            <tr class="hover:bg-gray-50">
+            <tr>
               {% for c in project_columns %}
-                <td class="px-3 sm:px-6 py-2 sm:py-3 text-xs text-gray-700{% if c == 'name' or c == 'category' %} break-words{% else %} whitespace-nowrap{% endif %}">{{ row.get(c, '') }}</td>
+                {% set val = row.get(c, '') %}
+                {% if c in ('name', 'title', 'description') and val|string|length > 60 %}
+                  <td class="pv-trunccell">
+                    <span class="pv-trunc" onclick="pvExpand(this)">{{ val }}</span>
+                  </td>
+                {% else %}
+                  <td>{{ val }}</td>
+                {% endif %}
               {% endfor %}
             </tr>
             {% endfor %}
@@ -112,67 +112,208 @@
     </div>
   </div>
 
-  <div class="bg-white rounded-lg shadow-lg mb-6">
-    <div class="border-b border-gray-200">
-      <button class="w-full px-4 sm:px-6 py-3 sm:py-4 text-left hover:bg-gray-50 focus:outline-none focus:bg-gray-50" onclick="toggleSection('votes-section')">
-        <div class="flex justify-between items-center">
-          <div>
-            <h2 class="text-xl font-bold text-slate-800">Votes ({{ total_votes_count }})</h2>
-            {% if votes_truncated %}
-            <div class="mt-1">
-              <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800">showing first {{ votes_preview|length }} rows</span>
-            </div>
-            {% endif %}
-          </div>
-          <svg class="w-5 h-5 text-gray-400 transform transition-transform duration-200" id="votes-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-          </svg>
-        </div>
-      </button>
-    </div>
-    <div id="votes-section" class="block">
-      <div class="p-3 sm:p-6 overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
+  <!-- Votes -->
+  <div class="pv-card pv-section">
+    <button class="pv-section-toggle" onclick="pvToggle('votes')" aria-expanded="true">
+      <span class="pv-section-title">Votes <span class="pv-cnt">{{ total_votes_count }}</span></span>
+      {% if votes_truncated %}
+        <span class="pv-badge yellow">first {{ votes_preview|length }} rows</span>
+      {% endif %}
+      <svg class="pv-chevron" id="votes-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <div class="pv-section-body" id="votes-body">
+      <div class="pv-frozen-head" id="votes-frozen" aria-hidden="true"></div>
+      <div class="pv-scroll" id="votes-scroll">
+        <table class="pv-table">
+          <thead>
             <tr>
-              {% for c in vote_columns %}<th class="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ c }}</th>{% endfor %}
+              {% for c in vote_columns %}<th>{{ c }}</th>{% endfor %}
             </tr>
           </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
+          <tbody>
             {% for row in votes_preview %}
-            <tr class="hover:bg-gray-50">
-              {% for c in vote_columns %}
-                <td class="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-sm text-gray-700">{{ row.get(c, '') }}</td>
-              {% endfor %}
+            <tr>
+              {% for c in vote_columns %}<td>{{ row.get(c, '') }}</td>{% endfor %}
             </tr>
             {% endfor %}
           </tbody>
         </table>
-        {% if votes_truncated %}
-        <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-          <p class="text-sm text-blue-700">Votes table truncated to keep the page fast. You can download the file for full data.</p>
-        </div>
-        {% endif %}
       </div>
+      {% if votes_truncated %}
+      <div class="pv-truncnote">Showing first {{ votes_preview|length }} of {{ total_votes_count }} votes. Download the file for full data.</div>
+      {% endif %}
     </div>
   </div>
-</section>
+
+</div>
+
+<style>
+html,body.preview{overflow-x:hidden;}
+.pv-wrap{max-width:700px;width:100%;margin:0 auto;padding:16px 12px 48px;overflow-x:hidden;}
+.pv-back a{color:#1d4ed8;text-decoration:none;font-size:14px;}
+.pv-back a:hover{text-decoration:underline;}
+.pv-back{margin-bottom:14px;}
+
+/* Card */
+.pv-card{background:#fff;border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.05);margin-bottom:16px;max-width:100%;overflow:hidden;}
+
+/* Header card */
+.pv-title{font-size:15px;font-weight:700;color:#1e293b;padding:16px 16px 12px;word-break:break-all;margin:0;line-height:1.4;}
+.pv-stats{display:flex;align-items:center;gap:0;padding:0 16px 14px;}
+.pv-stat{display:flex;flex-direction:column;align-items:center;min-width:80px;}
+.pv-stat-num{font-size:22px;font-weight:800;color:#1e293b;line-height:1;}
+.pv-stat-lbl{font-size:11px;color:#94a3b8;margin-top:2px;text-transform:uppercase;letter-spacing:.04em;}
+.pv-stat-sep{width:1px;height:36px;background:#e2e8f0;margin:0 16px;}
+.pv-actions{display:flex;gap:10px;padding:0 16px 16px;}
+.pv-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:10px;border:1.5px solid #cbd5e1;background:#f8fafc;color:#334155;font-size:14px;font-weight:600;text-decoration:none;transition:background .15s,border-color .15s;}
+.pv-btn:hover{background:#f1f5f9;border-color:#94a3b8;}
+
+/* Section */
+.pv-section-toggle{width:100%;display:flex;align-items:center;gap:8px;padding:14px 16px;background:none;border:none;cursor:pointer;text-align:left;}
+.pv-section-toggle:hover{background:#f8fafc;}
+.pv-section-title{font-size:15px;font-weight:700;color:#1e293b;flex:0 0 auto;}
+.pv-section-badges{display:flex;gap:6px;flex-wrap:wrap;flex:1 1 auto;}
+.pv-cnt{font-size:13px;font-weight:500;color:#64748b;margin-left:5px;}
+.pv-chevron{flex-shrink:0;color:#94a3b8;transition:transform .2s;margin-left:auto;}
+.pv-chevron.open{transform:rotate(180deg);}
+.pv-section-body{border-top:1px solid #f1f5f9;overflow:visible;position:relative;}
+.pv-section-body.closed{display:none;}
+
+/* Badge */
+.pv-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap;}
+.pv-badge.blue{background:#dbeafe;color:#1e40af;}
+.pv-badge.green{background:#dcfce7;color:#166534;}
+.pv-badge.yellow{background:#fef9c3;color:#854d0e;}
+
+/* Desktop first: keep content inside cards without page-level horizontal scroll */
+.pv-scroll{display:block;width:100%;max-width:100%;overflow-x:hidden;overflow-y:visible;box-sizing:border-box;}
+.pv-frozen-head{display:none;position:fixed;top:0;z-index:30;overflow:hidden;background:#f8fafc;border-bottom:1.5px solid #e2e8f0;box-shadow:0 4px 10px rgba(15,23,42,.06);}
+.pv-frozen-head.visible{display:block;}
+.pv-frozen-head .pv-table{margin:0;}
+
+/* Table base */
+.pv-table{border-collapse:separate;border-spacing:0;font-size:13px;width:100%;table-layout:auto;}
+.pv-table thead{background:#f8fafc;}
+.pv-table th{padding:8px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#64748b;border-bottom:1.5px solid #e2e8f0;white-space:nowrap;}
+.pv-table td{padding:8px 14px;color:#334155;border-bottom:1px solid #f1f5f9;vertical-align:top;}
+.pv-table tr:last-child td{border-bottom:none;}
+.pv-table tr:hover td{background:#f8fafc;}
+.pv-table tr:active td{background:#f8fafc;}
+.pv-table.freeze-active thead{visibility:hidden;}
+
+/* Meta table */
+.pv-table-meta{table-layout:fixed;}
+.pv-table-meta th:first-child,.pv-table-meta td:first-child{width:140px;white-space:nowrap;}
+.pv-table-meta td{white-space:normal;word-break:break-word;overflow-wrap:anywhere;}
+
+/* Meta key column */
+.pv-key{font-weight:600;color:#1e293b;white-space:nowrap;}
+
+/* Comment lines */
+.pv-comment{padding:2px 0;font-size:12px;}
+
+/* Truncated cell */
+.pv-trunccell{max-width:200px;}
+.pv-trunc{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer;white-space:normal;word-break:break-word;}
+.pv-trunc.expanded{display:block;-webkit-line-clamp:unset;overflow:visible;}
+
+/* Truncate note */
+.pv-truncnote{padding:12px 16px;font-size:12px;color:#64748b;background:#f8fafc;border-top:1px solid #f1f5f9;}
+
+@media (max-width: 640px){
+  .pv-wrap{padding-left:10px;padding-right:10px;}
+  .pv-actions{flex-wrap:wrap;}
+  .pv-btn{flex:1 1 140px;justify-content:center;}
+  .pv-section-toggle{flex-wrap:wrap;align-items:center;}
+  .pv-section-badges{order:3;flex-basis:100%;}
+  .pv-table th,.pv-table td{padding:8px 12px;}
+  .pv-scroll{overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;padding-bottom:6px;}
+  .pv-scroll .pv-table{width:max-content;min-width:100%;}
+  .pv-scroll .pv-table:not(.pv-table-meta){white-space:nowrap;}
+  .pv-table-meta{width:max-content;min-width:100%;table-layout:auto;}
+  .pv-table-meta th:first-child,.pv-table-meta td:first-child{width:1%;min-width:max-content;white-space:nowrap;}
+  .pv-table-meta td:last-child{white-space:normal;min-width:240px;}
+}
+</style>
 
 <script>
-function toggleSection(sectionId) {
-    const section = document.getElementById(sectionId);
-    const icon = document.getElementById(sectionId.replace('-section', '-icon'));
-    
-    if (section.classList.contains('hidden')) {
-        section.classList.remove('hidden');
-        section.classList.add('block');
-        icon.classList.remove('rotate-180');
-    } else {
-        section.classList.remove('block');
-        section.classList.add('hidden');
-        icon.classList.add('rotate-180');
-    }
+function pvToggle(id) {
+  const body = document.getElementById(id + '-body');
+  const chev = document.getElementById(id + '-chev');
+  const btn = body.previousElementSibling;
+  const closed = body.classList.toggle('closed');
+  chev.classList.toggle('open', !closed);
+  btn.setAttribute('aria-expanded', String(!closed));
+  if (window.pvFrozenUpdaters) window.pvFrozenUpdaters.forEach(fn => fn());
 }
+function pvExpand(el) {
+  el.classList.toggle('expanded');
+}
+
+function pvInitFrozenHeader(sectionId) {
+  const scrollEl = document.getElementById(sectionId + '-scroll');
+  const frozenEl = document.getElementById(sectionId + '-frozen');
+  if (!scrollEl || !frozenEl) return null;
+
+  const table = scrollEl.querySelector('.pv-table');
+  const thead = table ? table.querySelector('thead') : null;
+  const body = document.getElementById(sectionId + '-body');
+  if (!table || !thead || !body) return null;
+
+  frozenEl.innerHTML = `<table class="pv-table"><thead>${thead.innerHTML}</thead></table>`;
+  const frozenTable = frozenEl.querySelector('table');
+  const syncWidths = () => {
+    const sourceThs = Array.from(thead.querySelectorAll('th'));
+    const frozenThs = Array.from(frozenEl.querySelectorAll('th'));
+    if (!sourceThs.length || sourceThs.length !== frozenThs.length) return;
+
+    frozenTable.style.width = `${table.offsetWidth}px`;
+    sourceThs.forEach((th, i) => {
+      const width = th.getBoundingClientRect().width;
+      frozenThs[i].style.width = `${width}px`;
+      frozenThs[i].style.minWidth = `${width}px`;
+      frozenThs[i].style.maxWidth = `${width}px`;
+    });
+  };
+
+  const update = () => {
+    if (body.classList.contains('closed')) {
+      frozenEl.classList.remove('visible');
+      table.classList.remove('freeze-active');
+      return;
+    }
+
+    syncWidths();
+    const tableRect = table.getBoundingClientRect();
+    const scrollRect = scrollEl.getBoundingClientRect();
+    const headerHeight = thead.getBoundingClientRect().height || 0;
+    const stickyTop = 0;
+    const shouldShow = tableRect.top + headerHeight < stickyTop && tableRect.bottom > stickyTop + headerHeight;
+
+    if (!shouldShow) {
+      frozenEl.classList.remove('visible');
+      table.classList.remove('freeze-active');
+      return;
+    }
+
+    frozenEl.classList.add('visible');
+    table.classList.add('freeze-active');
+    frozenEl.style.left = `${scrollRect.left}px`;
+    frozenEl.style.width = `${scrollEl.clientWidth}px`;
+    frozenTable.style.transform = `translateX(${-scrollEl.scrollLeft}px)`;
+  };
+
+  scrollEl.addEventListener('scroll', update, { passive: true });
+  window.addEventListener('scroll', update, { passive: true });
+  window.addEventListener('resize', update);
+  update();
+  return update;
+}
+
+// Init chevrons as open
+document.querySelectorAll('.pv-chevron').forEach(c => c.classList.add('open'));
+window.pvFrozenUpdaters = ['meta', 'projects', 'votes'].map(pvInitFrozenHeader).filter(Boolean);
+window.addEventListener('load', () => window.pvFrozenUpdaters.forEach(fn => fn()));
 </script>
 
 {% endblock %}

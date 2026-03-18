@@ -6,7 +6,7 @@
 {% block body %}
 <section class="max-w-5xl mx-auto px-4">
   <div class="flex justify-center">
-    <div class="w-full max-w-5xl bg-white rounded-lg shadow-lg p-4 sm:p-8 mt-8 mb-32 overflow-x-hidden">
+    <div class="w-full max-w-5xl bg-white rounded-lg shadow-lg p-4 sm:p-8 mt-8 mb-32">
       <div class="flex items-baseline justify-between mb-6">
         <h1 class="text-3xl font-bold text-slate-800">Details</h1>
         <div class="text-sm text-gray-500 hidden sm:block">Explore comments, categories, targets and rules used across the library</div>
@@ -70,7 +70,7 @@
       </div>
 
       <div class="overflow-x-auto">
-        <table class="min-w-full bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <table class="min-w-max bg-white border border-gray-200 rounded-lg overflow-hidden">
           <thead class="bg-gray-100">
             <tr>
               <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-sm font-semibold text-gray-700 border-b border-gray-200">{{ 'Comment' if tab=='comments' else ( 'Category' if tab=='categories' else ( 'Target' if tab=='targets' else 'Rule' ) ) }}</th>
