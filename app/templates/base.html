@@ -31,31 +31,39 @@
     <link rel="stylesheet" href="{{ url_for('main.static', filename='styles.css') }}" />
     
     {% if google_analytics_id %}
-    <!-- Google Analytics 4 -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id={{ google_analytics_id }}"></script>
+    <!-- Google Analytics 4 — loaded only after cookie consent -->
     <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', '{{ google_analytics_id }}', {
-        // Privacy-friendly settings
-        anonymize_ip: true,
-        allow_google_signals: false,
-        allow_ad_personalization_signals: false,
-        // Custom parameters for better segmentation
-        custom_map: {
-          'custom_parameter_1': 'user_type',
-          'custom_parameter_2': 'session_datasets_viewed',
-          'custom_parameter_3': 'session_downloads_count'
-        }
-      });
-      
-      // Make analytics ID available to other scripts
-      window.googleAnalyticsId = '{{ google_analytics_id }}';
+      window._gaId = '{{ google_analytics_id }}';
+
+      function loadGA() {
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + window._gaId;
+        document.head.appendChild(s);
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        window.gtag = gtag;
+        gtag('js', new Date());
+        gtag('config', window._gaId, {
+          anonymize_ip: true,
+          allow_google_signals: false,
+          allow_ad_personalization_signals: false,
+          custom_map: {
+            'custom_parameter_1': 'user_type',
+            'custom_parameter_2': 'session_datasets_viewed',
+            'custom_parameter_3': 'session_downloads_count'
+          }
+        });
+        window.googleAnalyticsId = window._gaId;
+        var s2 = document.createElement('script');
+        s2.src = '{{ url_for("main.static", filename="js/analytics-ga4.js") }}';
+        document.head.appendChild(s2);
+      }
+
+      if (localStorage.getItem('pb_cookie_consent') === 'accepted') {
+        loadGA();
+      }
     </script>
-    
-    <!-- Enhanced Analytics for Pabulib -->
-    <script src="{{ url_for('main.static', filename='js/analytics-ga4.js') }}"></script>
     {% endif %}
     
     {% block head %}{% endblock %}
@@ -170,5 +178,35 @@
     {% block body %}{% endblock %}
 
     {% block scripts %}{% endblock %}
+
+    {% if google_analytics_id %}
+    <!-- Cookie consent banner -->
+    <div id="cookieBanner" style="display:none" class="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md z-50 bg-white text-slate-800 rounded-2xl shadow-2xl border border-slate-200 p-5">
+      <p class="font-semibold text-base mb-1">Cookies on Pabulib</p>
+      <p class="text-sm text-slate-600 mb-4">We use essential cookies to keep the site working. With your consent, we also use optional analytics cookies to understand how Pabulib is used and improve it. You can change your choice anytime.</p>
+      <div class="flex flex-wrap gap-2">
+        <button id="cookieDecline" class="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm font-medium hover:bg-slate-100 transition-colors">Essential only</button>
+        <button id="cookieAccept" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors">Accept all</button>
+        <a href="{{ url_for('main.cookies_page') }}" class="px-4 py-2 rounded-lg border border-indigo-300 text-indigo-600 text-sm font-medium hover:bg-indigo-50 transition-colors">Learn more</a>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var consent = localStorage.getItem('pb_cookie_consent');
+        if (!consent) {
+          document.getElementById('cookieBanner').style.display = '';
+        }
+        document.getElementById('cookieAccept').addEventListener('click', function () {
+          localStorage.setItem('pb_cookie_consent', 'accepted');
+          document.getElementById('cookieBanner').style.display = 'none';
+          if (typeof loadGA === 'function') loadGA();
+        });
+        document.getElementById('cookieDecline').addEventListener('click', function () {
+          localStorage.setItem('pb_cookie_consent', 'declined');
+          document.getElementById('cookieBanner').style.display = 'none';
+        });
+      })();
+    </script>
+    {% endif %}
   </body>
 </html>

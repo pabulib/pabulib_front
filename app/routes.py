@@ -392,6 +392,11 @@ def about_page():
     return render_template("about.html")
 
 
+@bp.route("/cookies")
+def cookies_page():
+    return render_template("cookies.html")
+
+
 @bp.route("/contact")
 def contact_page():
     return render_template("contact.html", now=datetime.now())

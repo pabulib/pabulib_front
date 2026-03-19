@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+
+{% block title %}Cookie settings – Pabulib{% endblock %}
+
+{% block body %}
+<section class="max-w-4xl mx-auto px-4">
+  <div class="flex justify-center">
+    <div class="w-full max-w-2xl bg-white rounded-lg shadow-lg p-6 sm:p-10 mt-8 mb-32">
+
+      <h1 class="text-2xl font-bold text-slate-800 mb-2">Cookies</h1>
+      <p class="text-slate-600 mb-6">We keep it simple and minimal. Here's what we use cookies for:</p>
+
+      <!-- Essential cookies -->
+      <div class="mb-5">
+        <p class="font-semibold text-slate-800 mb-1">Essential cookies <span class="text-slate-400 font-normal">(always on)</span></p>
+        <ul class="list-disc list-inside text-slate-600 text-sm space-y-1">
+          <li>Sign-in session so admins can stay logged in</li>
+          <li>Temporary upload key for anonymous file-checking sessions</li>
+          <li>Basic site security and functionality</li>
+        </ul>
+      </div>
+
+      <!-- Optional cookies -->
+      <div class="mb-8">
+        <p class="font-semibold text-slate-800 mb-1">Optional cookies <span class="text-slate-400 font-normal">(only if you accept)</span></p>
+        <ul class="list-disc list-inside text-slate-600 text-sm space-y-1">
+          <li>Google Analytics 4 — anonymous usage statistics (<code>_ga</code>, <code>_ga_*</code>). IP anonymisation is enabled; advertising signals are disabled.</li>
+        </ul>
+      </div>
+
+      <!-- Current choice + action -->
+      <div id="cookieStatus" class="rounded-lg border border-slate-200 bg-slate-50 p-5">
+        <p class="text-sm text-slate-600 mb-3">
+          Your current choice: <strong id="currentChoiceLabel" class="text-slate-800">not set</strong>
+        </p>
+        <div class="flex flex-wrap gap-3">
+          <button id="btnEssential"
+            class="px-5 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm font-medium hover:bg-slate-100 transition-colors">
+            Essential only
+          </button>
+          <button id="btnAcceptAll"
+            class="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors">
+            Accept all
+          </button>
+        </div>
+        <p id="savedMsg" class="mt-3 text-sm text-green-600 hidden">Your preference has been saved.</p>
+      </div>
+
+      <p class="mt-6 text-xs text-slate-400">
+        You can change your choice at any time from this page or the "Cookie settings" link in the footer.
+      </p>
+
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var KEY = 'pb_cookie_consent';
+    var consent = localStorage.getItem(KEY);
+
+    var label = document.getElementById('currentChoiceLabel');
+    var savedMsg = document.getElementById('savedMsg');
+    var btnAcceptAll = document.getElementById('btnAcceptAll');
+    var btnEssential = document.getElementById('btnEssential');
+
+    function renderStatus() {
+      consent = localStorage.getItem(KEY);
+      if (consent === 'accepted') {
+        label.textContent = 'all cookies';
+        btnAcceptAll.classList.add('ring-2', 'ring-indigo-400');
+        btnEssential.classList.remove('ring-2', 'ring-indigo-400');
+      } else if (consent === 'declined') {
+        label.textContent = 'essential only';
+        btnEssential.classList.add('ring-2', 'ring-indigo-400');
+        btnAcceptAll.classList.remove('ring-2', 'ring-indigo-400');
+      } else {
+        label.textContent = 'not set yet';
+        btnAcceptAll.classList.remove('ring-2', 'ring-indigo-400');
+        btnEssential.classList.remove('ring-2', 'ring-indigo-400');
+      }
+    }
+
+    function save(value) {
+      localStorage.setItem(KEY, value);
+      // Hide the global banner if it is still visible
+      var banner = document.getElementById('cookieBanner');
+      if (banner) banner.style.display = 'none';
+      // Load GA if accepted and not yet loaded
+      if (value === 'accepted' && typeof loadGA === 'function') loadGA();
+      savedMsg.classList.remove('hidden');
+      renderStatus();
+    }
+
+    btnAcceptAll.addEventListener('click', function () { save('accepted'); });
+    btnEssential.addEventListener('click', function () { save('declined'); });
+
+    renderStatus();
+  })();
+</script>
+{% endblock %}
