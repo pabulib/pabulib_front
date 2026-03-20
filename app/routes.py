@@ -1568,7 +1568,7 @@ def download_selected_start():
                 "artifact_type": "file",
                 "mime_type": mime_type,
             }
-        return jsonify(
+        response = jsonify(
             {
                 "ok": True,
                 "token": token,
@@ -1576,6 +1576,8 @@ def download_selected_start():
                 "file_url": url_for("main.download_selected_file", token=token),
             }
         )
+        response.headers["X-Download-Reuse-Cache"] = "false"
+        return response
 
     token = uuid.uuid4().hex
     # Record initial state
@@ -1611,7 +1613,7 @@ def download_selected_start():
     )
     t.start()
 
-    return jsonify(
+    response = jsonify(
         {
             "ok": True,
             "token": token,
@@ -1619,6 +1621,10 @@ def download_selected_start():
             "file_url": url_for("main.download_selected_file", token=token),
         }
     )
+    response.headers["X-Download-Reuse-Cache"] = (
+        "true" if reuse_path is not None else "false"
+    )
+    return response
 
 
 @bp.errorhandler(RequestEntityTooLarge)
@@ -1746,7 +1752,7 @@ def handle_large_request(e):
                     daemon=True,
                 )
                 t.start()
-            return jsonify(
+            response = jsonify(
                 {
                     "ok": True,
                     "token": token,
@@ -1756,6 +1762,10 @@ def handle_large_request(e):
                     "file_url": url_for("main.download_selected_file", token=token),
                 }
             )
+            response.headers["X-Download-Reuse-Cache"] = (
+                "true" if latest_export is not None else "false"
+            )
+            return response
     # Default: return the standard 413 JSON for API clients
     if request.headers.get("X-Requested-With") == "fetch":
         return jsonify({"ok": False, "error": "Request too large"}), 413

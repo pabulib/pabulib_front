@@ -69,8 +69,13 @@
         </select>
       </div>
 
-      <div class="overflow-x-auto">
-        <table class="min-w-max bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div class="overflow-x-auto sm:overflow-x-visible">
+        <table class="details-table bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <colgroup>
+            <col class="details-col-label">
+            <col class="details-col-count">
+            <col>
+          </colgroup>
           <thead class="bg-gray-100">
             <tr>
               <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-sm font-semibold text-gray-700 border-b border-gray-200">{{ 'Comment' if tab=='comments' else ( 'Category' if tab=='categories' else ( 'Target' if tab=='targets' else 'Rule' ) ) }}</th>
@@ -94,7 +99,14 @@
           <tbody class="divide-y divide-gray-200">
             {% for label, count, files in rows %}
             <tr class="hover:bg-gray-50">
-              <td class="px-3 sm:px-6 py-3 sm:py-4 text-sm text-gray-900">{{ label }}</td>
+              <td class="px-3 sm:px-6 py-3 sm:py-4 text-sm text-gray-900">
+                <div class="label-row" data-expanded="0">
+                  <span class="label-text">{{ label }}</span>
+                  {% if label|length > 120 %}
+                    <button type="button" class="btn-expand-label" aria-expanded="false">Show more</button>
+                  {% endif %}
+                </div>
+              </td>
               <td class="px-3 sm:px-4 py-3 sm:py-4 text-center">
                 <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800">{{ count }}</span>
               </td>
@@ -202,6 +214,18 @@
     }
   });
   addEventListener('click', (e) => {
+    const labelBtn = e.target.closest('.btn-expand-label');
+    if (labelBtn) {
+      const row = labelBtn.closest('.label-row');
+      if (!row) return;
+      const expanded = row.dataset.expanded === '1';
+      row.dataset.expanded = expanded ? '0' : '1';
+      row.classList.toggle('expanded', !expanded);
+      labelBtn.textContent = expanded ? 'Show more' : 'Show less';
+      labelBtn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+      return;
+    }
+
     const btn = e.target.closest('.btn-expand');
     if (!btn) return;
     const wrap = btn.closest('.files-cell');
@@ -218,6 +242,10 @@
 </script>
 
 <style>
+.details-table { width: 100%; table-layout: fixed; }
+.details-col-label { width: 44%; }
+.details-col-count { width: 96px; }
+
 .files-cell { display: flex; flex-direction: column; align-items: flex-start; max-width: 100%; }
 .file-list { display: block; max-width: 100%; line-height: 1.4; }
 .file-item { display: inline-block; margin-right: 8px; margin-bottom: 4px; padding: 2px 8px; background: #f3f4f6; border-radius: 4px; font-size: 12px; color: #374151; border: 1px solid #e5e7eb; }
@@ -227,6 +255,46 @@
 .group-label { font-weight: 600; color: #374151; }
 .group-count { background: #dbeafe; color: #1e40af; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 500; }
 .group-files { margin-left: 0; }
+
+.label-row { max-width: 100%; }
+.label-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.label-row.expanded .label-text {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+  overflow: visible;
+}
+.btn-expand-label {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+@media (max-width: 639px) {
+  .details-table { table-layout: auto; min-width: 620px; }
+  .label-text {
+    display: block;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+    overflow: visible;
+  }
+  .btn-expand-label { display: none; }
+}
 </style>
 {% include 'footer.html' %}
 {% endblock %}

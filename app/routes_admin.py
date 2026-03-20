@@ -1199,11 +1199,18 @@ def upload_tiles_ingest():
     except Exception:
         pass
 
-    # Trigger rebuild of all_pb_files.zip in background if the set changed
-    try:
-        export_service.trigger_build_if_changed_background()
-    except Exception:
-        pass
+    # Trigger rebuild of all_pb_files.zip in background if the set changed.
+    # Bulk upload flow can defer this and call a single trigger at the end.
+    defer_export = (request.form.get("defer_export") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    if not defer_export:
+        try:
+            export_service.trigger_build_if_changed_background()
+        except Exception:
+            pass
 
     # Pre-compute visualization data for the new file in background
     try:
@@ -1236,6 +1243,16 @@ def upload_tiles_ingest():
             success=1,
         )
     )
+
+
+@bp.post("/admin/upload/trigger-export-rebuild")
+def upload_trigger_export_rebuild():
+    """Trigger a single background rebuild of all_pb_files.zip."""
+    try:
+        export_service.trigger_build_if_changed_background()
+    except Exception:
+        return jsonify({"ok": False, "error": "Failed to trigger export rebuild"}), 500
+    return jsonify({"ok": True})
 
 
 @bp.post("/admin/upload/delete")

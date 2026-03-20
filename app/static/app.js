@@ -1218,27 +1218,15 @@
               // Trigger file download
               try{
                  const dlUrl = startData.file_url || `/download-selected/file/${token}`;
-                 const resp = await fetch(dlUrl);
-                 if(resp.ok) {
-                     handleSnapshotInfo(resp);
-                     
-                     // Try to get filename from Content-Disposition
-                     const cd = resp.headers.get('Content-Disposition') || '';
-                     const cdName = parseContentDispositionFilename(cd);
-                     const finalName = cdName || d.download_name || 'pb_selected.zip';
-
-                     const blob = await resp.blob();
-                     const url = window.URL.createObjectURL(blob);
-                     const a = document.createElement('a');
-                     a.href = url;
-                     a.download = finalName;
-                     document.body.appendChild(a);
-                     a.click();
-                     document.body.removeChild(a);
-                     window.URL.revokeObjectURL(url);
-                 } else {
-                     window.location.href = dlUrl;
-                 }
+                 // Avoid buffering the whole ZIP in JS memory. Let the browser stream
+                 // the download directly, which starts much faster for large archives.
+                 try {
+                   const headResp = await fetch(dlUrl, { method: 'HEAD' });
+                   if (headResp.ok) {
+                     handleSnapshotInfo(headResp);
+                   }
+                 } catch(_e) { /* non-fatal */ }
+                 window.location.href = dlUrl;
               } catch(e) {
                   console.error(e);
                   window.location.href = startData.file_url || `/download-selected/file/${token}`;

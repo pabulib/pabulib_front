@@ -1310,6 +1310,10 @@
       if(!proceed) return;
     }
     const params = new URLSearchParams(); params.set('name', name); params.set('confirm', '1');
+    // In batch mode, defer export zip rebuild and trigger once after all files ingest.
+    if(skipConfirm){
+      params.set('defer_export', '1');
+    }
     const resp = await fetch("{{ url_for('admin.upload_tiles_ingest') }}", { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'fetch' }, body: params.toString() });
     if(!resp.ok){
       // If server reports conflict (409) but we already confirmed at batch level, don't prompt again.
@@ -1541,6 +1545,16 @@
         summaryLines.push(maxList);
       }
       alert('Upload report:\n\n' + summaryLines.join('\n'));
+
+      // Trigger one export rebuild at the end of bulk ingest.
+      if(succeeded.length > 0){
+        try{
+          await fetch("{{ url_for('admin.upload_trigger_export_rebuild') }}", {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'fetch' }
+          });
+        }catch(_e){ /* non-fatal */ }
+      }
 
       // Hide progress bar after a brief success display
       setTimeout(() => {
