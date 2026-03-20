@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from typing import Any, Dict, List, Optional, Tuple
+import unicodedata
 
 from sqlalchemy import or_, and_, desc, asc
 from ..db import get_session
@@ -59,6 +61,7 @@ _RULES_CACHE: Optional[
         Dict[str, List[Dict[str, Any]]],
     ]
 ] = None
+_CITY_SLUG_CACHE: Optional[Tuple[Dict[str, str], Dict[str, str], Dict[str, str]]] = None
 
 _SEARCH_ORDER_COLUMNS = {
     "quality": PBFile.quality,
@@ -70,6 +73,75 @@ _SEARCH_ORDER_COLUMNS = {
     "year": PBFile.year,
     "vote_length": PBFile.vote_length,
 }
+
+
+def _slugify_text(value: str) -> str:
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = text.encode("ascii", "ignore").decode("ascii")
+    text = text.lower().strip()
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    text = re.sub(r"-+", "-", text).strip("-")
+    return text
+
+
+def _build_city_slug_maps(cities: List[str]) -> Tuple[Dict[str, str], Dict[str, str], Dict[str, str]]:
+    city_to_slug: Dict[str, str] = {}
+    slug_to_city: Dict[str, str] = {}
+    folded_city_to_city: Dict[str, str] = {}
+    for city in sorted({c for c in cities if c}):
+        base = _slugify_text(city) or "city"
+        slug = base
+        idx = 2
+        while slug in slug_to_city and slug_to_city[slug] != city:
+            slug = f"{base}-{idx}"
+            idx += 1
+        city_to_slug[city] = slug
+        slug_to_city[slug] = city
+        folded_city_to_city[city.casefold()] = city
+    return city_to_slug, slug_to_city, folded_city_to_city
+
+
+def _get_city_slug_maps() -> Tuple[Dict[str, str], Dict[str, str], Dict[str, str]]:
+    global _CITY_SLUG_CACHE
+    if _CITY_SLUG_CACHE is not None:
+        return _CITY_SLUG_CACHE
+
+    with get_session() as s:
+        cities = [
+            r[0]
+            for r in s.query(PBFile.unit)
+            .filter(PBFile.is_current == True)
+            .distinct()
+            .all()
+            if r[0]
+        ]
+    city_to_slug, slug_to_city, folded_city_to_city = _build_city_slug_maps(cities)
+    _CITY_SLUG_CACHE = (city_to_slug, slug_to_city, folded_city_to_city)
+    return _CITY_SLUG_CACHE
+
+
+def _resolve_city_filter_value(city: Optional[str]) -> Optional[str]:
+    if city is None:
+        return None
+    token = str(city).strip()
+    if not token:
+        return token
+
+    city_to_slug, slug_to_city, folded_city_to_city = _get_city_slug_maps()
+    # Keep old links working: exact city (including diacritics) still resolves.
+    exact_city = folded_city_to_city.get(token.casefold())
+    if exact_city:
+        return exact_city
+
+    # New links can use ASCII slugs (e.g. "krakow").
+    by_slug = slug_to_city.get(token)
+    if by_slug:
+        return by_slug
+
+    normalized = _slugify_text(token)
+    if normalized:
+        return slug_to_city.get(normalized, token)
+    return token
 
 
 def _read_meta_only(path: Path) -> Dict[str, Any]:
@@ -255,13 +327,14 @@ def _db_signature() -> Optional[str]:
 
 
 def invalidate_caches() -> None:
-    global _TILES_CACHE, _COMMENTS_CACHE, _STATS_CACHE, _CATEGORIES_CACHE, _TARGETS_CACHE, _RULES_CACHE
+    global _TILES_CACHE, _COMMENTS_CACHE, _STATS_CACHE, _CATEGORIES_CACHE, _TARGETS_CACHE, _RULES_CACHE, _CITY_SLUG_CACHE
     _TILES_CACHE = None
     _COMMENTS_CACHE = None
     _STATS_CACHE = None
     _CATEGORIES_CACHE = None
     _TARGETS_CACHE = None
     _RULES_CACHE = None
+    _CITY_SLUG_CACHE = None
 
 
 def _apply_search_filters(
@@ -304,6 +377,7 @@ def _apply_search_filters(
     if country:
         q = q.filter(PBFile.country == country)
     if city:
+        city = _resolve_city_filter_value(city)
         q = q.filter(PBFile.unit == city)
     if year:
         try:
@@ -623,10 +697,13 @@ def get_filter_options() -> Dict[str, Any]:
             }
             for r in comb_rows
         ]
+
+    city_slug_map, _slug_to_city, _folded_city_to_city = _get_city_slug_maps()
         
     return {
         "countries": countries,
         "cities": cities,
+        "city_slug_map": city_slug_map,
         "years": years,
         "combinations": combinations
     }

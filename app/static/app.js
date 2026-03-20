@@ -12,6 +12,8 @@
   let updateURLTimeout = null;
   let combinations = [];
   let isSelectAllActive = false;
+  let cityToSlug = {};
+  let slugToCity = {};
   
   // Elements
   const container = document.getElementById('downloadForm');
@@ -147,6 +149,38 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
+  }
+
+  function slugifyText(text) {
+    if (text == null) return '';
+    return String(text)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+  }
+
+  function toCityUrlValue(cityValue) {
+    if (!cityValue) return cityValue;
+    return cityToSlug[cityValue] || slugifyText(cityValue) || cityValue;
+  }
+
+  function fromCityUrlValue(cityParam) {
+    if (!cityParam) return cityParam;
+    if (slugToCity[cityParam]) return slugToCity[cityParam];
+    if (cityToSlug[cityParam]) return cityParam;
+    if (!filters.city) return cityParam;
+
+    const exact = Array.from(filters.city.options).find(opt => opt.value === cityParam);
+    if (exact) return exact.value;
+
+    const norm = slugifyText(cityParam);
+    if (!norm) return cityParam;
+    const byNorm = Array.from(filters.city.options).find(opt => slugifyText(opt.value) === norm);
+    return byNorm ? byNorm.value : cityParam;
   }
 
   // Render a single tile
@@ -323,7 +357,11 @@
         if (key === 'order_dir' && value === 'desc') continue;
         if (key === 'limit') continue;
         if (key === 'offset') continue;
-        cleanParams.set(key, value);
+        if (key === 'city') {
+          cleanParams.set(key, toCityUrlValue(value));
+        } else {
+          cleanParams.set(key, value);
+        }
       }
       const newURL = window.location.pathname + (cleanParams.toString() ? '?' + cleanParams.toString() : '');
       history.replaceState({}, '', newURL);
@@ -354,7 +392,13 @@
 
     set(filters.search, 'search');
     set(filters.country, 'country');
-    set(filters.city, 'city');
+    if (filters.city) {
+      const cityFromUrl = params.get('city');
+      if (cityFromUrl) {
+        filters.city.value = fromCityUrlValue(cityFromUrl);
+        hasFilters = true;
+      }
+    }
     set(filters.year, 'year');
     set(filters.votesMin, 'votes_min');
     set(filters.votesMax, 'votes_max');
@@ -388,6 +432,11 @@
         const data = await res.json();
         
         combinations = data.combinations || [];
+        cityToSlug = data.city_slug_map || {};
+        slugToCity = {};
+        Object.entries(cityToSlug).forEach(([city, slug]) => {
+          if (slug) slugToCity[slug] = city;
+        });
         
         if (filters.country) {
             data.countries.forEach(c => {
