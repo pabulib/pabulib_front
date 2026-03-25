@@ -266,11 +266,11 @@
           <input class="row-check" type="checkbox" data-file="${escapeHtml(t.file_name)}" ${isSelected ? 'checked' : ''} />
           <div class="title-row">
             <h2>${escapeHtml(t.title).replace(/_/g, ' ')}</h2>
-            <div class="labels">
+            <span class="labels">
                 ${t.experimental ? '<span class="tag exp" title="Dataset marked as experimental">Experimental</span>' : ''}
                 ${t.fully_funded ? '<span class="tag funded" title="All selected projects are funded">Fully funded</span>' : ''}
                 ${tags}
-            </div>
+            </span>
           </div>
           <span class="qs" title="QS = (avg vote length)³ × (projects)² × (votes). Higher is better.">QS ${t.quality_short}</span>
           <div class="tile-actions">
