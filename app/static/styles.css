@@ -866,8 +866,10 @@ nav#mainNav {
 .tile-header .doc{width:34px;height:34px;border-radius:10px;border:1px solid var(--border);background:linear-gradient(180deg,#fff,#f4f6fb);position:relative;display:inline-block;cursor:pointer;z-index:3;pointer-events:auto}
 .tile-header .doc::before{content:"";position:absolute;inset:0;background:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>') center/20px no-repeat}
 
-.tile-actions{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;flex:0 0 auto;flex-shrink:0}
-.tile-actions > a{flex:0 0 auto}
+@media (min-width:769px){
+  .tile-actions{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;flex:0 0 auto;flex-shrink:0}
+  .tile-actions > a{flex:0 0 auto}
+}
 
 /* (removed popover styles; direct navigation on click) */
 
