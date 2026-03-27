@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from datetime import timedelta
 
 import sentry_sdk
 from flask import Flask, render_template, request
@@ -60,6 +61,16 @@ def create_app():
 
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.environ["SECRET_KEY"]
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(
+        hours=int(os.environ.get("ADMIN_SESSION_TIMEOUT_HOURS", "4"))
+    )
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = os.environ.get(
+        "SESSION_COOKIE_SAMESITE", "Lax"
+    )
+    app.config["SESSION_COOKIE_SECURE"] = os.environ.get(
+        "SESSION_COOKIE_SECURE", "0"
+    ).strip() in {"1", "true", "True"}
 
     # Create database tables if they don't exist
     from .db import Base, engine
@@ -142,5 +153,12 @@ def create_app():
     def inject_analytics():
         """Make analytics configuration available to templates."""
         return {"google_analytics_id": os.environ.get("GOOGLE_ANALYTICS_ID", "")}
+
+    @app.context_processor
+    def inject_security_tokens():
+        from .utils.security import get_admin_csrf_token
+
+        is_admin_request = (request.endpoint or "").startswith("admin.") or request.path.startswith("/admin")
+        return {"admin_csrf_token": get_admin_csrf_token() if is_admin_request else ""}
 
     return app

@@ -29,6 +29,66 @@
       }
     </script>
     <link rel="stylesheet" href="{{ url_for('main.static', filename='styles.css') }}" />
+    {% if admin_csrf_token %}
+    <meta name="admin-csrf-token" content="{{ admin_csrf_token }}" />
+    <script>
+      (() => {
+        const token = {{ admin_csrf_token|tojson }};
+        if (!token) return;
+        window.pbAdminCsrfToken = token;
+
+        function isSameOrigin(url) {
+          if (!url || url.startsWith('/')) return true;
+          try {
+            return new URL(url, window.location.href).origin === window.location.origin;
+          } catch (_error) {
+            return false;
+          }
+        }
+
+        const originalFetch = window.fetch.bind(window);
+        window.fetch = function(input, init) {
+          const nextInit = init ? { ...init } : {};
+          const method = String(nextInit.method || (input && input.method) || 'GET').toUpperCase();
+          const url = typeof input === 'string' ? input : (input && input.url) || '';
+          if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && isSameOrigin(url)) {
+            const headers = new Headers(nextInit.headers || (input instanceof Request ? input.headers : undefined));
+            if (!headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', token);
+            nextInit.headers = headers;
+          }
+          return originalFetch(input, nextInit);
+        };
+
+        const originalOpen = XMLHttpRequest.prototype.open;
+        const originalSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.open = function(method, url) {
+          this._pbMethod = String(method || 'GET').toUpperCase();
+          this._pbUrl = url || '';
+          return originalOpen.apply(this, arguments);
+        };
+        XMLHttpRequest.prototype.send = function(body) {
+          if (!['GET', 'HEAD', 'OPTIONS'].includes(this._pbMethod || 'GET') && isSameOrigin(this._pbUrl || '')) {
+            try {
+              this.setRequestHeader('X-CSRF-Token', token);
+            } catch (_error) {
+            }
+          }
+          return originalSend.call(this, body);
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+          document.querySelectorAll('form[method="post"], form[method="POST"]').forEach((form) => {
+            if (form.querySelector('input[name="csrf_token"]')) return;
+            const field = document.createElement('input');
+            field.type = 'hidden';
+            field.name = 'csrf_token';
+            field.value = token;
+            form.appendChild(field);
+          });
+        });
+      })();
+    </script>
+    {% endif %}
     
     {% if google_analytics_id %}
     <!-- Google Analytics 4 — loaded only after cookie consent -->
