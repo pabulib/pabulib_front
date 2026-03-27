@@ -561,13 +561,14 @@ nav#mainNav {
   transition:width .25s ease;
 }
 .info-panel.collapsed{
-  width:38px;
+  width:46px;
 }
 .info-item{
   position:relative;
   display:flex;
   align-items:center;
   padding:8px 10px;
+  min-height:40px;
   border-radius:9px;
   border:1px solid #e2e8f0;
   background:#f8fafc;
@@ -578,7 +579,8 @@ nav#mainNav {
   display:flex;
   align-items:center;
   gap:8px;
-  overflow:hidden;
+  overflow-x:hidden;
+  overflow-y:visible;
   flex:1 1 auto;
   min-width:0;
 }
@@ -589,7 +591,16 @@ nav#mainNav {
   justify-content:center;
 }
 .info-item:hover{ background:#f1f5f9; }
-.info-item-icon{ font-size:15px; flex-shrink:0; line-height:1; }
+.info-item-icon{
+  font-size:16px;
+  flex-shrink:0;
+  line-height:1.3;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding-top:1px;
+  font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",emoji;
+}
 .info-item-label{
   font-size:12px;
   font-weight:600;
@@ -1316,14 +1327,29 @@ nav#mainNav {
   }
   .info-panel{
     display:flex;
-    width:38px;
+    width:46px;
     right:12px;
+    transition:none;
   }
   .info-item{
-    padding:8px 9px;
+    width:46px;
+    min-height:46px;
+    padding:0;
+    justify-content:center;
+    transition:background .15s;
   }
   .info-item-inner{
+    width:100%;
+    height:100%;
     justify-content:center;
+    overflow:visible;
+  }
+  .info-item-icon{
+    width:20px;
+    height:20px;
+    font-size:17px;
+    line-height:1;
+    padding-top:0;
   }
   .info-item-label{
     max-width:0;
