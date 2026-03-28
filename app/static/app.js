@@ -9,11 +9,13 @@
   let hasMore = true;
   let totalCount = 0;
   let selectedFiles = new Set();
+  let excludedFiles = new Set();
   let updateURLTimeout = null;
   let combinations = [];
   let isSelectAllActive = false;
   let cityToSlug = {};
   let slugToCity = {};
+  const LARGE_SELECTION_HINT_THRESHOLD = 300;
   
   // Elements
   const container = document.getElementById('downloadForm');
@@ -78,6 +80,11 @@
       order_by: filters.orderBy ? filters.orderBy.value : 'quality',
       order_dir: filters.orderDir ? (filters.orderDir.dataset.dir || 'desc') : 'desc'
     };
+  }
+
+  function isFileSelected(fileName) {
+    if (!fileName) return false;
+    return isSelectAllActive ? !excludedFiles.has(fileName) : selectedFiles.has(fileName);
   }
 
   function isAnyFilterActive() {
@@ -220,7 +227,7 @@
     // Original: <div>Budget{% if t.currency %} {{ t.currency }}{% endif %}</div>
     // Original grid value: {{ t.budget|replace... }}
     
-    const isSelected = selectedFiles.has(t.file_name);
+    const isSelected = isFileSelected(t.file_name);
 
     const dataAttrs = `
         data-title="${escapeHtml(t.title)}"
@@ -259,11 +266,11 @@
           <input class="row-check" type="checkbox" data-file="${escapeHtml(t.file_name)}" ${isSelected ? 'checked' : ''} />
           <div class="title-row">
             <h2>${escapeHtml(t.title).replace(/_/g, ' ')}</h2>
-            <div class="labels">
+            <span class="labels">
                 ${t.experimental ? '<span class="tag exp" title="Dataset marked as experimental">Experimental</span>' : ''}
                 ${t.fully_funded ? '<span class="tag funded" title="All selected projects are funded">Fully funded</span>' : ''}
                 ${tags}
-            </div>
+            </span>
           </div>
           <span class="qs" title="QS = (avg vote length)³ × (projects)² × (votes). Higher is better.">QS ${t.quality_short}</span>
           <div class="tile-actions">
@@ -479,8 +486,12 @@
         
         // Clear selection on filter change
         selectedFiles.clear();
+        excludedFiles.clear();
         isSelectAllActive = false;
-        if (selectAll) selectAll.checked = false;
+        if (selectAll) {
+          selectAll.checked = false;
+          selectAll.indeterminate = false;
+        }
         updateSelectionUI();
     }
     if (!hasMore) return;
@@ -514,10 +525,8 @@
         
         if (isSelectAllActive) {
             $$('.row-check').forEach(cb => {
-                if (!cb.checked) {
-                    cb.checked = true;
-                    selectedFiles.add(cb.dataset.file);
-                }
+            const file = cb.dataset.file;
+            cb.checked = !excludedFiles.has(file);
             });
             updateSelectionUI();
         }
@@ -665,14 +674,12 @@
               if (checkbox) {
                   checkbox.checked = !checkbox.checked;
                   const file = checkbox.dataset.file;
-                  if (checkbox.checked) {
-                      selectedFiles.add(file);
+                  if (isSelectAllActive) {
+                    if (checkbox.checked) excludedFiles.delete(file);
+                    else excludedFiles.add(file);
                   } else {
-                      selectedFiles.delete(file);
-                      if (isSelectAllActive) {
-                          isSelectAllActive = false;
-                          if (selectAll) selectAll.checked = false;
-                      }
+                    if (checkbox.checked) selectedFiles.add(file);
+                    else selectedFiles.delete(file);
                   }
                   updateSelectionUI();
               }
@@ -682,14 +689,12 @@
       container.addEventListener('change', (e) => {
           if (e.target.classList.contains('row-check')) {
               const file = e.target.dataset.file;
-              if (e.target.checked) {
-                  selectedFiles.add(file);
+            if (isSelectAllActive) {
+              if (e.target.checked) excludedFiles.delete(file);
+              else excludedFiles.add(file);
               } else {
-                  selectedFiles.delete(file);
-                  if (isSelectAllActive) {
-                      isSelectAllActive = false;
-                      if (selectAll) selectAll.checked = false;
-                  }
+              if (e.target.checked) selectedFiles.add(file);
+              else selectedFiles.delete(file);
               }
               updateSelectionUI();
           }
@@ -700,6 +705,8 @@
       selectAll.addEventListener('change', (e) => {
           const checked = e.target.checked;
           isSelectAllActive = checked;
+        excludedFiles.clear();
+        if (checked) selectedFiles.clear();
           $$('.row-check').forEach(cb => {
               cb.checked = checked;
               const file = cb.dataset.file;
@@ -710,28 +717,45 @@
   }
 
   function updateSelectionUI() {
-      const count = selectedFiles.size;
+      const count = isSelectAllActive
+        ? Math.max(0, totalCount - excludedFiles.size)
+        : selectedFiles.size;
       const isGlobal = isSelectAllActive;
 
       if (downloadBtn) {
-          if (isGlobal) {
-             downloadBtn.textContent = `Download ${totalCount} files`;
-             downloadBtn.disabled = false;
-          } else {
-             downloadBtn.textContent = count > 0 ? `Download ${count} selected file${count === 1 ? '' : 's'}` : 'Download selected';
-             downloadBtn.disabled = count === 0;
-          }
+        downloadBtn.textContent = count > 0 ? `Download ${count} selected file${count === 1 ? '' : 's'}` : 'Download selected';
+        downloadBtn.disabled = count === 0;
+      }
+
+      if (selectAll) {
+        selectAll.checked = isGlobal;
+        selectAll.indeterminate = isGlobal && excludedFiles.size > 0;
       }
       
       // Sync hidden inputs for form submission
       // Remove existing hidden inputs
       $$('input[type="hidden"][name="files"]').forEach(el => el.remove());
+      $$('input[type="hidden"][name="exclude"]').forEach(el => el.remove());
+      $$('input[type="hidden"][name="select_all"]').forEach(el => el.remove());
       
       // Add new hidden inputs for selected files
       const form = document.getElementById('downloadForm');
       if (form) {
-          // If global select all, we don't need individual files
-          if (!isGlobal) {
+        if (isGlobal) {
+          const allInput = document.createElement('input');
+          allInput.type = 'hidden';
+          allInput.name = 'select_all';
+          allInput.value = 'true';
+          form.appendChild(allInput);
+
+          excludedFiles.forEach(file => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'exclude';
+            input.value = file;
+            form.appendChild(input);
+          });
+        } else {
               selectedFiles.forEach(file => {
                   const input = document.createElement('input');
                   input.type = 'hidden';
@@ -929,6 +953,95 @@
       showSnapshotNotification(snapshotId, snapshotUrl);
     }
   }
+
+  function showLargeSelectionChoiceModal(selectedCount) {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'download-choice-overlay';
+      overlay.setAttribute('role', 'presentation');
+
+      const modal = document.createElement('div');
+      modal.className = 'download-choice-modal';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.setAttribute('aria-labelledby', 'download-choice-title');
+
+      modal.innerHTML = `
+        <div class="download-choice-header">
+          <h3 id="download-choice-title">Large download selected</h3>
+          <button type="button" class="download-choice-close" data-choice="cancel" aria-label="Cancel download">×</button>
+        </div>
+        <p class="download-choice-lead">
+          You selected <strong>${selectedCount}</strong> files. Preparing a ZIP with only these files may take a while.
+        </p>
+        <p>
+          Downloading the full archive is usually faster because it is already prepared on the server.
+        </p>
+        <div class="download-choice-actions">
+          <button type="button" class="download-choice-btn primary" data-choice="all">Download all (faster)</button>
+          <button type="button" class="download-choice-btn secondary" data-choice="selected">Keep downloading only selected (${selectedCount})</button>
+        </div>
+      `;
+
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+
+      const buttons = Array.from(modal.querySelectorAll('.download-choice-btn'));
+      const allBtn = modal.querySelector('[data-choice="all"]');
+      const cancelBtn = modal.querySelector('[data-choice="cancel"]');
+
+      function cleanup(choice) {
+        document.removeEventListener('keydown', onKeyDown);
+        overlay.removeEventListener('click', onOverlayClick);
+        buttons.forEach((btn) => btn.removeEventListener('click', onBtnClick));
+        document.body.style.overflow = prevOverflow;
+        overlay.remove();
+        resolve(choice);
+      }
+
+      function onBtnClick(e) {
+        const choice = e.currentTarget.getAttribute('data-choice');
+        cleanup(choice || 'cancel');
+      }
+
+      function onOverlayClick(e) {
+        if (e.target === overlay) cleanup('cancel');
+      }
+
+      function onKeyDown(e) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          cleanup('cancel');
+          return;
+        }
+
+        if (e.key === 'Tab') {
+          const focusable = buttons;
+          if (!focusable.length) return;
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+
+      buttons.forEach((btn) => btn.addEventListener('click', onBtnClick));
+      overlay.addEventListener('click', onOverlayClick);
+      document.addEventListener('keydown', onKeyDown);
+
+      // Default action requested by product decision.
+      if (allBtn) allBtn.focus();
+      if (!allBtn && cancelBtn) cancelBtn.focus();
+    });
+  }
   
   function parseContentDispositionFilename(cd) {
     if (!cd) return null;
@@ -1094,23 +1207,44 @@
       downloadForm.addEventListener('submit', async (e) => {
           e.preventDefault();
           
-          if (selectedFiles.size === 0 && !isSelectAllActive) return;
+        const selectedCount = isSelectAllActive
+          ? Math.max(0, totalCount - excludedFiles.size)
+          : selectedFiles.size;
+        if (selectedCount === 0) return;
+
+          const willBuildLargeZip = selectedCount >= LARGE_SELECTION_HINT_THRESHOLD && (
+            !isSelectAllActive || excludedFiles.size > 0 || isAnyFilterActive()
+          );
+
+          let forceDownloadAll = false;
+          if (willBuildLargeZip) {
+            const choice = await showLargeSelectionChoiceModal(selectedCount);
+            if (choice === 'cancel') return;
+            forceDownloadAll = choice === 'all';
+          }
 
           // Build form data
           const fd = new FormData(downloadForm);
           
           // Check if we should use "select_all" optimization
-          if (isSelectAllActive) {
+          if (isSelectAllActive || forceDownloadAll) {
              fd.append('select_all', 'true');
-             // If global select all, we don't need individual files
+             // Select-all mode sends selection intent without enumerating every file.
              fd.delete('files');
              
-             // Append current filter values to FormData
-             const filters = getFilterValues();
-             for (const [key, value] of Object.entries(filters)) {
-                 if (value !== '' && value !== null && value !== undefined && value !== false) {
-                     fd.append(key, value);
-                 }
+             // Preserve current filter-aware select-all behavior, unless user explicitly
+             // chose the faster "download all files" option above.
+             if (!forceDownloadAll) {
+               const filters = getFilterValues();
+               for (const [key, value] of Object.entries(filters)) {
+                   if (value !== '' && value !== null && value !== undefined && value !== false) {
+                       fd.append(key, value);
+                   }
+               }
+             } else {
+               // Ensure we request an unfiltered full archive.
+               fd.delete('exclude');
+               ['search','country','city','year','votes_min','votes_max','projects_min','projects_max','len_min','len_max','type','exclude_fully','exclude_experimental','require_geo','require_target','require_category'].forEach((k) => fd.delete(k));
              }
           }
 

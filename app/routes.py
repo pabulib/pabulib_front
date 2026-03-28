@@ -1,6 +1,7 @@
 import io
 import json
 import mimetypes
+import os
 import re
 import tempfile
 import threading
@@ -15,6 +16,7 @@ from flask import (
     Blueprint,
     Response,
     abort,
+    current_app,
     jsonify,
     redirect,
     render_template,
@@ -242,8 +244,13 @@ from .utils.load_pb_file import parse_pb_lines
 from .utils.pb_utils import parse_comments_from_meta as _parse_comments_from_meta
 from .utils.pb_utils import parse_pb_to_tile as _parse_pb_to_tile
 from .utils.upload_security import is_allowed_extension as _is_allowed_ext
-from .utils.upload_security import is_probably_text_file as _is_probably_text_file
+from .utils.upload_security import cleanup_stale_subdirectories as _cleanup_stale_subdirs
+from .utils.upload_security import detect_formula_injection_cells as _detect_formula_cells
+from .utils.upload_security import inspect_uploaded_file as _inspect_uploaded_file
+from .utils.upload_security import is_safe_regular_file as _is_safe_regular_file
 from .utils.upload_security import public_tmp_dir as _public_tmp_dir
+from .utils.upload_security import validate_email_address as _validate_email_address
+from .utils.security import log_security_event as _log_security_event
 from .utils.validation import count_issues, format_validation_summary
 from .utils.validation import get_checker_version as _get_checker_version
 from .utils.validation import validate_pb_file
@@ -436,6 +443,11 @@ def _public_session_dir() -> Path:
     # Base folder for public uploads in temp dir
     base = Path(tempfile.gettempdir()) / "pabulib_public"
     base.mkdir(parents=True, exist_ok=True)
+    _cleanup_stale_subdirs(
+        base,
+        max_age_seconds=int(os.environ.get("PUBLIC_UPLOAD_TTL_HOURS", "24")) * 3600,
+        skip_names={str(key)},
+    )
     p = base / key
     try:
         p.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -449,6 +461,8 @@ def _list_public_tmp_tiles() -> list[dict]:
     tmp_dir = _public_session_dir()
     tiles: list[dict] = []
     for p in sorted(tmp_dir.glob("*.pb")):
+        if not _is_safe_regular_file(p, tmp_dir):
+            continue
         try:
             # Parse PB to a tile dict and format to preview shape like admin
             parsed = _parse_pb_to_tile(p)
@@ -562,7 +576,7 @@ def upload_upload_batch():
         "true",
         "yes",
     }
-    existing = {p.name for p in tmp_dir.glob("*.pb")}
+    existing = {p.name for p in tmp_dir.glob("*.pb") if _is_safe_regular_file(p, tmp_dir)}
 
     results = []
     saved = 0
@@ -599,15 +613,42 @@ def upload_upload_batch():
                         continue
                 except Exception:
                     pass
-                if not _is_probably_text_file(tmp_unique):
+                file_ok, file_error = _inspect_uploaded_file(tmp_unique)
+                if not file_ok:
                     results.append(
                         {
                             "ok": False,
                             "name": name,
-                            "msg": "File does not look like text",
+                            "msg": file_error,
                         }
                     )
                     tmp_unique.unlink(missing_ok=True)
+                    _log_security_event(
+                        current_app.logger,
+                        "public_upload_rejected",
+                        name=name,
+                        reason=file_error,
+                        remote_addr=request.remote_addr,
+                    )
+                    continue
+                formula_hits = _detect_formula_cells(tmp_unique)
+                if formula_hits:
+                    results.append(
+                        {
+                            "ok": False,
+                            "name": name,
+                            "msg": "Potential spreadsheet formula content detected at " + ", ".join(formula_hits),
+                        }
+                    )
+                    tmp_unique.unlink(missing_ok=True)
+                    _log_security_event(
+                        current_app.logger,
+                        "public_upload_rejected",
+                        name=name,
+                        reason="formula_injection",
+                        hits=formula_hits,
+                        remote_addr=request.remote_addr,
+                    )
                     continue
 
                 # Determine webpage_name to standardize filename
@@ -651,6 +692,8 @@ def upload_upload_batch():
                         continue
                     # Force replace: allow overwrite atomically
                     try:
+                        if (tmp_dir / target_name).exists() and (tmp_dir / target_name).is_symlink():
+                            raise ValueError("Unsafe destination path")
                         (tmp_dir / target_name).unlink(missing_ok=True)
                     except Exception:
                         pass
@@ -667,6 +710,12 @@ def upload_upload_batch():
                         "exists_conflict": bool(exists_conflict),
                         "msg": "Uploaded to session.",
                     }
+                )
+                _log_security_event(
+                    current_app.logger,
+                    "public_upload_saved",
+                    name=target_name,
+                    remote_addr=request.remote_addr,
                 )
             except Exception as e:
                 try:
@@ -702,7 +751,7 @@ def upload_submit_selected():
     files = payload.get("files") or []
     email = (payload.get("email") or "").strip()
 
-    if not email or ("@" not in email or "." not in email.split("@")[-1]):
+    if not _validate_email_address(email):
         return jsonify({"ok": False, "error": "Valid email required"}), 400
     if not isinstance(files, list) or not files:
         return jsonify({"ok": False, "error": "No files selected"}), 400
@@ -726,8 +775,18 @@ def upload_submit_selected():
     for name in files:
         safe = secure_filename(str(name))
         src = tmp_dir / safe
-        if not safe or not _is_allowed_ext(safe) or not src.exists():
+        if not safe or not _is_allowed_ext(safe) or not _is_safe_regular_file(src, tmp_dir):
             results.append({"ok": False, "name": name, "msg": "Not found"})
+            continue
+        formula_hits = _detect_formula_cells(src)
+        if formula_hits:
+            results.append(
+                {
+                    "ok": False,
+                    "name": safe,
+                    "msg": "Potential spreadsheet formula content detected at " + ", ".join(formula_hits),
+                }
+            )
             continue
         # Validate before copying (use cache if available)
         validation_cache_path = tmp_dir / f".{safe}.validation.json"
@@ -757,6 +816,9 @@ def upload_submit_selected():
 
         # Compute destination, avoiding collisions by suffixing
         dest = admin_tmp / safe
+        if dest.exists() and dest.is_symlink():
+            results.append({"ok": False, "name": safe, "msg": "Unsafe destination path"})
+            continue
         if dest.exists():
             stem, suff = dest.stem, dest.suffix
             i = 1
@@ -786,6 +848,13 @@ def upload_submit_selected():
                 pass
             saved += 1
             results.append({"ok": True, "name": dest.name, "msg": "Submitted"})
+            _log_security_event(
+                current_app.logger,
+                "public_submission_saved",
+                name=dest.name,
+                email=email,
+                remote_addr=request.remote_addr,
+            )
         except Exception as e:
             results.append(
                 {
@@ -828,7 +897,7 @@ def upload_delete_selected():
             results.append({"ok": False, "name": name, "msg": "Invalid name"})
             continue
         p = tmp_dir / safe
-        if not p.exists() or not p.is_file():
+        if not _is_safe_regular_file(p, tmp_dir):
             results.append({"ok": False, "name": safe, "msg": "Not found"})
             continue
         try:
@@ -861,7 +930,7 @@ def upload_validate():
     f = request.files["file"]
     email = (request.form.get("email") or "").strip()
     # Basic email sanity (optional): simple pattern
-    if email and ("@" not in email or "." not in email.split("@")[-1]):
+    if email and not _validate_email_address(email):
         return jsonify({"ok": False, "error": "Invalid email"}), 400
 
     name = (f.filename or "").strip()
@@ -887,9 +956,17 @@ def upload_validate():
                 return jsonify({"ok": False, "error": "File too large"}), 413
         except Exception:
             pass
-        # Ensure it's text-like
-        if not _is_probably_text_file(tmp_path):
-            return jsonify({"ok": False, "error": "File does not look like text"}), 400
+        file_ok, file_error = _inspect_uploaded_file(tmp_path)
+        if not file_ok:
+            return jsonify({"ok": False, "error": file_error}), 400
+        formula_hits = _detect_formula_cells(tmp_path)
+        if formula_hits:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "Potential spreadsheet formula content detected at " + ", ".join(formula_hits),
+                }
+            ), 400
 
         # Validate using existing validator (creates its own sanitized temp and cleans it)
         validation = validate_pb_file(tmp_path)
@@ -925,7 +1002,7 @@ def upload_submit():
         return jsonify({"ok": False, "error": "No file part"}), 400
     f = request.files["file"]
     email = (request.form.get("email") or "").strip()
-    if not email or ("@" not in email or "." not in email.split("@")[-1]):
+    if not _validate_email_address(email):
         return jsonify({"ok": False, "error": "Valid email required"}), 400
     name = (f.filename or "").strip()
     if not name or not _is_allowed_ext(name):
@@ -944,8 +1021,17 @@ def upload_submit():
                 return jsonify({"ok": False, "error": "File too large"}), 413
         except Exception:
             pass
-        if not _is_probably_text_file(tmp_path):
-            return jsonify({"ok": False, "error": "File does not look like text"}), 400
+        file_ok, file_error = _inspect_uploaded_file(tmp_path)
+        if not file_ok:
+            return jsonify({"ok": False, "error": file_error}), 400
+        formula_hits = _detect_formula_cells(tmp_path)
+        if formula_hits:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "Potential spreadsheet formula content detected at " + ", ".join(formula_hits),
+                }
+            ), 400
 
         # Validate and only proceed if valid
         validation = validate_pb_file(tmp_path)
@@ -969,6 +1055,8 @@ def upload_submit():
         admin_tmp = _tmp_upload_dir()
         safe_name = secure_filename(name)
         dest = admin_tmp / safe_name
+        if dest.exists() and dest.is_symlink():
+            return jsonify({"ok": False, "error": "Unsafe destination path"}), 400
         # If collision, add a short suffix
         if dest.exists():
             stem = dest.stem
@@ -996,6 +1084,13 @@ def upload_submit():
 
         sentry_sdk.capture_message(
             f"New Public Submission: {dest.name} from {email}", level="info"
+        )
+        _log_security_event(
+            current_app.logger,
+            "public_submission_saved",
+            name=dest.name,
+            email=email,
+            remote_addr=request.remote_addr,
         )
 
         return jsonify(

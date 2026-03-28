@@ -24,10 +24,12 @@ from flask import (
     session,
     url_for,
 )
+from flask_limiter.util import get_remote_address
 from sqlalchemy import func
 from werkzeug.security import check_password_hash
 from werkzeug.utils import secure_filename
 
+from .__init__ import limiter
 from .db import get_session
 from .models import (
     AdminUser,
@@ -53,6 +55,19 @@ from .utils.pb_utils import build_group_key as _build_group_key
 from .utils.pb_utils import parse_pb_to_tile as _parse_pb_to_tile
 from .utils.pb_utils import pb_depreciated_folder as _pb_depr_folder
 from .utils.pb_utils import pb_folder as _pb_folder
+from .utils.security import (
+    get_admin_csrf_token,
+    has_valid_admin_csrf_token,
+    is_safe_redirect_target,
+    log_security_event,
+    rotate_admin_csrf_token,
+)
+from .utils.upload_security import (
+    cleanup_stale_files,
+    detect_formula_injection_cells,
+    inspect_uploaded_file,
+    is_safe_regular_file,
+)
 from .utils.validation import (
     count_issues,
     format_validation_summary,
@@ -134,6 +149,15 @@ CURRENT_CHECKER_CACHE_DIRNAME = "pabulib_current_checker"
 def _require_admin_login():
     # Allow login page and static files under this blueprint
     if request.endpoint in {"admin.login"}:
+        if request.method == "POST" and not has_valid_admin_csrf_token():
+            log_security_event(
+                current_app.logger,
+                "admin_csrf_rejected",
+                endpoint=request.path,
+                remote_addr=get_remote_address(),
+            )
+            abort(400, description="Invalid security token.")
+        get_admin_csrf_token()
         return None
     # Some servers may resolve static as 'admin.static'
     if request.endpoint and request.endpoint.startswith("admin.static"):
@@ -143,6 +167,16 @@ def _require_admin_login():
         if not session.get("admin_user_id"):
             nxt = request.url
             return redirect(url_for("admin.login", next=nxt))
+        session.permanent = True
+        if request.method in {"POST", "PUT", "PATCH", "DELETE"} and not has_valid_admin_csrf_token():
+            log_security_event(
+                current_app.logger,
+                "admin_csrf_rejected",
+                admin_user_id=session.get("admin_user_id"),
+                endpoint=request.path,
+                remote_addr=get_remote_address(),
+            )
+            abort(400, description="Invalid security token.")
     return None
 
 
@@ -173,17 +207,43 @@ def login():
                 or not check_password_hash(pwd_hash, password)
             ):
                 error = "Invalid credentials."
+                log_security_event(
+                    current_app.logger,
+                    "admin_login_failed",
+                    username=username,
+                    remote_addr=get_remote_address(),
+                )
             else:
+                session.clear()
                 session["admin_user_id"] = int(user_id)
+                session.permanent = True
+                rotate_admin_csrf_token()
                 # Redirect to next or dashboard
                 dest = request.args.get("next") or url_for("admin.admin_dashboard")
+                if not is_safe_redirect_target(dest):
+                    dest = url_for("admin.admin_dashboard")
+                log_security_event(
+                    current_app.logger,
+                    "admin_login_succeeded",
+                    admin_user_id=int(user_id),
+                    username=username,
+                    remote_addr=get_remote_address(),
+                )
                 return redirect(dest)
+    get_admin_csrf_token()
     return render_template("admin/login.html", error=error)
 
 
 @bp.route("/admin/logout")
 def logout():
+    log_security_event(
+        current_app.logger,
+        "admin_logout",
+        admin_user_id=session.get("admin_user_id"),
+        remote_addr=get_remote_address(),
+    )
     session.pop("admin_user_id", None)
+    session.pop("admin_csrf_token", None)
     return redirect(url_for("admin.login"))
 
 
@@ -607,6 +667,11 @@ def _tmp_upload_dir() -> Path:
     # Use container/host temp dir with a stable subfolder
     base = Path(tempfile.gettempdir()) / "pabulib_uploads"
     base.mkdir(parents=True, exist_ok=True)
+    cleanup_stale_files(
+        base,
+        max_age_seconds=int(os.environ.get("ADMIN_UPLOAD_TTL_HOURS", "168")) * 3600,
+        skip_names={SETTINGS_FILENAME},
+    )
     return base
 
 
@@ -634,6 +699,8 @@ def _list_tmp_tiles() -> list[dict]:
     tmp_dir = _tmp_upload_dir()
     tiles: list[dict] = []
     for p in sorted(tmp_dir.glob("*.pb")):
+        if not is_safe_regular_file(p, tmp_dir):
+            continue
         try:
             t = _parse_pb_to_tile(p)
             tile_data = _format_preview_tile(t)
@@ -824,6 +891,7 @@ def upload_tiles():
 
 
 @bp.post("/admin/upload")
+@limiter.limit("15/minute; 300/day")
 def upload_tiles_post():
     if "files" not in request.files:
         tiles = _list_tmp_tiles()
@@ -873,6 +941,8 @@ def upload_tiles_post():
     # Build a map of existing temp files by webpage_name for duplicate checking
     existing_temp_files = {}  # webpage_name -> filename
     for existing_file in tmp_dir.glob("*.pb"):
+        if not is_safe_regular_file(existing_file, tmp_dir):
+            continue
         try:
             tile_data = _parse_pb_to_tile(existing_file)
             existing_webpage_name = (tile_data.get("webpage_name") or "").strip()
@@ -914,6 +984,49 @@ def upload_tiles_post():
             # Save to a temporary location first to parse and get webpage_name
             temp_save_path = tmp_dir / f"temp_{fname}"
             f.save(str(temp_save_path))
+
+            file_ok, file_error = inspect_uploaded_file(temp_save_path)
+            if not file_ok:
+                temp_save_path.unlink(missing_ok=True)
+                results.append(
+                    {
+                        "ok": False,
+                        "name": fname,
+                        "msg": file_error,
+                        "validation": None,
+                    }
+                )
+                log_security_event(
+                    current_app.logger,
+                    "admin_upload_rejected",
+                    name=fname,
+                    reason=file_error,
+                    admin_user_id=session.get("admin_user_id"),
+                    remote_addr=get_remote_address(),
+                )
+                continue
+
+            formula_hits = detect_formula_injection_cells(temp_save_path)
+            if formula_hits:
+                temp_save_path.unlink(missing_ok=True)
+                results.append(
+                    {
+                        "ok": False,
+                        "name": fname,
+                        "msg": "Potential spreadsheet formula content detected at " + ", ".join(formula_hits),
+                        "validation": None,
+                    }
+                )
+                log_security_event(
+                    current_app.logger,
+                    "admin_upload_rejected",
+                    name=fname,
+                    reason="formula_injection",
+                    hits=formula_hits,
+                    admin_user_id=session.get("admin_user_id"),
+                    remote_addr=get_remote_address(),
+                )
+                continue
 
             # Enforce max size per file (dynamic)
             try:
@@ -962,6 +1075,17 @@ def upload_tiles_post():
             target_fname = secure_filename(target_fname) or secure_filename(fname)
 
             target = tmp_dir / target_fname
+            if target.exists() and target.is_symlink():
+                temp_save_path.unlink(missing_ok=True)
+                results.append(
+                    {
+                        "ok": False,
+                        "name": fname,
+                        "msg": "Unsafe target path.",
+                        "validation": None,
+                    }
+                )
+                continue
 
             # Check if a file with the same webpage_name already exists in temp
             existing_filename = None
@@ -1037,6 +1161,14 @@ def upload_tiles_post():
                     "msg": upload_msg,
                     "needs_validation": True,
                 }
+            )
+            log_security_event(
+                current_app.logger,
+                "admin_upload_saved",
+                name=target_fname,
+                original_name=fname,
+                admin_user_id=session.get("admin_user_id"),
+                remote_addr=get_remote_address(),
             )
         except Exception as e:
             # Clean up temp file if it still exists
@@ -1120,7 +1252,7 @@ def upload_tiles_ingest():
     if not name or "/" in name or ".." in name or not name.endswith(".pb"):
         abort(400)
     tmp_path = _tmp_upload_dir() / name
-    if not tmp_path.exists() or not tmp_path.is_file():
+    if not is_safe_regular_file(tmp_path, _tmp_upload_dir()):
         abort(404)
 
     logger = current_app.logger
@@ -1182,6 +1314,8 @@ def upload_tiles_ingest():
     dest_dir = _pb_folder()
     dest_dir.mkdir(parents=True, exist_ok=True)
     target = dest_dir / name
+    if target.exists() and target.is_symlink():
+        abort(400, description="Unsafe destination path.")
     # If there is a current record matching the same webpage_name, archive its file first
     archived_to: Optional[Path] = None
     try:
@@ -1205,7 +1339,7 @@ def upload_tiles_ingest():
                     )
             if prev_rec and prev_rec.path:
                 src_path = Path(prev_rec.path)
-                if src_path.exists():
+                if is_safe_regular_file(src_path, _pb_folder()):
                     archive_root = _pb_depr_folder()
                     # Use UTC timestamp-based folder name to keep history
                     ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
@@ -1242,6 +1376,8 @@ def upload_tiles_ingest():
         # Archival failures shouldn't block ingest; proceed with move of new file
         logger.exception("Archival step failed but will proceed with ingest: %s", e)
     try:
+        if target.exists() and target.is_symlink():
+            raise ValueError("Unsafe destination path")
         if target.exists():
             try:
                 target.unlink()
@@ -1264,6 +1400,13 @@ def upload_tiles_ingest():
                 success=0,
             )
         )
+    log_security_event(
+        logger,
+        "admin_upload_ingested",
+        name=name,
+        admin_user_id=session.get("admin_user_id"),
+        remote_addr=get_remote_address(),
+    )
 
     # Insert as current version (reuse parsed tile)
     tile = tile_preview
@@ -1552,7 +1695,7 @@ def upload_tiles_delete():
             continue
 
         p = tmp_dir / name
-        if p.exists() and p.is_file():
+        if is_safe_regular_file(p, tmp_dir):
             try:
                 p.unlink()
                 # Also remove the cached validation file if it exists
@@ -1564,6 +1707,13 @@ def upload_tiles_delete():
                 if public_marker.exists():
                     public_marker.unlink()
                 deleted_count += 1
+                log_security_event(
+                    current_app.logger,
+                    "admin_temp_deleted",
+                    name=name,
+                    admin_user_id=session.get("admin_user_id"),
+                    remote_addr=get_remote_address(),
+                )
             except Exception as e:
                 errors.append(f"Failed to delete {name}: {str(e)}")
         else:
@@ -1592,7 +1742,7 @@ def upload_tiles_download(name: str):
     if not name or "/" in name or ".." in name or not name.endswith(".pb"):
         abort(400)
     p = _tmp_upload_dir() / name
-    if not p.exists() or not p.is_file():
+    if not is_safe_regular_file(p, _tmp_upload_dir()):
         abort(404)
     return send_file(p, as_attachment=True)
 
@@ -1723,7 +1873,7 @@ def upload_tiles_download_selected_start():
         if not n.endswith(".pb") or "/" in n or ".." in n:
             continue
         p = tmp / n
-        if p.exists() and p.is_file():
+        if is_safe_regular_file(p, tmp):
             files.append(p)
     if not files:
         return jsonify({"ok": False, "error": "Files not found"}), 404
@@ -1785,7 +1935,7 @@ def upload_tiles_download_file(token: str):
         p = _admin_zip_jobs_dir() / f"{token}.zip"
         if p.exists():
             file_path = p
-    if not file_path or not file_path.exists():
+    if not file_path or not is_safe_regular_file(file_path, _admin_zip_jobs_dir()):
         abort(404)
     # Add snapshot information if available
     response = send_file(
@@ -1826,7 +1976,7 @@ def upload_tiles_validate():
             continue
 
         file_path = tmp_dir / fname
-        if not file_path.exists():
+        if not is_safe_regular_file(file_path, tmp_dir):
             results.append({"file": fname, "ok": False, "error": "File not found"})
             continue
 
@@ -1913,7 +2063,7 @@ def upload_tiles_validate_single():
     tmp_dir = _tmp_upload_dir()
     file_path = tmp_dir / fname
 
-    if not file_path.exists():
+    if not is_safe_regular_file(file_path, tmp_dir):
         return jsonify({"error": "File not found"}), 404
 
     # Parse file to get metadata including webpage_name
@@ -1989,7 +2139,7 @@ def upload_tiles_check():
     if not name or "/" in name or ".." in name or not name.endswith(".pb"):
         return jsonify({"error": "invalid name"}), 400
     tmp_path = _tmp_upload_dir() / name
-    if not tmp_path.exists() or not tmp_path.is_file():
+    if not is_safe_regular_file(tmp_path, _tmp_upload_dir()):
         return jsonify({"error": "not found"}), 404
     try:
         tile_preview = _parse_pb_to_tile(tmp_path)
@@ -2067,7 +2217,7 @@ def admin_delete_file():
             try:
                 if rec.path:
                     src = Path(rec.path)
-                    if src.exists():
+                    if is_safe_regular_file(src, _pb_folder()):
                         dest_dir = _pb_depr_folder() / ts
                         dest_dir.mkdir(parents=True, exist_ok=True)
                         dest = dest_dir / Path(rec.path).name
@@ -2171,7 +2321,7 @@ def admin_delete_files_bulk():
                 try:
                     if rec.path:
                         src = Path(rec.path)
-                        if src.exists():
+                        if is_safe_regular_file(src, _pb_folder()):
                             dest = dest_root / Path(rec.path).name
                             try:
                                 if dest.exists():
@@ -2263,7 +2413,7 @@ def admin_replace_file():
 
     # Check if new file exists in tmp
     tmp_path = _tmp_upload_dir() / new_name
-    if not tmp_path.exists() or not tmp_path.is_file():
+    if not is_safe_regular_file(tmp_path, _tmp_upload_dir()):
         if request.headers.get("X-Requested-With") == "fetch":
             return (
                 jsonify({"ok": False, "error": "Replacement file not found in tmp"}),
@@ -2337,7 +2487,7 @@ def admin_replace_file():
     try:
         if existing_rec.path:
             src_path = Path(existing_rec.path)
-            if src_path.exists():
+            if is_safe_regular_file(src_path, _pb_folder()):
                 archive_root = _pb_depr_folder()
                 dest_folder = archive_root / f"replaced_{ts}"
                 dest_folder.mkdir(parents=True, exist_ok=True)
@@ -2372,6 +2522,8 @@ def admin_replace_file():
     target = dest_dir / existing_name  # Keep original filename
 
     try:
+        if target.exists() and target.is_symlink():
+            raise ValueError("Unsafe destination path")
         if target.exists():
             target.unlink()
         shutil.move(str(tmp_path), str(target))
@@ -2538,6 +2690,15 @@ def admin_replace_file():
     except Exception:
         pass
 
+    log_security_event(
+        logger,
+        "admin_file_replaced",
+        existing_name=existing_name,
+        new_name=new_name,
+        admin_user_id=session.get("admin_user_id"),
+        remote_addr=get_remote_address(),
+    )
+
     if request.headers.get("X-Requested-With") == "fetch":
         return jsonify(
             {"ok": True, "message": f"Replaced {existing_name} with {new_name}"}
@@ -2624,7 +2785,7 @@ def admin_download_deleted_file(file_id: int):
             abort(404)
 
         file_path = Path(rec.path)
-        if not file_path.exists():
+        if not is_safe_regular_file(file_path, _pb_depr_folder()):
             abort(404)
 
         # Use the original filename for download
@@ -2660,7 +2821,7 @@ def admin_delete_deleted_file(file_id: int):
         try:
             if rec.path:
                 p = Path(rec.path)
-                if p.exists():
+                if is_safe_regular_file(p, _pb_depr_folder()):
                     try:
                         p.unlink()
                         removed = True
@@ -2900,7 +3061,7 @@ def admin_export_download(relpath: str):
     except Exception:
         abort(400)
 
-    if not target.exists() or not target.is_file() or not target.name.endswith(".zip"):
+    if not target.exists() or not target.is_file() or target.is_symlink() or not target.name.endswith(".zip"):
         abort(404)
 
     # If the ZIP already contains the permanent link, serve as-is and set headers
@@ -3063,6 +3224,7 @@ def admin_export_delete():
     if (
         (not target.exists())
         or (not target.is_file())
+        or target.is_symlink()
         or (not target.name.endswith(".zip"))
     ):
         if request.is_json:

@@ -20,6 +20,7 @@
     <p class="text-slate-600 mb-6">Create a ZIP containing all current files in the <code class="font-mono">pb_files/</code> directory. The archive will be saved in <code class="font-mono">cache/</code>.</p>
 
   <form method="post" action="{{ url_for('admin.admin_export_create') }}" class="space-y-4">
+    <input type="hidden" name="csrf_token" value="{{ admin_csrf_token }}">
       <div>
         <label for="zipName" class="block text-sm font-medium text-slate-700 mb-1">Archive name</label>
         <input id="zipName" name="name" type="text" value="{{ default_name }}" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500" placeholder="all_pb_files.zip" />
@@ -73,6 +74,7 @@
                     Create Link
                   </button>
                   <form method="post" action="{{ url_for('admin.admin_export_delete') }}" onsubmit="return confirm('Delete this ZIP permanently?');">
+                    <input type="hidden" name="csrf_token" value="{{ admin_csrf_token }}">
                     <input type="hidden" name="relpath" value="{{ z.relpath }}" />
                     <button type="submit" class="px-3 py-1.5 text-xs font-medium rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors">Delete</button>
                   </form>
