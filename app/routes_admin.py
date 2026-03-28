@@ -127,6 +127,8 @@ MAX_PB_FILE_SIZE = 10 * 1024 * 1024
 
 # Note: Frontend enforces a client-side batch size limit with a simple alert.
 
+CURRENT_CHECKER_CACHE_DIRNAME = "pabulib_current_checker"
+
 
 @bp.before_request
 def _require_admin_login():
@@ -228,6 +230,262 @@ def admin_dashboard():
         count=len(files),
         message=msg,
         success=success,
+    )
+
+
+def _current_checker_cache_dir() -> Path:
+    base = Path(tempfile.gettempdir()) / CURRENT_CHECKER_CACHE_DIRNAME
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
+def _current_checker_cache_path(file_id: int) -> Path:
+    return _current_checker_cache_dir() / f"{int(file_id)}.validation.json"
+
+
+def _load_validation_cache(cache_path: Path, file_path: Path) -> Optional[Dict[str, Any]]:
+    if not cache_path.exists():
+        return None
+    try:
+        if not file_path.exists():
+            return None
+        if cache_path.stat().st_mtime < file_path.stat().st_mtime:
+            return None
+        with open(cache_path, "r") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
+def _save_validation_cache(cache_path: Path, validation: Dict[str, Any]) -> None:
+    try:
+        with open(cache_path, "w") as f:
+            json.dump(validation, f)
+    except Exception:
+        pass
+
+
+def _checker_status_from_validation(validation: Optional[Dict[str, Any]]) -> str:
+    if not validation:
+        return "unchecked"
+    if validation.get("error_message"):
+        return "failed"
+    issue_counts = count_issues(validation)
+    if issue_counts["errors"] > 0:
+        return "errors"
+    if issue_counts["warnings"] > 0:
+        return "warnings"
+    return "correct"
+
+
+def _checker_status_label(status: str) -> str:
+    return {
+        "unchecked": "Not checked",
+        "correct": "Correct",
+        "warnings": "Warnings",
+        "errors": "Errors",
+        "failed": "Check failed",
+    }.get(status, "Unknown")
+
+
+def _checker_summary(results: List[Dict[str, Any]]) -> Dict[str, int]:
+    summary = {
+        "total": len(results),
+        "checked": 0,
+        "correct": 0,
+        "warnings": 0,
+        "errors": 0,
+        "failed": 0,
+        "unchecked": 0,
+    }
+    for result in results:
+        status = result.get("checker_status") or "unchecked"
+        if status == "unchecked":
+            summary["unchecked"] += 1
+            continue
+        summary["checked"] += 1
+        if status in summary:
+            summary[status] += 1
+    return summary
+
+
+def _serialize_checker_file_row(row: PBFile) -> Dict[str, Any]:
+    file_path = Path(row.path)
+    cache_path = _current_checker_cache_path(row.id)
+    validation = _load_validation_cache(cache_path, file_path)
+    checker_status = _checker_status_from_validation(validation)
+    issue_counts = count_issues(validation) if validation else {"errors": 0, "warnings": 0}
+    cached_at = None
+    if validation and cache_path.exists():
+        try:
+            cached_at = datetime.fromtimestamp(cache_path.stat().st_mtime).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+        except Exception:
+            cached_at = None
+
+    return {
+        "id": row.id,
+        "file_name": row.file_name,
+        "path": row.path,
+        "country": row.country,
+        "unit": row.unit,
+        "instance": row.instance,
+        "subunit": row.subunit,
+        "year": row.year,
+        "file_mtime": row.file_mtime,
+        "ingested_at": row.ingested_at,
+        "webpage_name": row.webpage_name,
+        "vote_type": row.vote_type,
+        "validation_summary": format_validation_summary(validation) if validation else None,
+        "validation": validation,
+        "checker_status": checker_status,
+        "checker_status_label": _checker_status_label(checker_status),
+        "error_count": issue_counts["errors"],
+        "warning_count": issue_counts["warnings"],
+        "checked_at": cached_at,
+    }
+
+
+def _current_checker_files() -> List[Dict[str, Any]]:
+    with get_session() as s:
+        rows: List[PBFile] = (
+            s.query(PBFile)
+            .filter(PBFile.is_current == True)  # noqa: E712
+            .order_by(PBFile.file_name.asc())
+            .all()
+        )
+        return [_serialize_checker_file_row(row) for row in rows]
+
+
+def _validate_current_file_record(row: PBFile, *, force: bool = False) -> Dict[str, Any]:
+    file_path = Path(row.path)
+    cache_path = _current_checker_cache_path(row.id)
+    validation = None if force else _load_validation_cache(cache_path, file_path)
+
+    if not file_path.exists() or not file_path.is_file():
+        validation = {
+            "valid": False,
+            "errors": None,
+            "warnings": None,
+            "error_message": "File not found on disk.",
+        }
+    elif validation is None:
+        validation = validate_pb_file(file_path)
+        _save_validation_cache(cache_path, validation)
+
+    issue_counts = count_issues(validation)
+    checker_status = _checker_status_from_validation(validation)
+    checked_at = None
+    if cache_path.exists():
+        try:
+            checked_at = datetime.fromtimestamp(cache_path.stat().st_mtime).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+        except Exception:
+            checked_at = None
+
+    return {
+        "id": row.id,
+        "file_name": row.file_name,
+        "title": row.webpage_name or row.file_name,
+        "path": row.path,
+        "country": row.country or "",
+        "unit": row.unit or "",
+        "year": row.year,
+        "vote_type": row.vote_type or "",
+        "validation": validation,
+        "validation_summary": format_validation_summary(validation),
+        "checker_status": checker_status,
+        "checker_status_label": _checker_status_label(checker_status),
+        "error_count": issue_counts["errors"],
+        "warning_count": issue_counts["warnings"],
+        "checked_at": checked_at,
+    }
+
+
+@bp.get("/admin/checker")
+def admin_checker():
+    files = _current_checker_files()
+    checker_version = None
+    try:
+        checker_version = get_checker_version()
+    except Exception:
+        checker_version = None
+
+    return render_template(
+        "admin/checker.html",
+        files=files,
+        count=len(files),
+        checker_version=checker_version,
+        summary=_checker_summary(files),
+    )
+
+
+@bp.post("/admin/checker/validate_single")
+def admin_checker_validate_single():
+    if not request.is_json:
+        return jsonify({"error": "JSON required"}), 400
+
+    payload = request.get_json(silent=True) or {}
+    file_id = payload.get("id")
+    force = bool(payload.get("force"))
+
+    try:
+        file_id = int(file_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid file id"}), 400
+
+    with get_session() as s:
+        row = (
+            s.query(PBFile)
+            .filter(PBFile.id == file_id, PBFile.is_current == True)  # noqa: E712
+            .one_or_none()
+        )
+        if row is None:
+            return jsonify({"error": "File not found"}), 404
+        result = _validate_current_file_record(row, force=force)
+
+    return jsonify({"ok": True, "result": result})
+
+
+@bp.post("/admin/checker/validate")
+def admin_checker_validate():
+    if not request.is_json:
+        return jsonify({"error": "JSON required"}), 400
+
+    payload = request.get_json(silent=True) or {}
+    file_ids = payload.get("ids") or []
+    run_all = bool(payload.get("all"))
+    force = bool(payload.get("force"))
+
+    with get_session() as s:
+        query = (
+            s.query(PBFile)
+            .filter(PBFile.is_current == True)  # noqa: E712
+            .order_by(PBFile.file_name.asc())
+        )
+        if run_all:
+            rows = query.all()
+        else:
+            try:
+                normalized_ids = [int(v) for v in file_ids]
+            except (TypeError, ValueError):
+                return jsonify({"error": "Invalid file ids"}), 400
+            if not normalized_ids:
+                return jsonify({"error": "No files selected"}), 400
+            rows = query.filter(PBFile.id.in_(normalized_ids)).all()
+
+        results = [_validate_current_file_record(row, force=force) for row in rows]
+
+    return jsonify(
+        {
+            "ok": True,
+            "results": results,
+            "summary": _checker_summary(results),
+            "total": len(results),
+        }
     )
 
 
