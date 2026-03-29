@@ -370,7 +370,153 @@ def _checker_summary(results: List[Dict[str, Any]]) -> Dict[str, int]:
     return summary
 
 
-def _serialize_checker_file_row(row: PBFile) -> Dict[str, Any]:
+_CHECKER_JOB_LOCK = threading.Lock()
+_CHECKER_JOBS: Dict[str, Dict[str, Any]] = {}
+_CHECKER_ACTIVE_TOKEN: Optional[str] = None
+
+
+def _checker_jobs_dir() -> Path:
+    # Keep checker background job artifacts in system temp.
+    d = Path(tempfile.gettempdir()) / "pabulib_checker_jobs"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _checker_write_progress(token: str, data: Dict[str, Any]) -> None:
+    try:
+        p = _checker_jobs_dir() / f"{token}.json"
+        with p.open("w", encoding="utf-8") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+
+def _checker_read_progress(token: str) -> Optional[Dict[str, Any]]:
+    p = _checker_jobs_dir() / f"{token}.json"
+    if not p.exists():
+        return None
+    try:
+        with p.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
+def _checker_cleanup_jobs(max_age_seconds: int = 60 * 60 * 6) -> None:
+    try:
+        now = datetime.utcnow().timestamp()
+        for fp in _checker_jobs_dir().glob("*"):
+            try:
+                if not fp.exists():
+                    continue
+                age = now - fp.stat().st_mtime
+                if age > max_age_seconds and fp.is_file():
+                    fp.unlink(missing_ok=True)
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+
+def _checker_validate_background(token: str, file_ids: Optional[List[int]], force: bool) -> None:
+    results: List[Dict[str, Any]] = []
+    try:
+        with get_session() as s:
+            query = (
+                s.query(PBFile)
+                .filter(PBFile.is_current == True)  # noqa: E712
+                .order_by(PBFile.file_name.asc())
+            )
+            if file_ids is not None:
+                rows: List[PBFile] = query.filter(PBFile.id.in_(file_ids)).all()
+            else:
+                rows = query.all()
+
+            total = len(rows)
+            progress: Dict[str, Any] = {
+                "token": token,
+                "total": total,
+                "current": 0,
+                "percent": 0,
+                "status": "running",
+                "current_name": None,
+                "done": False,
+                "error": None,
+                "summary": {
+                    "total": total,
+                    "checked": 0,
+                    "correct": 0,
+                    "warnings": 0,
+                    "errors": 0,
+                    "failed": 0,
+                    "unchecked": 0,
+                },
+            }
+            _checker_write_progress(token, progress)
+
+            for idx, row in enumerate(rows, start=1):
+                progress.update(
+                    {
+                        "current_name": row.file_name,
+                        "current": idx - 1,
+                        "percent": int(((idx - 1) / max(1, total)) * 100),
+                    }
+                )
+                _checker_write_progress(token, progress)
+
+                result = _validate_current_file_record(row, force=force)
+                results.append(result)
+
+                progress["summary"] = _checker_summary(results)
+                progress.update(
+                    {
+                        "current": idx,
+                        "percent": int((idx / max(1, total)) * 100),
+                    }
+                )
+                _checker_write_progress(token, progress)
+
+            progress.update(
+                {
+                    "done": True,
+                    "status": "ready",
+                    "current_name": None,
+                    "percent": 100,
+                    "summary": _checker_summary(results),
+                }
+            )
+            _checker_write_progress(token, progress)
+
+            with _CHECKER_JOB_LOCK:
+                _CHECKER_JOBS[token] = {
+                    "finished_at": datetime.utcnow().isoformat(),
+                    "total": total,
+                    "summary": progress.get("summary") or {},
+                }
+    except Exception as e:
+        progress = {
+            "token": token,
+            "total": len(results),
+            "current": len(results),
+            "percent": 0,
+            "status": "error",
+            "current_name": None,
+            "done": False,
+            "error": f"Checker job error: {e}",
+            "summary": _checker_summary(results),
+        }
+        _checker_write_progress(token, progress)
+    finally:
+        global _CHECKER_ACTIVE_TOKEN
+        with _CHECKER_JOB_LOCK:
+            if _CHECKER_ACTIVE_TOKEN == token:
+                _CHECKER_ACTIVE_TOKEN = None
+
+
+def _serialize_checker_file_row(
+    row: PBFile, comments: Optional[List[str]] = None
+) -> Dict[str, Any]:
     file_path = Path(row.path)
     cache_path = _current_checker_cache_path(row.id)
     validation = _load_validation_cache(cache_path, file_path)
@@ -405,6 +551,8 @@ def _serialize_checker_file_row(row: PBFile) -> Dict[str, Any]:
         "error_count": issue_counts["errors"],
         "warning_count": issue_counts["warnings"],
         "checked_at": cached_at,
+        "comments": comments or [],
+        "comment_count": len(comments or []),
     }
 
 
@@ -416,7 +564,22 @@ def _current_checker_files() -> List[Dict[str, Any]]:
             .order_by(PBFile.file_name.asc())
             .all()
         )
-        return [_serialize_checker_file_row(row) for row in rows]
+        ids = [row.id for row in rows]
+        comments_map: Dict[int, List[str]] = {}
+        if ids:
+            comment_rows = (
+                s.query(PBComment.file_id, PBComment.text)
+                .filter(PBComment.file_id.in_(ids), PBComment.is_active == True)  # noqa: E712
+                .order_by(PBComment.file_id.asc(), PBComment.idx.asc())
+                .all()
+            )
+            for file_id, text in comment_rows:
+                comments_map.setdefault(int(file_id), []).append(str(text or ""))
+
+        return [
+            _serialize_checker_file_row(row, comments=comments_map.get(row.id, []))
+            for row in rows
+        ]
 
 
 def _validate_current_file_record(row: PBFile, *, force: bool = False) -> Dict[str, Any]:
@@ -547,6 +710,89 @@ def admin_checker_validate():
             "total": len(results),
         }
     )
+
+
+@bp.post("/admin/checker/validate/start")
+def admin_checker_validate_start():
+    if not request.is_json:
+        return jsonify({"error": "JSON required"}), 400
+
+    _checker_cleanup_jobs()
+    payload = request.get_json(silent=True) or {}
+    file_ids = payload.get("ids") or []
+    run_all = bool(payload.get("all"))
+    force = bool(payload.get("force"))
+
+    normalized_ids: Optional[List[int]] = None
+    if not run_all:
+        try:
+            normalized_ids = [int(v) for v in file_ids]
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid file ids"}), 400
+        if not normalized_ids:
+            return jsonify({"error": "No files selected"}), 400
+
+    token = uuid.uuid4().hex
+    global _CHECKER_ACTIVE_TOKEN
+    with _CHECKER_JOB_LOCK:
+        if _CHECKER_ACTIVE_TOKEN:
+            active_progress = _checker_read_progress(_CHECKER_ACTIVE_TOKEN)
+            if active_progress and not active_progress.get("done"):
+                return (
+                    jsonify(
+                        {
+                            "error": "Another checker run is already in progress. Please wait until it finishes.",
+                        }
+                    ),
+                    409,
+                )
+        _CHECKER_ACTIVE_TOKEN = token
+
+    _checker_write_progress(
+        token,
+        {
+            "token": token,
+            "total": 0,
+            "current": 0,
+            "percent": 0,
+            "status": "queued",
+            "current_name": None,
+            "done": False,
+            "error": None,
+            "summary": {
+                "total": 0,
+                "checked": 0,
+                "correct": 0,
+                "warnings": 0,
+                "errors": 0,
+                "failed": 0,
+                "unchecked": 0,
+            },
+        },
+    )
+
+    t = threading.Thread(
+        target=_checker_validate_background,
+        args=(token, None if run_all else normalized_ids, force),
+        daemon=True,
+    )
+    t.start()
+
+    return jsonify(
+        {
+            "ok": True,
+            "token": token,
+            "progress_url": url_for("admin.admin_checker_validate_progress", token=token),
+        }
+    )
+
+
+@bp.get("/admin/checker/validate/progress/<token>")
+def admin_checker_validate_progress(token: str):
+    data = _checker_read_progress(token)
+    if not data:
+        return jsonify({"ok": False, "error": "Not found"}), 404
+    return jsonify({"ok": True, **data})
 
 
 @bp.get("/admin/links")
