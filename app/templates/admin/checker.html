@@ -206,12 +206,13 @@
                         <div class="checker-last-check-label text-sm text-slate-500">Last check: <span class="checker-checked-at text-slate-700">{{ f.checked_at }}</span></div>
                         {% endif %}
                       </div>
-                      <div class="mt-2 flex flex-wrap gap-2 text-sm text-slate-600">
-                        <span class="rounded-full bg-slate-100 px-2.5 py-1">{{ f.country or 'Unknown country' }}</span>
-                        {% if f.unit %}<span class="rounded-full bg-slate-100 px-2.5 py-1">{{ f.unit }}</span>{% endif %}
-                        {% if f.year %}<span class="rounded-full bg-slate-100 px-2.5 py-1">{{ f.year }}</span>{% endif %}
-                        {% if f.vote_type %}<span class="rounded-full bg-slate-100 px-2.5 py-1">{{ f.vote_type }}</span>{% endif %}
+                      {% if f.comment_count > 0 %}
+                      <div class="mt-2">
+                        <button type="button" class="toggle-comments-btn rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" aria-expanded="false" data-open-label="Show comments ({{ f.comment_count }})" data-close-label="Hide comments">
+                          Show comments ({{ f.comment_count }})
+                        </button>
                       </div>
+                      {% endif %}
                     </div>
                     <div class="flex flex-wrap items-center gap-2 xl:justify-end">
                       <span class="checker-status inline-flex items-center rounded-full px-3 py-1 text-sm font-medium
@@ -222,11 +223,6 @@
                         {% else %}bg-slate-100 text-slate-700{% endif %}">
                         {{ f.checker_status_label }}
                       </span>
-                      {% if f.comment_count > 0 %}
-                      <button type="button" class="toggle-comments-btn rounded-lg border border-teal-300 bg-teal-50 px-3 py-2 text-sm text-teal-700 hover:bg-teal-100" aria-expanded="false" data-open-label="Show comments ({{ f.comment_count }})" data-close-label="Hide comments">
-                        Show comments ({{ f.comment_count }})
-                      </button>
-                      {% endif %}
                       <button type="button" class="run-single-btn rounded-lg border border-indigo-300 px-3 py-2 text-sm text-indigo-700 hover:bg-indigo-50" data-id="{{ f.id }}">Run checker</button>
                     </div>
                   </div>
@@ -244,11 +240,11 @@
                   </div>
 
                   {% if f.comment_count > 0 %}
-                  <div class="checker-comments hidden mt-3 rounded-xl border border-teal-200 bg-teal-50/60 p-4">
-                    <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-teal-700">Comments</div>
+                  <div class="checker-comments hidden mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-700">Comments</div>
                     <ul class="space-y-2 text-sm text-slate-700">
                       {% for c in f.comments %}
-                      <li class="rounded-md border border-teal-100 bg-white/80 px-3 py-2">{{ c }}</li>
+                      <li class="rounded-md border border-slate-200 bg-white px-3 py-2">{{ c }}</li>
                       {% endfor %}
                     </ul>
                   </div>
@@ -299,6 +295,7 @@
   const progressCount = document.getElementById('checkerProgressCount');
   const globalIssueSummaryContent = document.getElementById('globalIssueSummaryContent');
   let quickStatusFilter = '';
+  let activeIssueFilter = null;
 
   function summaryElements(){
     return {
@@ -396,8 +393,8 @@
   }
 
   function buildGlobalIssueSummaryHtml(){
-    const aggregate = new Map();
-    const items = [];
+    const errorAggregate = new Map();
+    const warningAggregate = new Map();
 
     validationState.forEach(item => {
       const validation = item.validation;
@@ -409,10 +406,9 @@
         Object.entries(validation.errors).forEach(([issueType, instances]) => {
           const count = instances && typeof instances === 'object' ? Object.keys(instances).length : 0;
           if(count > 0){
-            const key = `error:${issueType}`;
-            const current = aggregate.get(key) || {label: issueType, count: 0, tone: 'error'};
+            const current = errorAggregate.get(issueType) || {label: issueType, count: 0, tone: 'error'};
             current.count += count;
-            aggregate.set(key, current);
+            errorAggregate.set(issueType, current);
           }
         });
       }
@@ -421,35 +417,76 @@
         Object.entries(validation.warnings).forEach(([issueType, instances]) => {
           const count = instances && typeof instances === 'object' ? Object.keys(instances).length : 0;
           if(count > 0){
-            const key = `warning:${issueType}`;
-            const current = aggregate.get(key) || {label: issueType, count: 0, tone: 'warning'};
+            const current = warningAggregate.get(issueType) || {label: issueType, count: 0, tone: 'warning'};
             current.count += count;
-            aggregate.set(key, current);
+            warningAggregate.set(issueType, current);
           }
         });
       }
     });
 
-    aggregate.forEach(item => items.push(item));
-    items.sort((a, b) => {
+    const sortedErrors = Array.from(errorAggregate.values()).sort((a, b) => {
       if(b.count !== a.count){
         return b.count - a.count;
       }
       return a.label.localeCompare(b.label);
     });
 
-    if(!items.length){
+    const sortedWarnings = Array.from(warningAggregate.values()).sort((a, b) => {
+      if(b.count !== a.count){
+        return b.count - a.count;
+      }
+      return a.label.localeCompare(b.label);
+    });
+
+    if(!sortedErrors.length && !sortedWarnings.length){
       return '<div class="text-sm text-slate-600">No aggregated errors or warnings yet.</div>';
     }
 
-    return `
-      <div class="space-y-2">
-        ${items.map(item => `
-          <div class="flex items-center justify-between gap-3 rounded-md px-3 py-2 ${item.tone === 'error' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}">
-            <span class="min-w-0 text-sm">${escapeHtml(item.label.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase()))}</span>
-            <span class="shrink-0 rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold">${item.count}</span>
+    const sectionHtml = (title, items, tone) => {
+      const emptyText = tone === 'error' ? 'No errors found.' : 'No warnings found.';
+      if(!items.length){
+        return `
+          <div class="rounded-lg border border-slate-200 bg-white p-3">
+            <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">${escapeHtml(title)}</div>
+            <div class="text-sm text-slate-500">${emptyText}</div>
           </div>
-        `).join('')}
+        `;
+      }
+      return `
+        <div class="rounded-lg border border-slate-200 bg-white p-3">
+          <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">${escapeHtml(title)}</div>
+          <div class="space-y-2">
+            ${items.map(item => {
+              const active = activeIssueFilter && activeIssueFilter.tone === tone && activeIssueFilter.issueType === item.label;
+              const rowTone = tone === 'error'
+                ? (active ? 'border-red-300 bg-red-100 text-red-800' : 'border-red-200 bg-red-50 text-red-700')
+                : (active ? 'border-amber-300 bg-amber-100 text-amber-800' : 'border-amber-200 bg-amber-50 text-amber-700');
+              return `
+                <button
+                  type="button"
+                  class="issue-filter-btn flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2 text-left ${rowTone}"
+                  data-issue-type="${escapeHtml(item.label)}"
+                  data-issue-tone="${escapeHtml(tone)}"
+                  aria-pressed="${active ? 'true' : 'false'}">
+                  <span class="min-w-0 text-sm">${escapeHtml(item.label.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase()))}</span>
+                  <span class="shrink-0 rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold">${item.count}</span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    };
+
+    return `
+      <div class="mb-3 flex items-center justify-between gap-3">
+        <div class="text-xs text-slate-500">Click an issue to filter tiles. Click again to clear.</div>
+        ${activeIssueFilter ? '<button type="button" id="clearIssueFilterBtn" class="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50">Clear issue filter</button>' : ''}
+      </div>
+      <div class="grid gap-3 lg:grid-cols-2">
+        ${sectionHtml('Errors', sortedErrors, 'error')}
+        ${sectionHtml('Warnings', sortedWarnings, 'warning')}
       </div>
     `;
   }
@@ -569,7 +606,19 @@
       const matchesSearch = !query || haystack.includes(query);
       const matchesStatus = !status || row.dataset.status === status;
       const matchesYear = !year || row.dataset.year === year;
-      const show = matchesSearch && matchesStatus && matchesYear;
+      let matchesIssue = true;
+      if(activeIssueFilter){
+        const rowValidationState = validationState.get(Number(row.dataset.id));
+        const validation = rowValidationState ? rowValidationState.validation : null;
+        const issueGroup = validation && typeof validation === 'object'
+          ? (activeIssueFilter.tone === 'error' ? validation.errors : validation.warnings)
+          : null;
+        const issueInstances = issueGroup && typeof issueGroup === 'object'
+          ? issueGroup[activeIssueFilter.issueType]
+          : null;
+        matchesIssue = !!(issueInstances && typeof issueInstances === 'object' && Object.keys(issueInstances).length > 0);
+      }
+      const show = matchesSearch && matchesStatus && matchesYear && matchesIssue;
       row.style.display = show ? '' : 'none';
       if(show){
         visible += 1;
@@ -803,6 +852,35 @@
   filterRows();
   deriveSummaryFromRows();
   refreshGlobalIssueSummary();
+
+  globalIssueSummaryContent.addEventListener('click', (event) => {
+    const clearBtn = event.target.closest('#clearIssueFilterBtn');
+    if(clearBtn){
+      activeIssueFilter = null;
+      refreshGlobalIssueSummary();
+      filterRows();
+      return;
+    }
+
+    const btn = event.target.closest('.issue-filter-btn');
+    if(!btn){
+      return;
+    }
+
+    const issueType = btn.dataset.issueType || '';
+    const tone = btn.dataset.issueTone || '';
+    if(!issueType || !tone){
+      return;
+    }
+
+    if(activeIssueFilter && activeIssueFilter.issueType === issueType && activeIssueFilter.tone === tone){
+      activeIssueFilter = null;
+    } else {
+      activeIssueFilter = {issueType, tone};
+    }
+    refreshGlobalIssueSummary();
+    filterRows();
+  });
 
   searchInput.addEventListener('input', filterRows);
   searchClear.addEventListener('click', () => {

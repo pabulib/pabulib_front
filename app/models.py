@@ -249,3 +249,37 @@ class PBVisualization(Base):
     file_mtime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     __table_args__ = (Index("ix_pb_visualizations_computed_at", "computed_at"),)
+
+
+class CheckerValidationCache(Base):
+    """Persistent checker results cache for current PB files."""
+
+    __tablename__ = "checker_validation_cache"
+
+    # One latest checker result per PBFile record id
+    file_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("pb_files.id"), primary_key=True, nullable=False
+    )
+
+    # Raw checker payload (serialized JSON dict)
+    validation_json: Mapped[str] = mapped_column(MEDIUMTEXT, nullable=False)
+
+    # Denormalized summary for fast UI/filtering
+    checker_status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    error_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    warning_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Snapshot info used to invalidate stale cache after file updates
+    file_mtime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    checker_version: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    checked_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False, index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_checker_validation_cache_checked_at", "checked_at"),
+    )

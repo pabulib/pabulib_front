@@ -33,6 +33,7 @@ from .__init__ import limiter
 from .db import get_session
 from .models import (
     AdminUser,
+    CheckerValidationCache,
     DownloadSnapshot,
     DownloadSnapshotFile,
     PBCategory,
@@ -141,8 +142,6 @@ bp = Blueprint(
 MAX_PB_FILE_SIZE = 10 * 1024 * 1024
 
 # Note: Frontend enforces a client-side batch size limit with a simple alert.
-
-CURRENT_CHECKER_CACHE_DIRNAME = "pabulib_current_checker"
 
 
 @bp.before_request
@@ -293,37 +292,57 @@ def admin_dashboard():
     )
 
 
-def _current_checker_cache_dir() -> Path:
-    base = Path(tempfile.gettempdir()) / CURRENT_CHECKER_CACHE_DIRNAME
-    base.mkdir(parents=True, exist_ok=True)
-    return base
-
-
-def _current_checker_cache_path(file_id: int) -> Path:
-    return _current_checker_cache_dir() / f"{int(file_id)}.validation.json"
-
-
-def _load_validation_cache(cache_path: Path, file_path: Path) -> Optional[Dict[str, Any]]:
-    if not cache_path.exists():
+def _load_db_validation_cache(
+    row: PBFile,
+    cache_row: Optional[CheckerValidationCache],
+) -> Optional[Dict[str, Any]]:
+    if cache_row is None:
         return None
+    if cache_row.file_mtime != row.file_mtime:
+        return None
+
+    file_path = Path(row.path)
+    if not file_path.exists() or not file_path.is_file():
+        return None
+
     try:
-        if not file_path.exists():
-            return None
-        if cache_path.stat().st_mtime < file_path.stat().st_mtime:
-            return None
-        with open(cache_path, "r") as f:
-            data = json.load(f)
+        data = json.loads(cache_row.validation_json)
         return data if isinstance(data, dict) else None
     except Exception:
         return None
 
 
-def _save_validation_cache(cache_path: Path, validation: Dict[str, Any]) -> None:
+def _upsert_db_validation_cache(
+    s,
+    row: PBFile,
+    validation: Dict[str, Any],
+    checker_status: str,
+    error_count: int,
+    warning_count: int,
+) -> CheckerValidationCache:
+    cache_row = (
+        s.query(CheckerValidationCache)
+        .filter(CheckerValidationCache.file_id == row.id)
+        .one_or_none()
+    )
+    if cache_row is None:
+        cache_row = CheckerValidationCache(file_id=row.id)
+        s.add(cache_row)
+
+    checker_version = None
     try:
-        with open(cache_path, "w") as f:
-            json.dump(validation, f)
+        checker_version = get_checker_version()
     except Exception:
-        pass
+        checker_version = None
+
+    cache_row.validation_json = json.dumps(validation)
+    cache_row.checker_status = checker_status
+    cache_row.error_count = int(error_count)
+    cache_row.warning_count = int(warning_count)
+    cache_row.file_mtime = row.file_mtime
+    cache_row.checker_version = checker_version
+    cache_row.checked_at = datetime.utcnow()
+    return cache_row
 
 
 def _checker_status_from_validation(validation: Optional[Dict[str, Any]]) -> str:
@@ -465,7 +484,7 @@ def _checker_validate_background(token: str, file_ids: Optional[List[int]], forc
                 )
                 _checker_write_progress(token, progress)
 
-                result = _validate_current_file_record(row, force=force)
+                result = _validate_current_file_record(s, row, force=force)
                 results.append(result)
 
                 progress["summary"] = _checker_summary(results)
@@ -515,19 +534,17 @@ def _checker_validate_background(token: str, file_ids: Optional[List[int]], forc
 
 
 def _serialize_checker_file_row(
-    row: PBFile, comments: Optional[List[str]] = None
+    row: PBFile,
+    comments: Optional[List[str]] = None,
+    cache_row: Optional[CheckerValidationCache] = None,
 ) -> Dict[str, Any]:
-    file_path = Path(row.path)
-    cache_path = _current_checker_cache_path(row.id)
-    validation = _load_validation_cache(cache_path, file_path)
+    validation = _load_db_validation_cache(row, cache_row)
     checker_status = _checker_status_from_validation(validation)
     issue_counts = count_issues(validation) if validation else {"errors": 0, "warnings": 0}
     cached_at = None
-    if validation and cache_path.exists():
+    if validation and cache_row and cache_row.checked_at:
         try:
-            cached_at = datetime.fromtimestamp(cache_path.stat().st_mtime).strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
+            cached_at = cache_row.checked_at.strftime("%Y-%m-%d %H:%M:%S")
         except Exception:
             cached_at = None
 
@@ -576,16 +593,36 @@ def _current_checker_files() -> List[Dict[str, Any]]:
             for file_id, text in comment_rows:
                 comments_map.setdefault(int(file_id), []).append(str(text or ""))
 
+        cache_map: Dict[int, CheckerValidationCache] = {}
+        if ids:
+            cache_rows: List[CheckerValidationCache] = (
+                s.query(CheckerValidationCache)
+                .filter(CheckerValidationCache.file_id.in_(ids))
+                .all()
+            )
+            cache_map = {int(r.file_id): r for r in cache_rows}
+
         return [
-            _serialize_checker_file_row(row, comments=comments_map.get(row.id, []))
+            _serialize_checker_file_row(
+                row,
+                comments=comments_map.get(row.id, []),
+                cache_row=cache_map.get(row.id),
+            )
             for row in rows
         ]
 
 
-def _validate_current_file_record(row: PBFile, *, force: bool = False) -> Dict[str, Any]:
+def _validate_current_file_record(s, row: PBFile, *, force: bool = False) -> Dict[str, Any]:
     file_path = Path(row.path)
-    cache_path = _current_checker_cache_path(row.id)
-    validation = None if force else _load_validation_cache(cache_path, file_path)
+    cache_row = None
+    validated_now = False
+    if not force:
+        cache_row = (
+            s.query(CheckerValidationCache)
+            .filter(CheckerValidationCache.file_id == row.id)
+            .one_or_none()
+        )
+    validation = _load_db_validation_cache(row, cache_row)
 
     if not file_path.exists() or not file_path.is_file():
         validation = {
@@ -594,20 +631,27 @@ def _validate_current_file_record(row: PBFile, *, force: bool = False) -> Dict[s
             "warnings": None,
             "error_message": "File not found on disk.",
         }
+        validated_now = True
     elif validation is None:
         validation = validate_pb_file(file_path)
-        _save_validation_cache(cache_path, validation)
+        validated_now = True
 
     issue_counts = count_issues(validation)
     checker_status = _checker_status_from_validation(validation)
+    if validated_now or cache_row is None:
+        cache_row = _upsert_db_validation_cache(
+            s,
+            row,
+            validation,
+            checker_status,
+            issue_counts["errors"],
+            issue_counts["warnings"],
+        )
+        s.flush()
+
     checked_at = None
-    if cache_path.exists():
-        try:
-            checked_at = datetime.fromtimestamp(cache_path.stat().st_mtime).strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
-        except Exception:
-            checked_at = None
+    if cache_row and cache_row.checked_at:
+        checked_at = cache_row.checked_at.strftime("%Y-%m-%d %H:%M:%S")
 
     return {
         "id": row.id,
@@ -668,7 +712,7 @@ def admin_checker_validate_single():
         )
         if row is None:
             return jsonify({"error": "File not found"}), 404
-        result = _validate_current_file_record(row, force=force)
+        result = _validate_current_file_record(s, row, force=force)
 
     return jsonify({"ok": True, "result": result})
 
@@ -700,7 +744,7 @@ def admin_checker_validate():
                 return jsonify({"error": "No files selected"}), 400
             rows = query.filter(PBFile.id.in_(normalized_ids)).all()
 
-        results = [_validate_current_file_record(row, force=force) for row in rows]
+        results = [_validate_current_file_record(s, row, force=force) for row in rows]
 
     return jsonify(
         {
