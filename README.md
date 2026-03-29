@@ -51,11 +51,11 @@ To re-ingest after adding files: docker compose -f docker/docker-compose.yml -f 
 
 This project uses the [pabulib/checker](https://github.com/pabulib/checker) library to validate .pb files. The checker is automatically installed during Docker build via `requirements.txt`.
 
-To update the checker: `docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml build web && docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml --profile debug up -d`
+To update the checker during image rebuild: `docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml build web && docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml --profile debug up -d`
 
-Quick update (running container): `docker exec pabulib-web-1 pip install pabulib-checker==0.3.1` (replace version as needed)
+Quick update (running container, no version needed): `./deployment/deploy.sh checker-update`
 
-Then you need to rebuild `./deployment/deploy.sh restart --build`
+Optional full restart after quick update: `./deployment/deploy.sh restart`
 
 To validate files: `docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml exec web python scripts/validate_pb_files.py /app/pb_files 10`
 

@@ -462,6 +462,8 @@ def _checker_validate_background(token: str, file_ids: Optional[List[int]], forc
                 "current_name": None,
                 "done": False,
                 "error": None,
+                "seq": 0,
+                "updates": [],
                 "summary": {
                     "total": total,
                     "checked": 0,
@@ -486,6 +488,10 @@ def _checker_validate_background(token: str, file_ids: Optional[List[int]], forc
 
                 result = _validate_current_file_record(s, row, force=force)
                 results.append(result)
+
+                seq = int(progress.get("seq") or 0) + 1
+                progress["seq"] = seq
+                progress["updates"] = [{"seq": seq, "result": result}]
 
                 progress["summary"] = _checker_summary(results)
                 progress.update(
@@ -523,6 +529,8 @@ def _checker_validate_background(token: str, file_ids: Optional[List[int]], forc
             "current_name": None,
             "done": False,
             "error": f"Checker job error: {e}",
+            "seq": 0,
+            "updates": [],
             "summary": _checker_summary(results),
         }
         _checker_write_progress(token, progress)
@@ -803,6 +811,8 @@ def admin_checker_validate_start():
             "current_name": None,
             "done": False,
             "error": None,
+            "seq": 0,
+            "updates": [],
             "summary": {
                 "total": 0,
                 "checked": 0,

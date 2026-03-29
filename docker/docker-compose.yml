@@ -33,6 +33,9 @@ services:
     environment:
       MYSQL_HOST: db
       MYSQL_PORT: 3306
+      # Control startup DB refresh behavior (default: skip for faster restarts)
+      DB_REFRESH_ON_START: ${DB_REFRESH_ON_START:-0}
+      REFRESH_FULL: ${REFRESH_FULL:-0}
       # Override pb_files paths for container - don't use host paths
       # These paths are where the volumes are mounted inside the container
       PB_FILES_DIR: /app/pb_files

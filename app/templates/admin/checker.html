@@ -113,7 +113,7 @@
     </div>
 
     <div class="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px_auto] xl:items-end">
+      <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
         <div class="relative">
           <label for="checkerSearch" class="block text-sm font-medium text-slate-700 mb-2">Search</label>
           <span class="absolute left-3 top-[42px] text-slate-400">
@@ -125,19 +125,33 @@
           </button>
         </div>
 
-        <div>
-          <label for="checkerYearFilter" class="block text-sm font-medium text-slate-700 mb-2">Year</label>
-          <select id="checkerYearFilter" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500">
-            <option value="">All years</option>
-          </select>
-        </div>
-
         <div class="flex flex-wrap gap-2 xl:justify-end">
           <button id="checkerFiltersClear" type="button" class="rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-700 hover:bg-slate-100">Clear filters</button>
           <button id="runSelectedBtn" type="button" class="rounded-lg border border-indigo-300 bg-white px-4 py-3 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed">Run selected</button>
           <button id="runAllBtn" type="button" class="rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-700 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed">Run all</button>
         </div>
       </div>
+
+      <details class="mt-4 rounded-lg border border-slate-200 bg-white" id="checkerAdditionalFilters">
+        <summary class="cursor-pointer list-none px-4 py-3 text-sm font-medium text-slate-700">
+          Additional filters &amp; count (city &amp; year)
+        </summary>
+
+        <div class="border-t border-slate-200 px-4 py-4">
+          <div class="mb-3 text-sm text-slate-500">Click a badge to filter. Click it again to clear.</div>
+
+          <div class="grid gap-3 lg:grid-cols-2">
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Files per city</div>
+              <div id="checkerCityBreakdown" class="flex flex-wrap gap-2"></div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Files per year / instance</div>
+              <div id="checkerInstanceBreakdown" class="flex flex-wrap gap-2"></div>
+            </div>
+          </div>
+        </div>
+      </details>
 
       <div class="mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 md:flex-row md:items-center md:justify-between">
         <div class="flex flex-wrap items-center gap-4 text-sm text-slate-600">
@@ -149,6 +163,7 @@
         </div>
         <div class="text-sm text-slate-500">Each file below shows a short summary and expandable checker details.</div>
       </div>
+
     </div>
 
     <div id="checkerNotice" class="hidden mt-4 rounded-xl p-4 text-sm"></div>
@@ -188,6 +203,7 @@
                data-title="{{ (f.webpage_name or f.file_name)|e }}"
                data-country="{{ (f.country or '')|e }}"
                data-city="{{ (f.unit or '')|e }}"
+               data-instance="{{ (f.instance or '')|e }}"
                data-year="{{ f.year if f.year is not none else '' }}"
                data-status="{{ f.checker_status }}"
                data-errors="{{ f.error_count }}"
@@ -281,7 +297,6 @@
   const searchInput = document.getElementById('checkerSearch');
   const searchClear = document.getElementById('checkerSearchClear');
   const summaryFilterButtons = Array.from(document.querySelectorAll('.summary-filter-btn'));
-  const yearFilter = document.getElementById('checkerYearFilter');
   const clearFiltersBtn = document.getElementById('checkerFiltersClear');
   const noResultsRow = document.getElementById('checkerNoResults');
   const visibleCountEl = document.getElementById('checkerVisibleCount');
@@ -294,8 +309,12 @@
   const progressText = document.getElementById('checkerProgressText');
   const progressCount = document.getElementById('checkerProgressCount');
   const globalIssueSummaryContent = document.getElementById('globalIssueSummaryContent');
+  const cityBreakdownEl = document.getElementById('checkerCityBreakdown');
+  const instanceBreakdownEl = document.getElementById('checkerInstanceBreakdown');
   let quickStatusFilter = '';
   let activeIssueFilter = null;
+  let activeCityFilter = '';
+  let activeInstanceFilter = '';
 
   function summaryElements(){
     return {
@@ -565,14 +584,71 @@
     progressCount.textContent = `${safeCurrent} / ${rawTotal}`;
   }
 
-  function populateYears(){
-    const years = Array.from(new Set(rows.map(row => row.dataset.year).filter(Boolean))).sort((a, b) => Number(b) - Number(a));
-    years.forEach(year => {
-      const option = document.createElement('option');
-      option.value = year;
-      option.textContent = year;
-      yearFilter.appendChild(option);
+  function instanceValueForRow(row){
+    const year = (row.dataset.year || '').trim();
+    if(year){
+      return year;
+    }
+    return (row.dataset.instance || '').trim();
+  }
+
+  function sortedCounterEntries(counterMap){
+    return Array.from(counterMap.entries()).sort((a, b) => {
+      if(b[1] !== a[1]){
+        return b[1] - a[1];
+      }
+      return a[0].localeCompare(b[0]);
     });
+  }
+
+  function matchesCoreFilters(row, query, status){
+    const haystack = [
+      row.dataset.file || '',
+      row.dataset.title || '',
+      row.dataset.country || '',
+      row.dataset.city || '',
+      row.dataset.instance || '',
+      row.dataset.year || ''
+    ].join(' ').toLowerCase();
+    const matchesSearch = !query || haystack.includes(query);
+    const matchesStatus = !status || row.dataset.status === status;
+    let matchesIssue = true;
+    if(activeIssueFilter){
+      const rowValidationState = validationState.get(Number(row.dataset.id));
+      const validation = rowValidationState ? rowValidationState.validation : null;
+      const issueGroup = validation && typeof validation === 'object'
+        ? (activeIssueFilter.tone === 'error' ? validation.errors : validation.warnings)
+        : null;
+      const issueInstances = issueGroup && typeof issueGroup === 'object'
+        ? issueGroup[activeIssueFilter.issueType]
+        : null;
+      matchesIssue = !!(issueInstances && typeof issueInstances === 'object' && Object.keys(issueInstances).length > 0);
+    }
+    return matchesSearch && matchesStatus && matchesIssue;
+  }
+
+  function renderBreakdown(container, entries, activeValue, filterType){
+    if(!entries.length){
+      container.innerHTML = '<div class="text-sm text-slate-500">No matching files.</div>';
+      return;
+    }
+    container.innerHTML = entries.map(([value, count]) => {
+      const active = activeValue === value;
+      const classes = active
+        ? 'border-indigo-300 bg-indigo-50 text-indigo-800'
+        : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50';
+      return `
+        <button
+          type="button"
+          class="checker-breakdown-btn inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm ${classes}"
+          data-filter-type="${escapeHtml(filterType)}"
+          data-filter-value="${escapeHtml(value)}"
+          aria-pressed="${active ? 'true' : 'false'}">
+          <span class="truncate">${escapeHtml(value)}</span>
+          <span class="rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-700">${count}</span>
+        </button>
+      `;
+    }).join('');
   }
 
   function selectedVisibleIds(){
@@ -594,31 +670,44 @@
   function filterRows(){
     const query = (searchInput.value || '').trim().toLowerCase();
     const status = quickStatusFilter || '';
-    const year = yearFilter.value || '';
+    const city = activeCityFilter || '';
+    const instance = activeInstanceFilter || '';
+
+    const coreMatchedRows = rows.filter(row => matchesCoreFilters(row, query, status));
+
+    const cityCounts = new Map();
+    coreMatchedRows.forEach(row => {
+      const cityValue = (row.dataset.city || '').trim();
+      if(cityValue){
+        cityCounts.set(cityValue, (cityCounts.get(cityValue) || 0) + 1);
+      }
+    });
+
+    const rowsForInstanceCounts = city
+      ? coreMatchedRows.filter(row => (row.dataset.city || '').trim() === city)
+      : coreMatchedRows;
+
+    const instanceCounts = new Map();
+    rowsForInstanceCounts.forEach(row => {
+      const instanceValue = instanceValueForRow(row);
+      if(instanceValue){
+        instanceCounts.set(instanceValue, (instanceCounts.get(instanceValue) || 0) + 1);
+      }
+    });
+
+    if(instance && !instanceCounts.has(instance)){
+      activeInstanceFilter = '';
+    }
+
+    renderBreakdown(cityBreakdownEl, sortedCounterEntries(cityCounts), activeCityFilter || '', 'city');
+    renderBreakdown(instanceBreakdownEl, sortedCounterEntries(instanceCounts), activeInstanceFilter || '', 'instance');
+
     let visible = 0;
     rows.forEach(row => {
-      const haystack = [
-        row.dataset.file || '',
-        row.dataset.title || '',
-        row.dataset.country || '',
-        row.dataset.city || ''
-      ].join(' ').toLowerCase();
-      const matchesSearch = !query || haystack.includes(query);
-      const matchesStatus = !status || row.dataset.status === status;
-      const matchesYear = !year || row.dataset.year === year;
-      let matchesIssue = true;
-      if(activeIssueFilter){
-        const rowValidationState = validationState.get(Number(row.dataset.id));
-        const validation = rowValidationState ? rowValidationState.validation : null;
-        const issueGroup = validation && typeof validation === 'object'
-          ? (activeIssueFilter.tone === 'error' ? validation.errors : validation.warnings)
-          : null;
-        const issueInstances = issueGroup && typeof issueGroup === 'object'
-          ? issueGroup[activeIssueFilter.issueType]
-          : null;
-        matchesIssue = !!(issueInstances && typeof issueInstances === 'object' && Object.keys(issueInstances).length > 0);
-      }
-      const show = matchesSearch && matchesStatus && matchesYear && matchesIssue;
+      const matchesCore = matchesCoreFilters(row, query, status);
+      const matchesCity = !city || (row.dataset.city || '').trim() === city;
+      const matchesInstance = !instance || instanceValueForRow(row) === instance;
+      const show = matchesCore && matchesCity && matchesInstance;
       row.style.display = show ? '' : 'none';
       if(show){
         visible += 1;
@@ -743,7 +832,7 @@
     setNotice('', '');
     try{
       setProgress(true, 0, 1, 'Running checker for selected file…');
-      const data = await postJson('{{ url_for("admin.admin_checker_validate_single") }}', {id});
+      const data = await postJson('{{ url_for("admin.admin_checker_validate_single") }}', {id, force: true});
       updateRow(data.result);
       deriveSummaryFromRows();
       filterRows();
@@ -790,6 +879,7 @@
     setNotice('', '');
     runAllBtn.disabled = true;
     runSelectedBtn.disabled = true;
+    let lastProgressSeq = 0;
     try{
       const startData = await postJson('{{ url_for("admin.admin_checker_validate_start") }}', payload);
       const progressUrl = startData.progress_url;
@@ -818,6 +908,26 @@
           throw new Error(progressData.error);
         }
 
+        const updates = Array.isArray(progressData.updates) ? progressData.updates : [];
+        updates.forEach(update => {
+          const seq = Number(update && update.seq);
+          if(!Number.isFinite(seq) || seq <= lastProgressSeq){
+            return;
+          }
+          if(update && update.result){
+            updateRow(update.result);
+            lastProgressSeq = seq;
+          }
+        });
+
+        const progressSummary = progressData.summary;
+        if(progressSummary && typeof progressSummary === 'object'){
+          updateSummary(progressSummary);
+        } else {
+          deriveSummaryFromRows();
+        }
+        filterRows();
+
         const total = Number(progressData.total || 0);
         const current = Number(progressData.current || 0);
         const currentName = progressData.current_name || '';
@@ -828,10 +938,9 @@
         setProgress(true, current, total, labelText);
 
         if(progressData.done){
-          setNotice(`Checker completed for ${total} file(s). Refreshing results…`, 'success');
-          window.setTimeout(() => {
-            window.location.reload();
-          }, 500);
+          setNotice(`Checker completed for ${total} file(s).`, 'success');
+          setProgress(true, total, total || 1, 'Completed');
+          window.setTimeout(() => setProgress(false), 800);
           return;
         }
 
@@ -848,7 +957,6 @@
     }
   }
 
-  populateYears();
   filterRows();
   deriveSummaryFromRows();
   refreshGlobalIssueSummary();
@@ -896,11 +1004,30 @@
       filterRows();
     });
   });
-  yearFilter.addEventListener('change', filterRows);
+  cityBreakdownEl.addEventListener('click', (event) => {
+    const btn = event.target.closest('.checker-breakdown-btn[data-filter-type="city"]');
+    if(!btn){
+      return;
+    }
+    const value = btn.dataset.filterValue || '';
+    activeCityFilter = activeCityFilter === value ? '' : value;
+    activeInstanceFilter = '';
+    filterRows();
+  });
+  instanceBreakdownEl.addEventListener('click', (event) => {
+    const btn = event.target.closest('.checker-breakdown-btn[data-filter-type="instance"]');
+    if(!btn){
+      return;
+    }
+    const value = btn.dataset.filterValue || '';
+    activeInstanceFilter = activeInstanceFilter === value ? '' : value;
+    filterRows();
+  });
   clearFiltersBtn.addEventListener('click', () => {
     searchInput.value = '';
     quickStatusFilter = '';
-    yearFilter.value = '';
+    activeCityFilter = '';
+    activeInstanceFilter = '';
     refreshQuickStatusButtons();
     filterRows();
   });
@@ -939,11 +1066,11 @@
       setNotice('Select at least one visible file.', 'error');
       return;
     }
-    runBatch({ids}, 'Running checker…');
+    runBatch({ids, force: true}, 'Running checker…');
   });
 
   runAllBtn.addEventListener('click', () => {
-    runBatchInBackground({all: true}, 'Running checker for all current files…');
+    runBatchInBackground({all: true, force: true}, 'Running checker for all current files…');
   });
 })();
 </script>
