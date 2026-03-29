@@ -556,9 +556,17 @@ def _serialize_checker_file_row(
         except Exception:
             cached_at = None
 
+    display_parts = [row.country, row.unit, row.instance, row.subunit]
+    display_name = " ".join(str(part).strip() for part in display_parts if str(part or "").strip())
+    if not display_name:
+        display_name = (row.webpage_name or "").strip()
+    if not display_name:
+        display_name = Path(row.file_name).stem.replace("_", " ")
+
     return {
         "id": row.id,
         "file_name": row.file_name,
+        "display_name": display_name,
         "path": row.path,
         "country": row.country,
         "unit": row.unit,
@@ -661,10 +669,18 @@ def _validate_current_file_record(s, row: PBFile, *, force: bool = False) -> Dic
     if cache_row and cache_row.checked_at:
         checked_at = cache_row.checked_at.strftime("%Y-%m-%d %H:%M:%S")
 
+    display_parts = [row.country, row.unit, row.instance, row.subunit]
+    display_name = " ".join(str(part).strip() for part in display_parts if str(part or "").strip())
+    if not display_name:
+        display_name = (row.webpage_name or "").strip()
+    if not display_name:
+        display_name = Path(row.file_name).stem.replace("_", " ")
+
     return {
         "id": row.id,
         "file_name": row.file_name,
-        "title": row.webpage_name or row.file_name,
+        "title": display_name,
+        "display_name": display_name,
         "path": row.path,
         "country": row.country or "",
         "unit": row.unit or "",

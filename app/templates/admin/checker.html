@@ -200,7 +200,7 @@
                {% else %}border-slate-200 bg-white{% endif %}"
                data-id="{{ f.id }}"
                data-file="{{ f.file_name|e }}"
-               data-title="{{ (f.webpage_name or f.file_name)|e }}"
+               data-title="{{ (f.display_name or f.webpage_name or f.file_name)|e }}"
                data-country="{{ (f.country or '')|e }}"
                data-city="{{ (f.unit or '')|e }}"
                data-instance="{{ (f.instance or '')|e }}"
@@ -217,11 +217,12 @@
                   <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div class="min-w-0">
                       <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
-                        <div class="break-all font-mono text-lg font-semibold text-slate-900">{{ f.file_name }}</div>
+                        <div class="checker-display-name break-words text-lg font-semibold text-slate-900">{{ f.display_name or f.webpage_name or f.file_name|replace('_', ' ') }}</div>
                         {% if f.checked_at and f.checker_status != 'unchecked' %}
                         <div class="checker-last-check-label text-sm text-slate-500">Last check: <span class="checker-checked-at text-slate-700">{{ f.checked_at }}</span></div>
                         {% endif %}
                       </div>
+                      <div class="mt-1 break-all font-mono text-xs text-slate-500">{{ f.file_name }}</div>
                       {% if f.comment_count > 0 %}
                       <div class="mt-2">
                         <button type="button" class="toggle-comments-btn rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" aria-expanded="false" data-open-label="Show comments ({{ f.comment_count }})" data-close-label="Hide comments">
@@ -311,10 +312,61 @@
   const globalIssueSummaryContent = document.getElementById('globalIssueSummaryContent');
   const cityBreakdownEl = document.getElementById('checkerCityBreakdown');
   const instanceBreakdownEl = document.getElementById('checkerInstanceBreakdown');
-  let quickStatusFilter = '';
-  let activeIssueFilter = null;
-  let activeCityFilter = '';
-  let activeInstanceFilter = '';
+
+  function parseFiltersFromUrl(){
+    const params = new URLSearchParams(window.location.search || '');
+    const allowedStatuses = new Set(['correct', 'warnings', 'errors', 'failed', 'unchecked']);
+    const statusParam = (params.get('status') || '').trim();
+    const status = allowedStatuses.has(statusParam) ? statusParam : '';
+    const issueType = (params.get('issueType') || '').trim();
+    const issueTone = (params.get('issueTone') || '').trim();
+    const hasIssue = !!issueType && (issueTone === 'error' || issueTone === 'warning');
+    const hasAnyFilter = ['q', 'status', 'city', 'instance', 'issueType', 'issueTone']
+      .some(key => (params.get(key) || '').trim() !== '');
+
+    return {
+      query: (params.get('q') || '').trim(),
+      status,
+      city: (params.get('city') || '').trim(),
+      instance: (params.get('instance') || '').trim(),
+      issue: hasIssue ? {issueType, tone: issueTone} : null,
+      hasAnyFilter
+    };
+  }
+
+  function writeFiltersToUrl(){
+    const params = new URLSearchParams(window.location.search || '');
+    const setParam = (key, value) => {
+      if(value){
+        params.set(key, value);
+      } else {
+        params.delete(key);
+      }
+    };
+
+    setParam('q', (searchInput.value || '').trim());
+    setParam('status', quickStatusFilter || '');
+    setParam('city', activeCityFilter || '');
+    setParam('instance', activeInstanceFilter || '');
+    setParam('issueType', activeIssueFilter ? activeIssueFilter.issueType : '');
+    setParam('issueTone', activeIssueFilter ? activeIssueFilter.tone : '');
+
+    const query = params.toString();
+    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash || ''}`;
+    window.history.replaceState(null, '', nextUrl);
+  }
+
+  const initialFilters = parseFiltersFromUrl();
+  let quickStatusFilter = initialFilters.status || '';
+  let activeIssueFilter = initialFilters.issue;
+  let activeCityFilter = initialFilters.city;
+  let activeInstanceFilter = initialFilters.instance;
+  if(!initialFilters.hasAnyFilter){
+    quickStatusFilter = 'errors';
+  }
+  if(initialFilters.query){
+    searchInput.value = initialFilters.query;
+  }
 
   function summaryElements(){
     return {
@@ -414,9 +466,58 @@
   function buildGlobalIssueSummaryHtml(){
     const errorAggregate = new Map();
     const warningAggregate = new Map();
+    const query = (searchInput.value || '').trim().toLowerCase();
+    const status = quickStatusFilter || '';
+    const city = activeCityFilter || '';
+    const instance = activeInstanceFilter || '';
 
-    validationState.forEach(item => {
-      const validation = item.validation;
+    function rowMatchesCurrentFilters(row){
+      const haystack = [
+        row.dataset.file || '',
+        row.dataset.title || '',
+        row.dataset.country || '',
+        row.dataset.city || '',
+        row.dataset.instance || '',
+        row.dataset.year || ''
+      ].join(' ').toLowerCase();
+
+      if(query && !haystack.includes(query)){
+        return false;
+      }
+      if(status && row.dataset.status !== status){
+        return false;
+      }
+      if(city && (row.dataset.city || '').trim() !== city){
+        return false;
+      }
+      if(instance && instanceValueForRow(row) !== instance){
+        return false;
+      }
+
+      if(activeIssueFilter){
+        const rowValidationState = validationState.get(Number(row.dataset.id));
+        const validation = rowValidationState ? rowValidationState.validation : null;
+        const issueGroup = validation && typeof validation === 'object'
+          ? (activeIssueFilter.tone === 'error' ? validation.errors : validation.warnings)
+          : null;
+        const issueInstances = issueGroup && typeof issueGroup === 'object'
+          ? issueGroup[activeIssueFilter.issueType]
+          : null;
+        if(!(issueInstances && typeof issueInstances === 'object' && Object.keys(issueInstances).length > 0)){
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    rows.forEach(row => {
+      if(!rowMatchesCurrentFilters(row)){
+        return;
+      }
+
+      const item = validationState.get(Number(row.dataset.id));
+      const validation = item ? item.validation : null;
       if(!validation || validation.error_message){
         return;
       }
@@ -717,6 +818,8 @@
     visibleCountEl.textContent = `${visible} / ${rows.length} visible`;
     searchClear.classList.toggle('hidden', !searchInput.value);
     updateSelectionUi();
+    refreshGlobalIssueSummary();
+    writeFiltersToUrl();
   }
 
   function refreshQuickStatusButtons(){
@@ -798,7 +901,7 @@
     if(lastCheckEl){
       lastCheckEl.remove();
     }
-    const titleEl = row.querySelector('.break-all.font-mono');
+    const titleEl = row.querySelector('.checker-display-name');
     if(titleEl && result.checked_at && result.checker_status !== 'unchecked'){
       titleEl.insertAdjacentHTML('afterend', `<div class="checker-last-check-label text-sm text-slate-500">Last check: <span class="checker-checked-at text-slate-700">${escapeHtml(result.checked_at)}</span></div>`);
     }
@@ -957,6 +1060,7 @@
     }
   }
 
+  refreshQuickStatusButtons();
   filterRows();
   deriveSummaryFromRows();
   refreshGlobalIssueSummary();
@@ -1026,8 +1130,10 @@
   clearFiltersBtn.addEventListener('click', () => {
     searchInput.value = '';
     quickStatusFilter = '';
+    activeIssueFilter = null;
     activeCityFilter = '';
     activeInstanceFilter = '';
+    refreshGlobalIssueSummary();
     refreshQuickStatusButtons();
     filterRows();
   });
