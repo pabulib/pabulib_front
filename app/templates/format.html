@@ -96,6 +96,37 @@
         body.format .offcanvas-size-xxl { --bs-offcanvas-width: min(95vw, 90vw) !important; }
         body.format .offcanvas-size-md { --bs-offcanvas-width: min(95vw, 400px) !important; }
         body.format .offcanvas-size-sm { --bs-offcanvas-width: min(95vw, 250px) !important; }
+
+        body.format .field-info {
+            margin: 0.75em 0 0 1em;
+            padding: 0.7em 0.9em;
+            border-left: 4px solid #60a5fa;
+            border-radius: 0 8px 8px 0;
+            background: #eff6ff;
+            color: #1e3a8a;
+        }
+
+        body.format .field-info .field-info-marker {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.35em;
+            height: 1.35em;
+            margin-right: 0.45em;
+            border-radius: 9999px;
+            background: #2563eb;
+            color: #ffffff;
+            font-size: 0.82em;
+            font-style: normal;
+            font-weight: 700;
+            line-height: 1;
+            vertical-align: text-top;
+        }
+
+        body.format .field-info .field-info-value {
+            color: #1e3a8a;
+            font-weight: 700;
+        }
     </style>
     <section class="max-w-4xl mx-auto px-4">
         <div class="flex justify-center">
@@ -565,6 +596,9 @@ voter_id; age; sex; vote
             "description": "the cost of the project.",
             "options": null,
             "example": "50000",
+            "additional_info": [
+                "If the cost is exactly <span class='field-info-value'>999999999</span>, treat it as a sentinel value: it usually means the project was admitted to the ballot but later could not be implemented, so this artificial cost keeps the pipeline stable and prevents greedy rules from selecting it."
+            ],
             "if_obligatory": true
         },
         {
@@ -844,13 +878,15 @@ voter_id; age; sex; vote
                         const optionClass = getOptionClass(field, option);
                         return `<li><code class='${optionClass}'>${option.value}</code>${option.description ? ` &ndash; ${option.description}` : ''}${option.note ? `<br><em style="margin-left: 1.5em;">Note: ${option.note}</em>` : ''}</li>`;
                     }).join('')}</ul>` : ''}
-                    ${field.additional_info ? `<div style=\"margin-left: 1em;\"><ul>${field.additional_info.map(info => `<li>${info}</li>`).join('')}</ul></div>` : ''}
                     ${Array.isArray(field.example) 
                     ? `<div style=\"margin-left: 1em;\"><em>e.g.:</em> ${field.example.map((example, index) => 
                         `<kbd>${example}</kbd>${index < field.example.length - 1 ? ' or ' : ''}`
                         ).join('')}</div>` 
                     : field.example 
                         ? `<div style=\"margin-left: 1em;\"><em>e.g.:</em> <kbd>${field.example}</kbd></div>` 
+                        : ''}
+                    ${field.additional_info
+                        ? `<div style=\"margin-left: 1em;\">${field.additional_info.map(info => `<div class="field-info"><span class='field-info-marker' aria-hidden='true'>i</span>${info}</div>`).join('')}</div>`
                         : ''}
                 </ul>
             `;
