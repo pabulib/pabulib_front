@@ -242,6 +242,35 @@ show_logs() {
     dc logs --tail=50
 }
 
+# Refresh checker package in running web container
+update_checker_in_web() {
+    log "Refreshing pabulib-checker in web container..."
+    cd "$PROJECT_DIR"
+
+    # Ensure web service exists and is running before exec.
+    dc up -d web >/dev/null
+
+    dc exec -T web sh -lc '
+set -eu
+echo "Uninstalling existing pabulib-checker (if present)..."
+pip uninstall -y pabulib-checker >/dev/null 2>&1 || true
+echo "Installing newest pabulib-checker..."
+pip install --no-cache-dir --upgrade pabulib-checker
+echo "Installed version: $(python -c "import importlib.metadata as m; print(m.version(\"pabulib-checker\"))")"
+'
+
+    # Reload gunicorn workers so updated checker is used immediately.
+    # This avoids a full docker compose restart for normal checker updates.
+    if dc exec -T web sh -lc 'kill -HUP 1' >/dev/null 2>&1; then
+        log "Gunicorn reloaded (HUP) - checker update is active without full restart"
+    else
+        warning "Could not reload gunicorn automatically. Use: $0 restart"
+    fi
+
+    success "Checker refreshed in web container"
+    log "Tip: full restart is optional; use $0 restart only if you want full container recreation"
+}
+
 # Monitor function
 monitor() {
     log "Monitoring services (Ctrl+C to stop)..."
@@ -294,6 +323,11 @@ deploy() {
         log "Skipping image rebuild (use 'deploy rebuild' to rebuild images)"
     fi
     
+    # Full deploy should refresh DB by default unless explicitly overridden.
+    export DB_REFRESH_ON_START="${DB_REFRESH_ON_START:-1}"
+    export REFRESH_FULL="${REFRESH_FULL:-0}"
+    log "Startup DB refresh (deploy mode): DB_REFRESH_ON_START=${DB_REFRESH_ON_START}, REFRESH_FULL=${REFRESH_FULL}"
+
     start_services
     cleanup
     
@@ -353,8 +387,9 @@ Commands:
     status      Show service status
     logs        Show recent logs
     monitor     Monitor logs in real-time
+    checker-update  Reinstall latest pabulib-checker in web container
     stop        Stop all services
-    restart     Restart all services
+    restart     Restart all services (default: skip startup DB refresh)
     backup      Create manual backup
     cleanup     Clean old logs and backups
     help        Show this help
@@ -364,7 +399,10 @@ Examples:
     $0 status           # Check status
     $0 logs             # View recent logs
     $0 monitor          # Monitor in real-time
-    $0 restart --build  # Restart services and force rebuild
+    $0 checker-update   # Refresh checker in running web container
+    $0 restart --build                 # Restart services and force rebuild
+    $0 restart --refresh-files         # Restart and run incremental DB refresh
+    $0 restart --refresh-full          # Restart and run full DB refresh
 
 Notes:
     - This script does not require sudo. Ensure your user is in the 'docker' group.
@@ -390,17 +428,55 @@ main() {
         monitor)
             monitor
             ;;
+        checker-update)
+            check_prerequisites
+            update_checker_in_web
+            ;;
         stop)
             stop_services
             ;;
         restart)
             log "Restarting services..."
             stop_services
-            # If second argument requests a rebuild, rebuild images before starting
-            if [[ "${2:-}" == "--build" || "${2:-}" == "-b" || "${FORCE_REBUILD:-0}" == "1" ]]; then
+            local restart_build=0
+            local restart_refresh=0
+            local restart_refresh_full=0
+
+            shift || true
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --build|-b)
+                        restart_build=1
+                        ;;
+                    --refresh-files|--refresh)
+                        restart_refresh=1
+                        ;;
+                    --refresh-full)
+                        restart_refresh=1
+                        restart_refresh_full=1
+                        ;;
+                    *)
+                        warning "Unknown restart option: $1"
+                        ;;
+                esac
+                shift
+            done
+
+            if [[ "${FORCE_REBUILD:-0}" == "1" ]]; then
+                restart_build=1
+            fi
+
+            # If requested, rebuild images before starting
+            if [[ "$restart_build" == "1" ]]; then
                 log "Rebuilding images before restart (requested via --build/-b or FORCE_REBUILD=1)..."
                 update_images
             fi
+
+            # Fast path by default: do not refresh files on restart unless asked.
+            export DB_REFRESH_ON_START="$restart_refresh"
+            export REFRESH_FULL="$restart_refresh_full"
+            log "Startup DB refresh (restart mode): DB_REFRESH_ON_START=${DB_REFRESH_ON_START}, REFRESH_FULL=${REFRESH_FULL}"
+
             start_services
             ;;
         backup)
