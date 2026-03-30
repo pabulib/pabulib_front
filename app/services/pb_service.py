@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional, Tuple
 import unicodedata
+
+_logger = logging.getLogger(__name__)
 
 from sqlalchemy import or_, and_, desc, asc
 from ..db import get_session
@@ -337,6 +340,129 @@ def invalidate_caches() -> None:
     _CITY_SLUG_CACHE = None
 
 
+def _row_to_tile(
+    r: Any,
+    comments_map: Dict[int, List[str]],
+) -> Dict[str, Any]:
+    """Convert a raw SQLAlchemy row tuple (32 fields) into the tile dict
+    returned by the public API.  Both search_tiles() and get_tiles_cached()
+    query the same columns in the same order and use this helper."""
+    (
+        file_id,
+        file_name,
+        webpage_name,
+        description,
+        currency,
+        num_votes,
+        num_projects,
+        num_selected_projects,
+        budget,
+        vote_type,
+        vote_length,
+        country,
+        unit,
+        year,
+        fully_funded,
+        experimental,
+        quality,
+        rule_raw,
+        edition,
+        language,
+        instance,
+        subunit,
+        has_geo,
+        has_category,
+        has_target,
+        min_length,
+        max_length,
+        min_sum_points,
+        max_sum_points,
+        max_sum_cost,
+        max_sum_cost_per_category,
+        max_total_cost,
+    ) = r
+
+    meta: Dict[str, Any] = {"subunit": subunit}
+    if min_length is not None:
+        meta["min_length"] = min_length
+    if max_length is not None:
+        meta["max_length"] = max_length
+    if min_sum_points is not None:
+        meta["min_sum_points"] = min_sum_points
+    if max_sum_points is not None:
+        meta["max_sum_points"] = max_sum_points
+    if max_sum_cost is not None:
+        meta["max_sum_cost"] = max_sum_cost
+    if max_sum_cost_per_category is not None:
+        meta["max_sum_cost_per_category"] = max_sum_cost_per_category
+    if max_total_cost is not None:
+        meta["max_total_cost"] = max_total_cost
+
+    vtype = (vote_type or "").strip().lower()
+    approval_k_label = None
+    approval_knapsack = False
+    approval_k_type = None
+    ordinal_k_label = None
+    ordinal_k_type = None
+    cumulative_points_label = None
+
+    if vtype == "approval":
+        approval_k_label, approval_knapsack, approval_k_type = (
+            _compute_approval_labels_from_meta(meta)
+        )
+    elif vtype == "ordinal":
+        ordinal_k_label, ordinal_k_type = _compute_ordinal_k_from_meta(meta)
+    elif vtype == "cumulative":
+        cumulative_points_label = _compute_cumulative_points_from_meta(meta)
+
+    return {
+        "file_name": file_name,
+        "title": webpage_name or file_name.replace("_", " "),
+        "webpage_name": webpage_name or "",
+        "description": description or "",
+        "currency": currency or "",
+        "num_votes": format_int(int(num_votes or 0)),
+        "num_votes_raw": int(num_votes or 0),
+        "num_projects": format_int(int(num_projects or 0)),
+        "num_projects_raw": int(num_projects or 0),
+        "num_selected_projects": format_int(int(num_selected_projects or 0)),
+        "num_selected_projects_raw": int(num_selected_projects or 0),
+        "budget": (
+            format_budget(currency or "", int(float(budget or 0)))
+            if budget is not None
+            else "—"
+        ),
+        "budget_raw": budget,
+        "vote_type": vote_type or "",
+        "vote_length": format_vote_length(vote_length),
+        "vote_length_raw": vote_length,
+        "country": country or "",
+        "city": unit or "",
+        "year": str(year) if year is not None else "",
+        "year_raw": year,
+        "fully_funded": bool(fully_funded),
+        "experimental": bool(experimental),
+        "quality": quality or 0.0,
+        "quality_short": format_short_number(quality or 0.0),
+        "rule_raw": rule_raw or "",
+        "edition": edition or "",
+        "language": language or "",
+        "comments": comments_map.get(file_id, []),
+        "country_raw": country or "",
+        "unit_raw": unit or "",
+        "instance_raw": instance or "",
+        "has_geo": bool(has_geo),
+        "has_category": bool(has_category),
+        "has_target": bool(has_target),
+        "approval_k_label": approval_k_label,
+        "approval_knapsack": approval_knapsack,
+        "approval_k_type": approval_k_type,
+        "ordinal_k_label": ordinal_k_label,
+        "ordinal_k_type": ordinal_k_type,
+        "cumulative_points_label": cumulative_points_label,
+    }
+
+
 def _apply_search_filters(
     q,
     query: Optional[str] = None,
@@ -560,123 +686,7 @@ def search_tiles(
         
         tiles: List[Dict[str, Any]] = []
         for r in rows:
-            (
-                file_id,
-                file_name,
-                webpage_name,
-                description,
-                currency,
-                num_votes,
-                num_projects,
-                num_selected_projects,
-                budget,
-                vote_type,
-                vote_length,
-                country,
-                unit,
-                year,
-                fully_funded,
-                experimental,
-                quality,
-                rule_raw,
-                edition,
-                language,
-                instance,
-                subunit,
-                has_geo,
-                has_category,
-                has_target,
-                min_length,
-                max_length,
-                min_sum_points,
-                max_sum_points,
-                max_sum_cost,
-                max_sum_cost_per_category,
-                max_total_cost,
-            ) = r
-
-            # Construct meta dict for label computation
-            meta = {"subunit": subunit}
-            if min_length is not None:
-                meta["min_length"] = min_length
-            if max_length is not None:
-                meta["max_length"] = max_length
-            if min_sum_points is not None:
-                meta["min_sum_points"] = min_sum_points
-            if max_sum_points is not None:
-                meta["max_sum_points"] = max_sum_points
-            if max_sum_cost is not None:
-                meta["max_sum_cost"] = max_sum_cost
-            if max_sum_cost_per_category is not None:
-                meta["max_sum_cost_per_category"] = max_sum_cost_per_category
-            if max_total_cost is not None:
-                meta["max_total_cost"] = max_total_cost
-
-            vtype = (vote_type or "").strip().lower()
-            approval_k_label = None
-            approval_knapsack = False
-            approval_k_type = None
-            ordinal_k_label = None
-            ordinal_k_type = None
-            cumulative_points_label = None
-
-            if vtype == "approval":
-                approval_k_label, approval_knapsack, approval_k_type = (
-                    _compute_approval_labels_from_meta(meta)
-                )
-            elif vtype == "ordinal":
-                ordinal_k_label, ordinal_k_type = _compute_ordinal_k_from_meta(meta)
-            elif vtype == "cumulative":
-                cumulative_points_label = _compute_cumulative_points_from_meta(meta)
-
-            tiles.append(
-                {
-                    "file_name": file_name,
-                    "title": webpage_name or file_name.replace("_", " "),
-                    "webpage_name": webpage_name or "",
-                    "description": description or "",
-                    "currency": currency or "",
-                    "num_votes": format_int(int(num_votes or 0)),
-                    "num_votes_raw": int(num_votes or 0),
-                    "num_projects": format_int(int(num_projects or 0)),
-                    "num_projects_raw": int(num_projects or 0),
-                    "num_selected_projects": format_int(int(num_selected_projects or 0)),
-                    "num_selected_projects_raw": int(num_selected_projects or 0),
-                    "budget": (
-                        format_budget(currency or "", int(float(budget or 0)))
-                        if budget is not None
-                        else "—"
-                    ),
-                    "budget_raw": budget,
-                    "vote_type": vote_type or "",
-                    "vote_length": format_vote_length(vote_length),
-                    "vote_length_raw": vote_length,
-                    "country": country or "",
-                    "city": unit or "",
-                    "year": str(year) if year is not None else "",
-                    "year_raw": year,
-                    "fully_funded": bool(fully_funded),
-                    "experimental": bool(experimental),
-                    "quality": quality or 0.0,
-                    "quality_short": format_short_number(quality or 0.0),
-                    "rule_raw": rule_raw or "",
-                    "edition": edition or "",
-                    "language": language or "",
-                    "comments": comments_map.get(file_id, []),
-                    "country_raw": country or "",
-                    "unit_raw": unit or "",
-                    "instance_raw": instance or "",
-                    "has_geo": bool(has_geo),
-                    "has_category": bool(has_category),
-                    "has_target": bool(has_target),
-                    "approval_k_label": approval_k_label,
-                    "approval_knapsack": approval_knapsack,
-                    "approval_k_type": approval_k_type,
-                    "ordinal_k_label": ordinal_k_label,
-                    "ordinal_k_type": ordinal_k_type,
-                    "cumulative_points_label": cumulative_points_label,
-                }
-            )
+            tiles.append(_row_to_tile(r, comments_map))
             
         return tiles, total_count
 
@@ -715,10 +725,10 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
     t0 = time.time()
     db_sig = _db_signature()
     if _TILES_CACHE is not None and getattr(_TILES_CACHE, "_db_sig", None) == db_sig:
-        print(f"[PERF] get_tiles_cached hit cache ({len(_TILES_CACHE)} tiles) in {time.time()-t0:.4f}s")
+        _logger.debug("get_tiles_cached hit cache (%d tiles) in %.4fs", len(_TILES_CACHE), time.time() - t0)
         return _TILES_CACHE
 
-    print(f"[PERF] get_tiles_cached MISS - rebuilding cache...")
+    _logger.debug("get_tiles_cached MISS — rebuilding")
     t1 = time.time()
     with get_session() as s:
         rows = (
@@ -779,138 +789,14 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
 
     tiles: List[Dict[str, Any]] = []
     for r in rows:
-        (
-            file_id,
-            file_name,
-            webpage_name,
-            description,
-            currency,
-            num_votes,
-            num_projects,
-            num_selected_projects,
-            budget,
-            vote_type,
-            vote_length,
-            country,
-            unit,
-            year,
-            fully_funded,
-            experimental,
-            quality,
-            rule_raw,
-            edition,
-            language,
-            instance,
-            subunit,
-            has_geo,
-            has_category,
-            has_target,
-            min_length,
-            max_length,
-            min_sum_points,
-            max_sum_points,
-            max_sum_cost,
-            max_sum_cost_per_category,
-            max_total_cost,
-        ) = r
-
-        # Construct meta dict for label computation
-        meta = {"subunit": subunit}
-        if min_length is not None:
-            meta["min_length"] = min_length
-        if max_length is not None:
-            meta["max_length"] = max_length
-        if min_sum_points is not None:
-            meta["min_sum_points"] = min_sum_points
-        if max_sum_points is not None:
-            meta["max_sum_points"] = max_sum_points
-        if max_sum_cost is not None:
-            meta["max_sum_cost"] = max_sum_cost
-        if max_sum_cost_per_category is not None:
-            meta["max_sum_cost_per_category"] = max_sum_cost_per_category
-        if max_total_cost is not None:
-            meta["max_total_cost"] = max_total_cost
-
-        vtype = (vote_type or "").strip().lower()
-        approval_k_label = None
-        approval_knapsack = False
-        approval_k_type = None
-        ordinal_k_label = None
-        ordinal_k_type = None
-        cumulative_points_label = None
-
-        if vtype == "approval":
-            approval_k_label, approval_knapsack, approval_k_type = (
-                _compute_approval_labels_from_meta(meta)
-            )
-        elif vtype == "ordinal":
-            ordinal_k_label, ordinal_k_type = _compute_ordinal_k_from_meta(meta)
-        elif vtype == "cumulative":
-            cumulative_points_label = _compute_cumulative_points_from_meta(meta)
-
-        tiles.append(
-            {
-                "file_name": file_name,
-                "title": webpage_name or file_name.replace("_", " "),
-                "webpage_name": webpage_name or "",
-                "description": description or "",
-                "currency": currency or "",
-                "num_votes": format_int(int(num_votes or 0)),
-                "num_votes_raw": int(num_votes or 0),
-                "num_projects": format_int(int(num_projects or 0)),
-                "num_projects_raw": int(num_projects or 0),
-                "num_selected_projects": format_int(int(num_selected_projects or 0)),
-                "num_selected_projects_raw": int(num_selected_projects or 0),
-                "budget": (
-                    format_budget(currency or "", int(float(budget or 0)))
-                    if budget is not None
-                    else "—"
-                ),
-                "budget_raw": budget,
-                "vote_type": vote_type or "",
-                "vote_length": format_vote_length(vote_length),
-                "vote_length_raw": vote_length,
-                "country": country or "",
-                "city": unit or "",
-                "year": str(year) if year is not None else "",
-                "year_raw": year,
-                "fully_funded": bool(fully_funded),
-                "experimental": bool(experimental),
-                "quality": quality or 0.0,
-                "quality_short": format_short_number(quality or 0.0),
-                "rule_raw": rule_raw or "",
-                "edition": edition or "",
-                "language": language or "",
-                # filled below with active comments for this file (strings)
-                "comments": comments_map.get(file_id, []),
-                "country_raw": country or "",
-                "unit_raw": unit or "",
-                "instance_raw": instance or "",
-                "has_geo": bool(has_geo),
-                "has_category": bool(has_category),
-                "has_target": bool(has_target),
-                # computed client labels (filled later for approvals)
-                "approval_k_label": approval_k_label,
-                "approval_knapsack": approval_knapsack,
-                "approval_k_type": approval_k_type,
-                # ordinal (computed from META)
-                "ordinal_k_label": ordinal_k_label,
-                "ordinal_k_type": ordinal_k_type,
-                # cumulative (computed from META)
-                "cumulative_points_label": cumulative_points_label,
-            }
-        )
-
-
-
-
+        tiles.append(_row_to_tile(r, comments_map))
 
     try:
         setattr(tiles, "_db_sig", db_sig)
     except Exception:
         pass
     _TILES_CACHE = tiles
-    print(f"[PERF] get_tiles_cached rebuilt in {time.time()-t1:.4f}s (total {time.time()-t0:.4f}s)")
+    _logger.debug("get_tiles_cached rebuilt in %.4fs (total %.4fs)", time.time() - t1, time.time() - t0)
     return _TILES_CACHE
 
 

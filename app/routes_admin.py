@@ -85,8 +85,6 @@ def _load_upload_settings() -> dict:
     """Load upload settings from a small JSON file in the temp uploads dir.
     Defaults: max_file_mb=10, max_batch=100
     """
-    import json
-
     tmp = _tmp_upload_dir()
     p = tmp / SETTINGS_FILENAME
     defaults = {"max_file_mb": 10, "max_batch": 100}
@@ -108,8 +106,6 @@ def _load_upload_settings() -> dict:
 
 
 def _save_upload_settings(new_settings: dict) -> None:
-    import json
-
     tmp = _tmp_upload_dir()
     p = tmp / SETTINGS_FILENAME
     tmp.mkdir(parents=True, exist_ok=True)

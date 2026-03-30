@@ -88,21 +88,7 @@
   }
 
   function isAnyFilterActive() {
-    const v = getFilterValues();
-    if (v.search) return true;
-    if (v.country) return true;
-    if (v.city) return true;
-    if (v.year) return true;
-    if (v.votes_min || v.votes_max) return true;
-    if (v.projects_min || v.projects_max) return true;
-    if (v.len_min || v.len_max) return true;
-    if (v.type) return true;
-    if (v.exclude_fully) return true;
-    if (v.exclude_experimental) return true;
-    if (v.require_geo) return true;
-    if (v.require_target) return true;
-    if (v.require_category) return true;
-    return false;
+    return countActiveFilters() > 0;
   }
 
   function countActiveFilters() {
@@ -709,8 +695,9 @@
         if (checked) selectedFiles.clear();
           $$('.row-check').forEach(cb => {
               cb.checked = checked;
-              const file = cb.dataset.file;
-              if (checked) selectedFiles.add(file); else selectedFiles.delete(file);
+              if (!checked) {
+                selectedFiles.delete(cb.dataset.file);
+              }
           });
           updateSelectionUI();
       });
@@ -844,92 +831,18 @@
       </div>
     `;
     
-    // Add styles if not already present
-    if (!document.querySelector('#snapshot-styles')) {
-      const styles = document.createElement('style');
-      styles.id = 'snapshot-styles';
-      styles.textContent = `
-        .snapshot-notification {
-          position: fixed;
-          top: 20px;
-          right: 20px;
-          background: #fff;
-          border: 1px solid #ddd;
-          border-radius: 8px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-          padding: 16px;
-          max-width: 400px;
-          z-index: 1000;
-          animation: slideIn 0.3s ease;
-        }
-        .snapshot-content h4 {
-          margin: 0 0 8px 0;
-          color: #059669;
-        }
-        .snapshot-content p {
-          margin: 0 0 12px 0;
-          font-size: 14px;
-        }
-        .snapshot-link-container {
-          display: flex;
-          gap: 8px;
-          margin-bottom: 8px;
-        }
-        .snapshot-link {
-          flex: 1;
-          padding: 6px 8px;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          font-family: monospace;
-          font-size: 12px;
-        }
-        .copy-btn {
-          padding: 6px 12px;
-          background: #059669;
-          color: white;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-          font-size: 12px;
-        }
-        .copy-btn:hover {
-          background: #047857;
-        }
-        .close-btn {
-          position: absolute;
-          top: 8px;
-          right: 12px;
-          background: none;
-          border: none;
-          font-size: 18px;
-          cursor: pointer;
-          color: #666;
-        }
-        .close-btn:hover {
-          color: #333;
-        }
-        .snapshot-content small {
-          color: #666;
-          font-size: 12px;
-          display: block;
-        }
-        @keyframes slideIn {
-          from { transform: translateX(100%); }
-          to { transform: translateX(0); }
-        }
-      `;
-      document.head.appendChild(styles);
-    }
-    
     // Add to page
     document.body.appendChild(notification);
     
     // Add copy functionality
     notification.querySelector('.copy-btn').addEventListener('click', function() {
       const input = notification.querySelector('.snapshot-link');
-      input.select();
-      document.execCommand('copy');
-      
+      navigator.clipboard.writeText(input.value).catch(() => {
+        // fallback for older browsers
+        input.select();
+        document.execCommand('copy');
+      });
+
       // Show feedback
       this.textContent = 'Copied!';
       setTimeout(() => {
@@ -1153,16 +1066,15 @@
     sub.textContent = '';
     sub.style.display = 'none';
     grid.innerHTML = '';
-    const esc = (s)=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const toTitle = (s)=>String(s||'').toLowerCase().replace(/\b\w/g, c=>c.toUpperCase());
     function row(k,v){ const dk=document.createElement('div'); dk.className='k'; dk.textContent=k; const dv=document.createElement('div'); dv.className='v'; dv.textContent=v; grid.appendChild(dk); grid.appendChild(dv); }
     function rowHtml(k,vHtml){ const dk=document.createElement('div'); dk.className='k'; dk.textContent=k; const dv=document.createElement('div'); dv.className='v'; dv.innerHTML=vHtml; grid.appendChild(dk); grid.appendChild(dv); }
     // Primary details first: Country / Unit / Year (of voting) with bold values
-    if(tile.dataset.country) rowHtml('Country', `<strong>${esc(toTitle(tile.dataset.country))}</strong>`);
-    if(tile.dataset.city) rowHtml('Unit', `<strong>${esc(tile.dataset.city)}</strong>`);
-    if(tile.dataset.year) rowHtml('Year (of voting)', `<strong>${esc(tile.dataset.year)}</strong>`);
+    if(tile.dataset.country) rowHtml('Country', `<strong>${escapeHtml(toTitle(tile.dataset.country))}</strong>`);
+    if(tile.dataset.city) rowHtml('Unit', `<strong>${escapeHtml(tile.dataset.city)}</strong>`);
+    if(tile.dataset.year) rowHtml('Year (of voting)', `<strong>${escapeHtml(tile.dataset.year)}</strong>`);
     // Show items that are NOT already shown in the tile grid itself
-  if(tile.dataset.rule) row('Rule', tile.dataset.rule); // keep leading capital for consistency in grid
+  if(tile.dataset.rule) row('Rule', tile.dataset.rule);
   if(tile.dataset.edition) row('Edition', tile.dataset.edition);
   if(tile.dataset.language) row('Language', tile.dataset.language);
   if(tile.dataset.selected && tile.dataset.selected !== '0') row('# selected projects', tile.dataset.selected);

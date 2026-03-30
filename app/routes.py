@@ -28,6 +28,9 @@ from flask import (
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 
+import numpy as np
+from sklearn.manifold import MDS
+
 from .__init__ import limiter
 from .db import get_session
 from .models import PBFile
@@ -35,15 +38,44 @@ from .routes_admin import _format_preview_tile  # reuse tile formatting
 from .routes_admin import _load_upload_settings  # reuse limits
 from .services.pb_service import (
     aggregate_categories_cached as _aggregate_categories_cached,
-    get_tiles_cached as _get_tiles_cached,
-)
-from .services.pb_service import aggregate_comments_cached as _aggregate_comments_cached
-from .services.pb_service import (
+    aggregate_comments_cached as _aggregate_comments_cached,
+    aggregate_rules_cached as _aggregate_rules_cached,
     aggregate_statistics_cached as _aggregate_statistics_cached,
+    aggregate_targets_cached as _aggregate_targets_cached,
+    get_all_current_file_paths,
+    get_current_file_path,
+    get_filter_options as _get_filter_options,
+    get_filtered_file_paths as _get_filtered_file_paths,
+    get_tiles_cached as _get_tiles_cached,
+    search_tiles as _search_tiles,
 )
-from .services.pb_service import aggregate_targets_cached as _aggregate_targets_cached
-from .services.pb_service import aggregate_rules_cached as _aggregate_rules_cached
-from .services.pb_service import get_all_current_file_paths, get_current_file_path
+from .services.snapshot_service import (
+    add_link_to_existing_zip as _add_link_to_existing_zip,
+    create_download_with_link as _create_download_with_link,
+    serve_snapshot_download as _serve_snapshot_download,
+)
+from .services.visualization_service import get_or_compute_visualization_data
+from .utils.file_helpers import is_safe_filename as _is_safe_filename
+from .utils.formatting import format_int as _format_int
+from .utils.load_pb_file import parse_pb_lines
+from .utils.pb_utils import parse_comments_from_meta as _parse_comments_from_meta
+from .utils.pb_utils import parse_pb_to_tile as _parse_pb_to_tile
+from .utils.security import log_security_event as _log_security_event
+from .utils.upload_security import (
+    cleanup_stale_subdirectories as _cleanup_stale_subdirs,
+    detect_formula_injection_cells as _detect_formula_cells,
+    inspect_uploaded_file as _inspect_uploaded_file,
+    is_allowed_extension as _is_allowed_ext,
+    is_safe_regular_file as _is_safe_regular_file,
+    public_tmp_dir as _public_tmp_dir,
+    validate_email_address as _validate_email_address,
+)
+from .utils.validation import (
+    count_issues,
+    format_validation_summary,
+    get_checker_version as _get_checker_version,
+    validate_pb_file,
+)
 
 # Simple in-memory registry for zip jobs; zip files and progress json live on disk
 _ZIP_JOBS: Dict[str, Dict[str, Any]] = {}
@@ -220,41 +252,6 @@ def _build_zip_in_background(
         _write_progress(token, progress)
 
 
-from .services.pb_service import (
-    get_tiles_cached as _get_tiles_cached,
-    search_tiles as _search_tiles,
-    get_filter_options as _get_filter_options,
-    get_filtered_file_paths as _get_filtered_file_paths,
-)
-from .services.snapshot_service import (
-    add_link_to_existing_zip as _add_link_to_existing_zip,
-)
-from .services.snapshot_service import (
-    create_download_with_link as _create_download_with_link,
-)
-from .services.snapshot_service import (
-    serve_snapshot_download as _serve_snapshot_download,
-)
-from .services.visualization_service import get_or_compute_visualization_data
-from sklearn.manifold import MDS
-import numpy as np
-from .utils.file_helpers import is_safe_filename as _is_safe_filename
-from .utils.formatting import format_int as _format_int
-from .utils.load_pb_file import parse_pb_lines
-from .utils.pb_utils import parse_comments_from_meta as _parse_comments_from_meta
-from .utils.pb_utils import parse_pb_to_tile as _parse_pb_to_tile
-from .utils.upload_security import is_allowed_extension as _is_allowed_ext
-from .utils.upload_security import cleanup_stale_subdirectories as _cleanup_stale_subdirs
-from .utils.upload_security import detect_formula_injection_cells as _detect_formula_cells
-from .utils.upload_security import inspect_uploaded_file as _inspect_uploaded_file
-from .utils.upload_security import is_safe_regular_file as _is_safe_regular_file
-from .utils.upload_security import public_tmp_dir as _public_tmp_dir
-from .utils.upload_security import validate_email_address as _validate_email_address
-from .utils.security import log_security_event as _log_security_event
-from .utils.validation import count_issues, format_validation_summary
-from .utils.validation import get_checker_version as _get_checker_version
-from .utils.validation import validate_pb_file
-
 bp = Blueprint(
     "main",
     __name__,
@@ -376,7 +373,6 @@ def citations_page():
                 ]
                 authors = []
                 for author in authors_list:
-                    print("author", author)
                     parts = author.split()
                     if len(parts) > 1:
                         firstname = parts[-1]
@@ -386,7 +382,6 @@ def citations_page():
                         authors.append(f"{firstname[0]}. {surname}")
                     elif parts:
                         authors.append(parts[0])
-                print("->", authors)
                 authors_str = ", ".join(authors)
                 publications.append(
                     {"authors": authors_str, "year": year, "title": title, "url": url}
