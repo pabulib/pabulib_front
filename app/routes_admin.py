@@ -52,6 +52,7 @@ from .services.snapshot_service import (
 from .utils.formatting import format_budget as _format_budget
 from .utils.formatting import format_int as _format_int
 from .utils.formatting import format_vote_length as _format_vote_length
+from .utils.load_pb_file import parse_pb_lines as _parse_pb_lines
 from .utils.pb_utils import build_group_key as _build_group_key
 from .utils.pb_utils import parse_pb_to_tile as _parse_pb_to_tile
 from .utils.pb_utils import pb_depreciated_folder as _pb_depr_folder
@@ -2440,6 +2441,105 @@ def upload_tiles_validate_single():
     }
 
     return jsonify(result)
+
+
+@bp.post("/admin/upload/preview_data")
+def upload_tiles_preview_data():
+    """Return parsed preview data (meta, projects, votes) for a tmp file.
+    Expects JSON: {"file": "filename.pb"}
+    Returns meta_items, project table (first 5 rows), vote table (first 5 rows).
+    """
+    if not request.is_json:
+        return jsonify({"error": "JSON required"}), 400
+
+    data = request.get_json()
+    fname = (data.get("file") or "").strip()
+
+    if not fname or "/" in fname or ".." in fname or not fname.endswith(".pb"):
+        return jsonify({"error": "Invalid filename"}), 400
+
+    tmp_dir = _tmp_upload_dir()
+    file_path = tmp_dir / fname
+
+    if not is_safe_regular_file(file_path, tmp_dir):
+        return jsonify({"error": "File not found"}), 404
+
+    try:
+        with file_path.open("r", encoding="utf-8", newline="") as fh:
+            lines = [line.rstrip("\n") for line in fh]
+        meta, projects, votes, _votes_in_proj, _scores_in_proj = _parse_pb_lines(lines)
+    except Exception as e:
+        return jsonify({"error": f"Parse error: {e}"}), 400
+
+    def _order_cols(all_keys: list, preferred: list) -> list:
+        seen: set = set()
+        cols: list = []
+        for k in preferred:
+            if k in all_keys and k not in seen:
+                cols.append(k)
+                seen.add(k)
+        for k in sorted(all_keys):
+            if k not in seen:
+                cols.append(k)
+                seen.add(k)
+        return cols
+
+    PREVIEW_ROWS = 5
+
+    # ---- META ----
+    preferred_meta = [
+        "country", "unit", "city", "district", "subunit", "instance",
+        "year", "date_begin", "date_end", "budget", "currency",
+        "num_projects", "num_votes", "vote_type", "rule", "description", "comment",
+    ]
+    meta_order = {k: i for i, k in enumerate(preferred_meta)}
+    meta_items = sorted(
+        list(meta.items()),
+        key=lambda kv: (kv[0] not in meta_order, meta_order.get(kv[0], 9999), kv[0]),
+    )
+
+    # ---- PROJECTS ----
+    project_rows_raw: List[Dict[str, Any]] = []
+    project_keys: set = set()
+    for pid, row in projects.items():
+        r = dict(row)
+        r.setdefault("project_id", pid)
+        project_rows_raw.append(r)
+        project_keys.update(r.keys())
+    preferred_proj = [
+        "project_id", "name", "title", "cost", "score",
+        "votes", "selected", "category", "district", "description",
+    ]
+    project_columns = _order_cols(list(project_keys), preferred_proj)
+
+    # ---- VOTES ----
+    vote_rows_raw: List[Dict[str, Any]] = []
+    vote_keys: set = set()
+    for vid, row in votes.items():
+        r = {"voter_id": vid}
+        r.update(row)
+        vote_rows_raw.append(r)
+        vote_keys.update(r.keys())
+    preferred_votes = [
+        "voter_id", "vote", "ranking", "points", "weight",
+        "age", "gender", "district",
+    ]
+    vote_columns = _order_cols(list(vote_keys), preferred_votes)
+
+    def _serialise_row(row: dict, cols: list) -> list:
+        return [str(row.get(c, "")) for c in cols]
+
+    return jsonify({
+        "ok": True,
+        "file": fname,
+        "meta_items": [[str(k), str(v)] for k, v in meta_items],
+        "project_columns": project_columns,
+        "project_rows": [_serialise_row(r, project_columns) for r in project_rows_raw[:PREVIEW_ROWS]],
+        "total_projects": len(project_rows_raw),
+        "vote_columns": vote_columns,
+        "vote_rows": [_serialise_row(r, vote_columns) for r in vote_rows_raw[:PREVIEW_ROWS]],
+        "total_votes": len(vote_rows_raw),
+    })
 
 
 @bp.get("/admin/upload/check")

@@ -374,6 +374,7 @@
         
         {# Action buttons column #}
         <div class="flex flex-col items-center gap-2 ml-2">
+          <button class="p-2 rounded-md border border-slate-300 hover:bg-slate-50 preview-one" data-file="{{ t.file_name|e }}" title="Preview" type="button" onclick="event.stopPropagation()">👁</button>
           <a class="p-2 rounded-md border border-slate-300 hover:bg-slate-50" title="Download" href="{{ url_for('admin.upload_tiles_download', name=t.file_name) }}">⬇</a>
           <div class="flex flex-col items-center gap-1">
             <button class="p-2 rounded-md border border-slate-300 hover:bg-slate-50 ingest-one" data-file="{{ t.file_name|e }}" title="Upload" type="button">⤴</button>
@@ -393,9 +394,153 @@
     </div>
   </div>
 </section>
+
+{# ── File Preview Modal ─────────────────────────────────────────────────── #}
+<div id="previewModal" class="hidden fixed inset-0 z-50 flex items-start justify-center" style="background:rgba(15,23,42,.55);padding:24px 12px 24px;overflow-y:auto;">
+  <div class="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl flex flex-col" style="max-height:calc(100vh - 48px);overflow:hidden;">
+    {# Modal header #}
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0">
+      <div>
+        <span class="text-base font-bold text-slate-900" id="previewModalTitle">Preview</span>
+        <span class="ml-2 text-xs font-mono text-slate-400" id="previewModalFile"></span>
+      </div>
+      <button id="previewModalClose" type="button" class="ml-4 p-1.5 rounded-lg text-slate-500 hover:bg-slate-100" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    {# Modal body #}
+    <div class="overflow-y-auto flex-1 px-5 py-4" id="previewModalBody">
+      <div id="previewModalLoading" class="py-10 text-center text-slate-500 text-sm">Loading…</div>
+      <div id="previewModalContent" class="hidden space-y-6"></div>
+      <div id="previewModalError" class="hidden py-10 text-center text-red-600 text-sm"></div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
+<script>
+// ── Preview Modal ──────────────────────────────────────────────────────────
+(function(){
+  const modal   = document.getElementById('previewModal');
+  const title   = document.getElementById('previewModalTitle');
+  const fileEl  = document.getElementById('previewModalFile');
+  const loading = document.getElementById('previewModalLoading');
+  const content = document.getElementById('previewModalContent');
+  const errEl   = document.getElementById('previewModalError');
+
+  function closeModal(){
+    modal.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+  document.getElementById('previewModalClose').addEventListener('click', closeModal);
+  modal.addEventListener('click', function(e){ if(e.target === modal) closeModal(); });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeModal(); });
+
+  function esc(s){ const d=document.createElement('div'); d.textContent=String(s??''); return d.innerHTML; }
+
+  function buildTable(columns, rows, totalCount, label){
+    const previewCount = rows.length;
+    const truncated = totalCount > previewCount;
+    let html = `<div class="pm-section">
+      <div class="pm-section-head">
+        <span class="pm-section-title">${esc(label)}</span>
+        <span class="pm-section-cnt">${totalCount.toLocaleString()}</span>
+        ${truncated ? `<span class="pm-badge-yellow">first ${previewCount} rows</span>` : ''}
+      </div>
+      <div class="pm-scroll">
+        <table class="pm-table">
+          <thead><tr>${columns.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead>
+          <tbody>`;
+    for(const row of rows){
+      html += '<tr>' + row.map(v=>`<td>${esc(v)}</td>`).join('') + '</tr>';
+    }
+    html += `</tbody></table></div>`;
+    if(truncated) html += `<div class="pm-note">Showing first ${previewCount} of ${totalCount.toLocaleString()} rows.</div>`;
+    html += '</div>';
+    return html;
+  }
+
+  function buildMetaTable(metaItems){
+    let rows = metaItems.map(([k,v])=>
+      `<tr><td class="pm-meta-key">${esc(k)}</td><td>${esc(v)}</td></tr>`
+    ).join('');
+    return `<div class="pm-section">
+      <div class="pm-section-head"><span class="pm-section-title">Meta</span><span class="pm-section-cnt">${metaItems.length} keys</span></div>
+      <div class="pm-scroll">
+        <table class="pm-table pm-meta-table">
+          <thead><tr><th>Key</th><th>Value</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
+  async function openPreview(fname, titleText){
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    title.textContent = titleText || fname;
+    fileEl.textContent = fname;
+    loading.classList.remove('hidden');
+    content.classList.add('hidden');
+    content.innerHTML = '';
+    errEl.classList.add('hidden');
+
+    try {
+      const resp = await fetch("/admin/upload/preview_data", {
+        method: 'POST',
+        headers: {'Content-Type':'application/json','X-Requested-With':'fetch'},
+        body: JSON.stringify({file: fname})
+      });
+      const data = await resp.json();
+      if(!resp.ok || !data.ok){
+        throw new Error(data.error || 'Server error');
+      }
+      content.innerHTML =
+        buildMetaTable(data.meta_items) +
+        buildTable(data.project_columns, data.project_rows, data.total_projects, 'Projects') +
+        buildTable(data.vote_columns, data.vote_rows, data.total_votes, 'Votes');
+      loading.classList.add('hidden');
+      content.classList.remove('hidden');
+    } catch(err){
+      loading.classList.add('hidden');
+      errEl.textContent = 'Failed to load preview: ' + (err.message||err);
+      errEl.classList.remove('hidden');
+    }
+  }
+
+  document.querySelectorAll('.preview-one').forEach(btn => {
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      const tile = btn.closest('.tile-preview');
+      const fname = btn.dataset.file;
+      const titleText = tile ? (tile.dataset.title || fname) : fname;
+      openPreview(fname, titleText);
+    });
+  });
+})();
+</script>
+<style>
+/* Preview modal table styles */
+.pm-section{border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#fff;}
+.pm-section-head{display:flex;align-items:center;gap:8px;padding:12px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;}
+.pm-section-title{font-size:14px;font-weight:700;color:#1e293b;}
+.pm-section-cnt{font-size:12px;color:#64748b;}
+.pm-badge-yellow{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:#fef9c3;color:#854d0e;}
+.pm-scroll{overflow-x:auto;overflow-y:visible;}
+.pm-table{border-collapse:separate;border-spacing:0;font-size:12px;width:100%;min-width:100%;}
+.pm-table thead{background:#f8fafc;}
+.pm-table th{padding:7px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#64748b;border-bottom:1.5px solid #e2e8f0;white-space:nowrap;}
+.pm-table td{padding:7px 12px;color:#334155;border-bottom:1px solid #f1f5f9;vertical-align:top;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pm-table tr:last-child td{border-bottom:none;}
+.pm-table tr:hover td{background:#f8fafc;}
+.pm-meta-table{table-layout:fixed;width:100%;}
+.pm-meta-table th:first-child,.pm-meta-table td:first-child{width:150px;}
+.pm-meta-table td{white-space:normal;word-break:break-word;overflow:visible;text-overflow:unset;}
+.pm-meta-key{font-weight:600;color:#1e293b;white-space:nowrap;}
+.pm-note{padding:8px 16px;font-size:11px;color:#64748b;background:#f8fafc;border-top:1px solid #f1f5f9;}
+</style>
+
 <script>
 (function(){
   const dropzone = document.getElementById('dropzone');

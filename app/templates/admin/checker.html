@@ -223,13 +223,21 @@
                         {% endif %}
                       </div>
                       <div class="mt-1 break-all font-mono text-xs text-slate-500">{{ f.file_name }}</div>
-                      {% if f.comment_count > 0 %}
-                      <div class="mt-2">
+                      <div class="mt-2 flex flex-wrap items-center gap-2">
+                        {% if f.comment_count > 0 %}
                         <button type="button" class="toggle-comments-btn rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50" aria-expanded="false" data-open-label="Show comments ({{ f.comment_count }})" data-close-label="Hide comments">
                           Show comments ({{ f.comment_count }})
                         </button>
+                        {% endif %}
+                        <a href="{{ url_for('main.preview_file', filename=f.file_name) }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                          Preview
+                        </a>
+                        <a href="{{ url_for('main.download', filename=f.file_name) }}" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                          Download
+                        </a>
                       </div>
-                      {% endif %}
                     </div>
                     <div class="flex flex-wrap items-center gap-2 xl:justify-end">
                       <span class="checker-status inline-flex items-center rounded-full px-3 py-1 text-sm font-medium
