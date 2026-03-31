@@ -164,6 +164,19 @@
         <div class="text-sm text-slate-500">Each file below shows a short summary and expandable checker details.</div>
       </div>
 
+      <div class="mt-3 rounded-lg border border-slate-200 bg-white p-3">
+        <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Selected files actions</div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button id="downloadSelectedBtn" type="button" class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-slate-700 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed">Download selected</button>
+          <select id="issueExportTone" class="rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500">
+            <option value="both">Errors + warnings</option>
+            <option value="errors">Errors only</option>
+            <option value="warnings">Warnings only</option>
+          </select>
+          <button id="exportIssuesBtn" type="button" class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-slate-700 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed">Export issues JSON</button>
+        </div>
+      </div>
+
     </div>
 
     <div id="checkerNotice" class="hidden mt-4 rounded-xl p-4 text-sm"></div>
@@ -312,6 +325,9 @@
   const selectAll = document.getElementById('checkerSelectAll');
   const runSelectedBtn = document.getElementById('runSelectedBtn');
   const runAllBtn = document.getElementById('runAllBtn');
+  const downloadSelectedBtn = document.getElementById('downloadSelectedBtn');
+  const exportIssuesBtn = document.getElementById('exportIssuesBtn');
+  const issueExportTone = document.getElementById('issueExportTone');
   const notice = document.getElementById('checkerNotice');
   const progressWrap = document.getElementById('checkerProgress');
   const progressBar = document.getElementById('checkerProgressBar');
@@ -768,12 +784,26 @@
       .map(box => Number(box.value));
   }
 
+  function selectedRows(){
+    return rows.filter(row => {
+      const box = row.querySelector('.checker-row-check');
+      return !!(box && box.checked);
+    });
+  }
+
   function updateSelectionUi(){
     const visibleRows = rows.filter(row => row.style.display !== 'none');
     const checkedVisible = visibleRows.filter(row => row.querySelector('.checker-row-check').checked).length;
+    const checkedTotal = selectedRows().length;
     selectAll.checked = visibleRows.length > 0 && checkedVisible === visibleRows.length;
     selectAll.indeterminate = checkedVisible > 0 && checkedVisible < visibleRows.length;
     runSelectedBtn.disabled = checkedVisible === 0;
+    if(downloadSelectedBtn){
+      downloadSelectedBtn.disabled = checkedTotal === 0;
+    }
+    if(exportIssuesBtn){
+      exportIssuesBtn.disabled = checkedTotal === 0;
+    }
   }
 
   function filterRows(){
@@ -1068,6 +1098,112 @@
     }
   }
 
+  function triggerDownloadSelected(){
+    const selected = selectedRows();
+    if(selected.length === 0){
+      setNotice('Select at least one file to download.', 'error');
+      return;
+    }
+
+    const uniqueNames = Array.from(new Set(selected.map(row => (row.dataset.file || '').trim()).filter(Boolean)));
+    if(uniqueNames.length === 0){
+      setNotice('Selected rows do not contain downloadable file names.', 'error');
+      return;
+    }
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/download-selected';
+    form.style.display = 'none';
+
+    uniqueNames.forEach(name => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'files';
+      input.value = name;
+      form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+    window.setTimeout(() => {
+      if(form.parentNode){
+        form.parentNode.removeChild(form);
+      }
+    }, 1000);
+    setNotice(`Preparing ZIP for ${uniqueNames.length} selected file(s).`, 'success');
+  }
+
+  function buildIssueReport(){
+    const selected = selectedRows();
+    if(selected.length === 0){
+      setNotice('Select at least one file to export a report.', 'error');
+      return null;
+    }
+
+    const tone = (issueExportTone && issueExportTone.value) || 'both';
+    const includeErrors = tone === 'both' || tone === 'errors';
+    const includeWarnings = tone === 'both' || tone === 'warnings';
+
+    const items = [];
+    selected.forEach(row => {
+      const id = Number(row.dataset.id);
+      const fileName = (row.dataset.file || '').trim();
+      const state = validationState.get(id);
+      const validation = state ? state.validation : null;
+      const checkerStatus = state ? state.checker_status : (row.dataset.status || 'unchecked');
+
+      const entry = {
+        file_name: fileName,
+        checker_status: checkerStatus,
+        errors: includeErrors && validation && validation.errors ? validation.errors : {},
+        warnings: includeWarnings && validation && validation.warnings ? validation.warnings : {},
+      };
+      if(validation && validation.error_message){
+        entry.error_message = validation.error_message;
+      }
+
+      const hasErrors = entry.errors && Object.keys(entry.errors).length > 0;
+      const hasWarnings = entry.warnings && Object.keys(entry.warnings).length > 0;
+      if(hasErrors || hasWarnings || entry.error_message){
+        items.push(entry);
+      }
+    });
+
+    return {
+      generated_at_utc: new Date().toISOString(),
+      filter: tone,
+      total_selected: selected.length,
+      files_with_reported_issues: items.length,
+      items,
+    };
+  }
+
+  function exportIssueReport(){
+    const report = buildIssueReport();
+    if(!report){
+      return;
+    }
+    if(report.items.length === 0){
+      setNotice('No matching errors/warnings found in selected files for this export filter.', 'error');
+      return;
+    }
+
+    const tone = report.filter || 'both';
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `checker_issues_${tone}_${stamp}.json`;
+    const blob = new Blob([JSON.stringify(report, null, 2)], {type: 'application/json'});
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+    setNotice(`Exported issue report for ${report.items.length} file(s).`, 'success');
+  }
+
   refreshQuickStatusButtons();
   filterRows();
   deriveSummaryFromRows();
@@ -1186,6 +1322,12 @@
   runAllBtn.addEventListener('click', () => {
     runBatchInBackground({all: true, force: true}, 'Running checker for all current files…');
   });
+  if(downloadSelectedBtn){
+    downloadSelectedBtn.addEventListener('click', triggerDownloadSelected);
+  }
+  if(exportIssuesBtn){
+    exportIssuesBtn.addEventListener('click', exportIssueReport);
+  }
 })();
 </script>
 {% endblock %}
