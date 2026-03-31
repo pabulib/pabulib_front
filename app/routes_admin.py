@@ -8,6 +8,7 @@ import tempfile
 import threading
 import uuid
 import zipfile
+import difflib
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -2540,6 +2541,145 @@ def upload_tiles_preview_data():
         "vote_rows": [_serialise_row(r, vote_columns) for r in vote_rows_raw[:PREVIEW_ROWS]],
         "total_votes": len(vote_rows_raw),
     })
+
+
+def _to_sorted_lines_meta(meta: Dict[str, Any]) -> List[str]:
+    return [f"{k} = {meta.get(k, '')}" for k in sorted(meta.keys())]
+
+
+def _to_sorted_lines_projects(projects: Dict[str, Dict[str, Any]]) -> List[str]:
+    lines: List[str] = []
+    for pid in sorted(projects.keys(), key=lambda x: str(x)):
+        row = projects.get(pid) or {}
+        lines.append(f"[project_id={pid}]")
+        for k in sorted(row.keys()):
+            lines.append(f"  {k} = {row.get(k, '')}")
+    return lines
+
+
+def _unified_text_diff(old_lines: List[str], new_lines: List[str], *, from_name: str, to_name: str, max_lines: int = 1200) -> Dict[str, Any]:
+    diff_lines = list(
+        difflib.unified_diff(
+            old_lines,
+            new_lines,
+            fromfile=from_name,
+            tofile=to_name,
+            lineterm="",
+            n=3,
+        )
+    )
+    total_lines = len(diff_lines)
+    truncated = total_lines > max_lines
+    shown = diff_lines[:max_lines] if truncated else diff_lines
+    return {
+        "text": "\n".join(shown),
+        "has_changes": total_lines > 0,
+        "truncated": truncated,
+        "total_lines": total_lines,
+    }
+
+
+@bp.post("/admin/upload/diff_data")
+def upload_tiles_diff_data():
+    """Return unified diff for META and PROJECTS between temp file and current file.
+    Expects JSON: {"file": "filename.pb"}
+    """
+    if not request.is_json:
+        return jsonify({"error": "JSON required"}), 400
+
+    data = request.get_json(silent=True) or {}
+    fname = (data.get("file") or "").strip()
+
+    if not fname or "/" in fname or ".." in fname or not fname.endswith(".pb"):
+        return jsonify({"error": "Invalid filename"}), 400
+
+    tmp_dir = _tmp_upload_dir()
+    tmp_path = tmp_dir / fname
+    if not is_safe_regular_file(tmp_path, tmp_dir):
+        return jsonify({"error": "File not found"}), 404
+
+    try:
+        tmp_tile = _parse_pb_to_tile(tmp_path)
+    except Exception as e:
+        return jsonify({"error": f"Parse error (temp): {e}"}), 400
+
+    webpage_name = (tmp_tile.get("webpage_name") or "").strip()
+    if not webpage_name:
+        return jsonify(
+            {
+                "ok": True,
+                "file": fname,
+                "webpage_name": "",
+                "has_conflict": False,
+                "message": "No webpage_name in META. Cannot compare with current dataset.",
+            }
+        )
+
+    with get_session() as s:
+        current_row = (
+            s.query(PBFile)
+            .filter(
+                PBFile.webpage_name == webpage_name,
+                PBFile.is_current == True,
+            )  # noqa: E712
+            .one_or_none()
+        )
+
+    if not current_row or not current_row.path:
+        return jsonify(
+            {
+                "ok": True,
+                "file": fname,
+                "webpage_name": webpage_name,
+                "has_conflict": False,
+                "message": "No current dataset found for this webpage_name.",
+            }
+        )
+
+    current_path = Path(current_row.path)
+    if not current_path.exists() or not current_path.is_file():
+        return jsonify({"error": "Current dataset file is missing on disk."}), 404
+
+    try:
+        with current_path.open("r", encoding="utf-8", newline="") as fh_old:
+            old_lines = [line.rstrip("\n") for line in fh_old]
+        old_meta, old_projects, _old_votes, _a, _b = _parse_pb_lines(old_lines)
+    except Exception as e:
+        return jsonify({"error": f"Parse error (current): {e}"}), 400
+
+    try:
+        with tmp_path.open("r", encoding="utf-8", newline="") as fh_new:
+            new_lines = [line.rstrip("\n") for line in fh_new]
+        new_meta, new_projects, _new_votes, _c, _d = _parse_pb_lines(new_lines)
+    except Exception as e:
+        return jsonify({"error": f"Parse error (temp): {e}"}), 400
+
+    meta_diff = _unified_text_diff(
+        _to_sorted_lines_meta(old_meta),
+        _to_sorted_lines_meta(new_meta),
+        from_name=f"current:{current_path.name} META",
+        to_name=f"temp:{tmp_path.name} META",
+        max_lines=800,
+    )
+    projects_diff = _unified_text_diff(
+        _to_sorted_lines_projects(old_projects),
+        _to_sorted_lines_projects(new_projects),
+        from_name=f"current:{current_path.name} PROJECTS",
+        to_name=f"temp:{tmp_path.name} PROJECTS",
+        max_lines=1200,
+    )
+
+    return jsonify(
+        {
+            "ok": True,
+            "file": fname,
+            "webpage_name": webpage_name,
+            "has_conflict": True,
+            "current_file": current_path.name,
+            "meta_diff": meta_diff,
+            "projects_diff": projects_diff,
+        }
+    )
 
 
 @bp.get("/admin/upload/check")
