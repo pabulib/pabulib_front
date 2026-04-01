@@ -4,125 +4,125 @@
 {% block title %}Pabulib – Details{% endblock %}
 
 {% block body %}
-<section class="max-w-5xl mx-auto px-4">
-  <div class="flex justify-center">
-    <div class="w-full max-w-5xl bg-white rounded-lg shadow-lg p-4 sm:p-8 mt-8 mb-32">
-      <div class="flex items-baseline justify-between mb-6">
-        <h1 class="text-3xl font-bold text-slate-800">Details</h1>
-        <div class="text-sm text-gray-500 hidden sm:block">Explore comments, categories, targets and rules used across the library</div>
-      </div>
+{% if tab=='comments' %}
+  {% set rows = rows_comments %}
+  {% set groups_country = groups_comments_country %}
+  {% set groups_country_unit = groups_comments_country_unit %}
+  {% set groups_country_unit_instance = groups_comments_country_unit_instance %}
+  {% set total_items = total_comments %}
+  {% set label_name = 'Comment' %}
+  {% set intro_html %}
+    Parsed from META key <code class="details-inline-code">comment</code> using pattern <code class="details-inline-code">#n:</code> segments. Showing how many PB files share each comment. <a href="{{ url_for('main.format_page') }}#comment-field" class="details-link">→ View field specification</a>
+  {% endset %}
+{% elif tab=='categories' %}
+  {% set rows = rows_categories %}
+  {% set groups_country = groups_categories_country %}
+  {% set groups_country_unit = groups_categories_country_unit %}
+  {% set groups_country_unit_instance = groups_categories_country_unit_instance %}
+  {% set total_items = total_categories %}
+  {% set label_name = 'Category' %}
+  {% set intro_html %}
+    Extracted from <code class="details-inline-code">PROJECTS.category</code> (comma-separated or lists). Grouped by distinct token per file. <a href="{{ url_for('main.format_page') }}#category-field" class="details-link">→ View field specification</a>
+  {% endset %}
+{% elif tab=='targets' %}
+  {% set rows = rows_targets %}
+  {% set groups_country = groups_targets_country %}
+  {% set groups_country_unit = groups_targets_country_unit %}
+  {% set groups_country_unit_instance = groups_targets_country_unit_instance %}
+  {% set total_items = total_targets %}
+  {% set label_name = 'Target' %}
+  {% set intro_html %}
+    Extracted from <code class="details-inline-code">PROJECTS.target</code> (comma-separated or lists). Grouped by distinct token per file. <a href="{{ url_for('main.format_page') }}#target-field" class="details-link">→ View field specification</a>
+  {% endset %}
+{% else %}
+  {% set rows = rows_rules %}
+  {% set groups_country = groups_rules_country %}
+  {% set groups_country_unit = groups_rules_country_unit %}
+  {% set groups_country_unit_instance = groups_rules_country_unit_instance %}
+  {% set total_items = total_rules %}
+  {% set label_name = 'Rule' %}
+  {% set intro_html %}
+    Extracted from <code class="details-inline-code">META.rule</code>. Shows which PB files use each voting rule, grouped by location. <a href="{{ url_for('main.format_page') }}#rule-field" class="details-link">→ View field specification</a>
+  {% endset %}
+{% endif %}
 
-      <!-- Tabs -->
-      <div class="overflow-x-auto pb-1 mb-6">
-        <div class="flex items-center gap-2 w-max">
+<section class="details-page">
+  <div class="details-shell">
+    <div class="details-head">
+      <div>
+        <h1 class="details-title">Details</h1>
+      </div>
+      <div class="details-subtitle">Explore comments, categories, targets and rules used across the library</div>
+    </div>
+
+    <div class="details-tabs-wrap">
+      <div class="details-tabs">
         {% set tabs = [
-          {'id':'comments','label':'Comments','desc':'from META.comment, split by #n:'},
-          {'id':'categories','label':'Categories','desc':'from PROJECTS.category/categories'},
-          {'id':'targets','label':'Targets','desc':'from PROJECTS.target/targets'},
-          {'id':'rules','label':'Rules','desc':'from META.rule'},
+          {'id':'comments','label':'Comments'},
+          {'id':'categories','label':'Categories'},
+          {'id':'targets','label':'Targets'},
+          {'id':'rules','label':'Rules'},
         ] %}
         {% for t in tabs %}
-          <a href="{{ url_for('main.details_page') }}?tab={{ t.id }}" 
-             class="px-3 py-1.5 rounded-md text-sm border transition-colors {{ 'bg-indigo-600 text-white border-indigo-600' if tab==t.id else 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50' }}"
-             data-tab-target="{{ t.id }}" data-track="tab_switch" data-track-category="navigation">{{ t.label }}</a>
+          <a href="{{ url_for('main.details_page') }}?tab={{ t.id }}"
+             class="details-tab {{ 'is-active' if tab == t.id else '' }}"
+             data-tab-target="{{ t.id }}"
+             data-track="tab_switch"
+             data-track-category="navigation">{{ t.label }}</a>
         {% endfor %}
-        <span class="ml-3 text-xs text-gray-500 whitespace-nowrap">
-          {% if tab=='comments' %}{{ total_comments }} items{% elif tab=='categories' %}{{ total_categories }} items{% elif tab=='targets' %}{{ total_targets }} items{% else %}{{ total_rules }} items{% endif %}
-        </span>
-        </div>
+        <span class="details-count">{{ total_items }} items</span>
       </div>
+    </div>
 
-      {% if tab=='comments' %}
-        {% set rows = rows_comments %}
-        {% set groups_country = groups_comments_country %}
-        {% set groups_country_unit = groups_comments_country_unit %}
-        {% set groups_country_unit_instance = groups_comments_country_unit_instance %}
-        <p class="text-gray-600 mb-4 break-words">Parsed from META key <code class="bg-gray-100 px-2 py-1 rounded text-sm">comment</code> using pattern <code class="bg-gray-100 px-2 py-1 rounded text-sm">#n:</code> segments. Showing how many PB files share each comment. <a href="{{ url_for('main.format_page') }}#comment-field" class="text-blue-700 hover:text-blue-900 underline text-sm">→ View field specification</a></p>
-      {% elif tab=='categories' %}
-        {% set rows = rows_categories %}
-        {% set groups_country = groups_categories_country %}
-        {% set groups_country_unit = groups_categories_country_unit %}
-        {% set groups_country_unit_instance = groups_categories_country_unit_instance %}
-        <p class="text-gray-600 mb-4 break-words">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">PROJECTS.category</code> (comma-separated or lists). Grouped by distinct token per file. <a href="{{ url_for('main.format_page') }}#category-field" class="text-blue-700 hover:text-blue-900 underline text-sm">→ View field specification</a></p>
-      {% elif tab=='targets' %}
-        {% set rows = rows_targets %}
-        {% set groups_country = groups_targets_country %}
-        {% set groups_country_unit = groups_targets_country_unit %}
-        {% set groups_country_unit_instance = groups_targets_country_unit_instance %}
-        <p class="text-gray-600 mb-4 break-words">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">PROJECTS.target</code> (comma-separated or lists). Grouped by distinct token per file. <a href="{{ url_for('main.format_page') }}#target-field" class="text-blue-700 hover:text-blue-900 underline text-sm">→ View field specification</a></p>
-      {% else %}
-        {% set rows = rows_rules %}
-        {% set groups_country = groups_rules_country %}
-        {% set groups_country_unit = groups_rules_country_unit %}
-        {% set groups_country_unit_instance = groups_rules_country_unit_instance %}
-        <p class="text-gray-600 mb-4 break-words">Extracted from <code class="bg-gray-100 px-2 py-1 rounded text-sm">META.rule</code>. Shows which PB files use each voting rule, grouped by location. <a href="{{ url_for('main.format_page') }}#rule-field" class="text-blue-700 hover:text-blue-900 underline text-sm">→ View field specification</a></p>
-      {% endif %}
+    <p class="details-intro">{{ intro_html|safe }}</p>
 
-      <!-- Group by selector for mobile (shown above table on mobile, hidden on desktop) -->
-      <div class="flex items-center gap-2 mb-3 sm:hidden">
-        <span class="text-xs text-gray-500">Group by</span>
-        <select id="groupModeMobile" class="text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-700">
+    <div class="details-toolbar">
+      <label class="details-groupby">
+        <span>Group by</span>
+        <select id="groupMode" class="details-select">
           <option value="none">None</option>
           <option value="country">Country</option>
           <option value="country_unit" selected>Country + Unit</option>
           <option value="country_unit_instance">Country + Unit + Instance</option>
         </select>
-      </div>
+      </label>
+    </div>
 
-      <div class="overflow-x-auto sm:overflow-x-visible">
-        <table class="details-table bg-white border border-gray-200 rounded-lg overflow-hidden">
+    <div class="details-table-panel">
+      <div class="details-table-scroll">
+        <table class="details-table">
           <colgroup>
-            <col class="details-col-label">
+            <col class="details-col-main">
             <col class="details-col-count">
-            <col>
+            <col class="details-col-files">
           </colgroup>
-          <thead class="bg-gray-100">
+          <thead>
             <tr>
-              <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-sm font-semibold text-gray-700 border-b border-gray-200">{{ 'Comment' if tab=='comments' else ( 'Category' if tab=='categories' else ( 'Target' if tab=='targets' else 'Rule' ) ) }}</th>
-              <th class="px-3 sm:px-4 py-3 sm:py-4 text-center text-sm font-semibold text-gray-700 border-b border-gray-200"># files</th>
-              <th class="hidden sm:table-cell px-6 py-4 text-left text-sm font-semibold text-gray-700 border-b border-gray-200">
-                <div class="flex items-center gap-3">
-                  <span>Files</span>
-                  <label class="flex items-center gap-2 text-xs font-normal text-gray-500">
-                    Group by
-                    <select id="groupMode" class="text-xs px-2 py-1 border border-gray-300 rounded bg-white text-gray-700">
-                      <option value="none">None</option>
-                      <option value="country">Country</option>
-                      <option value="country_unit" selected>Country + Unit</option>
-                      <option value="country_unit_instance">Country + Unit + Instance</option>
-                    </select>
-                  </label>
-                </div>
-              </th>
+              <th>{{ label_name }}</th>
+              <th># files</th>
+              <th>Files</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-200">
+          <tbody>
             {% for label, count, files in rows %}
-            <tr class="hover:bg-gray-50">
-              <td class="px-3 sm:px-6 py-3 sm:py-4 text-sm text-gray-900">
-                <div class="label-row" data-expanded="0">
-                  <span class="label-text">{{ label }}</span>
-                  {% if label|length > 120 %}
-                    <button type="button" class="btn-expand-label" aria-expanded="false">Show more</button>
-                  {% endif %}
-                </div>
+            {% set preview = files[:5] %}
+            <tr>
+              <td class="details-cell-label">
+                <div class="details-label-text">{{ label }}</div>
               </td>
-              <td class="px-3 sm:px-4 py-3 sm:py-4 text-center">
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-800">{{ count }}</span>
+              <td class="details-cell-count">
+                <span class="details-pill">{{ count }}</span>
               </td>
-              <td class="hidden sm:table-cell px-6 py-4">
-                {% set preview = files[:5] %}
-                <div class="files-cell">
-                  <div class="file-list text-sm"
-                    data-files='{{ files|tojson|e }}'
-                    data-groups-country='{{ (groups_country.get(label) or [])|tojson|e }}'
-                    data-groups-country-unit='{{ (groups_country_unit.get(label) or [])|tojson|e }}'
-                    data-groups-country-unit-instance='{{ (groups_country_unit_instance.get(label) or [])|tojson|e }}'
-                    data-expanded="0"></div>
-                  {% if files|length > preview|length %}
-                    <button type="button" class="mt-2 px-3 py-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 btn-expand" aria-label="Show all files" aria-expanded="false">+ Show more</button>
-                  {% endif %}
-                </div>
+              <td class="details-cell-files">
+                <div class="details-files"
+                  data-files='{{ files|tojson|e }}'
+                  data-groups-country='{{ (groups_country.get(label) or [])|tojson|e }}'
+                  data-groups-country-unit='{{ (groups_country_unit.get(label) or [])|tojson|e }}'
+                  data-groups-country-unit-instance='{{ (groups_country_unit_instance.get(label) or [])|tojson|e }}'
+                  data-expanded="0"></div>
+                {% if files|length > preview|length %}
+                  <button type="button" class="details-more btn-expand" aria-label="Show all files" aria-expanded="false">Show more</button>
+                {% endif %}
               </td>
             </tr>
             {% endfor %}
@@ -130,170 +130,568 @@
         </table>
       </div>
     </div>
+
+    <div class="details-mobile-toolbar">
+      <label class="details-groupby">
+        <span>Group by</span>
+        <select id="groupModeMobile" class="details-select">
+          <option value="none">None</option>
+          <option value="country">Country</option>
+          <option value="country_unit" selected>Country + Unit</option>
+          <option value="country_unit_instance">Country + Unit + Instance</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="details-cards">
+      {% for label, count, files in rows %}
+      {% set preview = files[:5] %}
+      <article class="details-card">
+        <div class="details-card-top">
+          <span class="details-card-kicker">{{ label_name }}</span>
+          <span class="details-pill">{{ count }}</span>
+        </div>
+        <div class="details-card-title">{{ label }}</div>
+        <div class="details-card-files-head">Files</div>
+        <div class="details-files"
+          data-files='{{ files|tojson|e }}'
+          data-groups-country='{{ (groups_country.get(label) or [])|tojson|e }}'
+          data-groups-country-unit='{{ (groups_country_unit.get(label) or [])|tojson|e }}'
+          data-groups-country-unit-instance='{{ (groups_country_unit_instance.get(label) or [])|tojson|e }}'
+          data-expanded="0"></div>
+        {% if files|length > preview|length %}
+          <button type="button" class="details-more btn-expand" aria-label="Show all files" aria-expanded="false">Show more</button>
+        {% endif %}
+      </article>
+      {% endfor %}
+    </div>
   </div>
 </section>
 
 <script>
-// Expand/collapse and grouping behavior (reused from comments)
 (function(){
   const PREVIEW_COUNT = 5;
+
   function getGroupMode(){
-    const mob = document.getElementById('groupModeMobile');
-    const desk = document.getElementById('groupMode');
-    if(mob && mob.offsetParent !== null) return mob.value;
-    return desk ? desk.value : 'none';
+    const mobile = document.getElementById('groupModeMobile');
+    if (mobile && (window.matchMedia('(max-width: 1200px)').matches || navigator.maxTouchPoints > 0)) return mobile.value;
+    const desktop = document.getElementById('groupMode');
+    return desktop ? desktop.value : 'country_unit';
   }
-  function renderFilesFlat(container, files, expanded){
-    if(expanded){
-      container.innerHTML = files.map(f => `<span class="file-item">${f}</span>`).join('');
-      container.dataset.expanded = '1';
-    } else {
-      const rest = Math.max(files.length - PREVIEW_COUNT, 0);
-      const preview = files.slice(0, PREVIEW_COUNT).map(f => `<span class="file-item">${f}</span>`).join('');
-      const more = rest > 0 ? `<span class="more-count text-muted">+ ${rest} more</span>` : '';
-      container.innerHTML = preview + more;
-      container.dataset.expanded = '0';
+
+  function parseJsonAttr(el, name){
+    try {
+      return JSON.parse(el.getAttribute(name) || '[]') || [];
+    } catch (_error) {
+      return [];
     }
-    
-    // Show/hide button based on whether there are more files to show
-    const wrap = container.closest('.files-cell');
-    const btn = wrap && wrap.querySelector('.btn-expand');
-    if(btn){ btn.style.display = files.length > PREVIEW_COUNT ? '' : 'none'; }
   }
-  function renderFilesGrouped(container, groups, expanded){
+
+  function renderFlat(el, files, expanded){
+    const shown = expanded ? files : files.slice(0, PREVIEW_COUNT);
+    const html = shown.map((file) => `<span class="details-chip">${file}</span>`).join('');
+    const rest = Math.max(files.length - shown.length, 0);
+    el.innerHTML = html + (!expanded && rest > 0 ? `<div class="details-more-note">+ ${rest} more</div>` : '');
+    el.dataset.expanded = expanded ? '1' : '0';
+  }
+
+  function renderGrouped(el, groups, expanded){
+    const shown = expanded ? groups : groups.slice(0, PREVIEW_COUNT);
     let html = '';
-    const toRender = expanded ? groups : groups.slice(0, 5);
-    toRender.forEach(g => {
-      html += `<div class="group">
-        <div class="group-head"><span class="group-label">${g.label || '—'}</span><span class="group-count">${g.count}</span></div>
-      </div>`;
+    shown.forEach((group) => {
+      html += `
+        <div class="details-group">
+          <div class="details-group-head">
+            <span class="details-group-label">${group.label || '—'}</span>
+            <span class="details-group-count">${group.count}</span>
+          </div>
+        </div>
+      `;
     });
-    if(!expanded){
-      const restGroups = Math.max(groups.length - toRender.length, 0);
-      if(restGroups > 0){ html += `<span class="more-count text-muted">+ ${restGroups} more groups</span>`; }
-    }
-    container.innerHTML = html;
-    container.dataset.expanded = expanded ? '1' : '0';
-    
-    // Show/hide button based on whether there are more groups to show
-    const wrap = container.closest('.files-cell');
-    const btn = wrap && wrap.querySelector('.btn-expand');
-    if(btn){ btn.style.display = groups.length > 10 ? '' : 'none'; }
+    const rest = Math.max(groups.length - shown.length, 0);
+    if (!expanded && rest > 0) html += `<div class="details-more-note">+ ${rest} more groups</div>`;
+    el.innerHTML = html;
+    el.dataset.expanded = expanded ? '1' : '0';
   }
-  function render(container, expanded){
-    let files = [], groups = [];
-    try{ files = JSON.parse(container.getAttribute('data-files')||'[]') || []; }catch(e){ files=[]; }
+
+  function renderOne(el, expanded){
     const mode = getGroupMode();
-    if(mode === 'country'){
-      try{ groups = JSON.parse(container.getAttribute('data-groups-country')||'[]') || []; }catch(e){ groups=[]; }
-    }else if(mode === 'country_unit'){
-      try{ groups = JSON.parse(container.getAttribute('data-groups-country-unit')||'[]') || []; }catch(e){ groups=[]; }
-    }else if(mode === 'country_unit_instance'){
-      try{ groups = JSON.parse(container.getAttribute('data-groups-country-unit-instance')||'[]') || []; }catch(e){ groups=[]; }
-    }else{
-      groups = [];
-    }
-    const grouped = (mode !== 'none') && groups && groups.length;
-    if(grouped){ renderFilesGrouped(container, groups, expanded); } else { renderFilesFlat(container, files, expanded); }
-    
-    // Show/hide the expand button based on whether there's more to show
-    const wrap = container.closest('.files-cell');
-    const btn = wrap && wrap.querySelector('.btn-expand');
-    if(btn){
-      const hasMore = grouped ? groups.length > 5 : files.length > PREVIEW_COUNT;
-      btn.style.display = hasMore ? '' : 'none';
+    const files = parseJsonAttr(el, 'data-files');
+    const groupsCountry = parseJsonAttr(el, 'data-groups-country');
+    const groupsCountryUnit = parseJsonAttr(el, 'data-groups-country-unit');
+    const groupsCountryUnitInstance = parseJsonAttr(el, 'data-groups-country-unit-instance');
+
+    let groups = [];
+    if (mode === 'country') groups = groupsCountry;
+    if (mode === 'country_unit') groups = groupsCountryUnit;
+    if (mode === 'country_unit_instance') groups = groupsCountryUnitInstance;
+
+    const grouped = mode !== 'none' && groups.length > 0;
+    if (grouped) renderGrouped(el, groups, expanded);
+    else renderFlat(el, files, expanded);
+
+    const wrap = el.parentElement;
+    const btn = wrap ? wrap.querySelector('.btn-expand') : null;
+    if (btn) {
+      const hasMore = grouped ? groups.length > PREVIEW_COUNT : files.length > PREVIEW_COUNT;
+      btn.hidden = !hasMore;
+      btn.textContent = el.dataset.expanded === '1' ? 'Show less' : 'Show more';
+      btn.setAttribute('aria-expanded', el.dataset.expanded === '1' ? 'true' : 'false');
     }
   }
-  document.querySelectorAll('.file-list').forEach(el => render(el, false));
-  addEventListener('change', (e)=>{
-    if(e.target && (e.target.id === 'groupMode' || e.target.id === 'groupModeMobile')){
-      document.querySelectorAll('.file-list').forEach(el => {
-        const expanded = el.dataset.expanded === '1';
-        render(el, expanded);
-      });
+
+  function rerenderAll(keepExpanded){
+    document.querySelectorAll('.details-files').forEach((el) => {
+      const expanded = keepExpanded ? el.dataset.expanded === '1' : false;
+      renderOne(el, expanded);
+    });
+  }
+
+  rerenderAll(false);
+
+  document.addEventListener('change', (event) => {
+    if (event.target && (event.target.id === 'groupMode' || event.target.id === 'groupModeMobile')) {
+      const otherId = event.target.id === 'groupMode' ? 'groupModeMobile' : 'groupMode';
+      const other = document.getElementById(otherId);
+      if (other) other.value = event.target.value;
+      rerenderAll(false);
     }
   });
-  addEventListener('click', (e) => {
-    const labelBtn = e.target.closest('.btn-expand-label');
-    if (labelBtn) {
-      const row = labelBtn.closest('.label-row');
-      if (!row) return;
-      const expanded = row.dataset.expanded === '1';
-      row.dataset.expanded = expanded ? '0' : '1';
-      row.classList.toggle('expanded', !expanded);
-      labelBtn.textContent = expanded ? 'Show more' : 'Show less';
-      labelBtn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
-      return;
-    }
 
-    const btn = e.target.closest('.btn-expand');
+  document.addEventListener('click', (event) => {
+    const btn = event.target.closest('.btn-expand');
     if (!btn) return;
-    const wrap = btn.closest('.files-cell');
-    const container = wrap && wrap.querySelector('.file-list');
-    if (!container) return;
-    const expanded = container.dataset.expanded === '1';
-    render(container, !expanded);
-    const nowExpanded = container.dataset.expanded === '1';
-    btn.textContent = nowExpanded ? '-' : '+';
-    btn.setAttribute('aria-label', nowExpanded ? 'Show fewer files' : 'Show all files');
-    btn.setAttribute('aria-expanded', nowExpanded ? 'true' : 'false');
+    const wrap = btn.parentElement;
+    const target = wrap ? wrap.querySelector('.details-files') : null;
+    if (!target) return;
+    renderOne(target, target.dataset.expanded !== '1');
   });
 })();
 </script>
 
 <style>
-.details-table { width: 100%; table-layout: fixed; }
-.details-col-label { width: 44%; }
-.details-col-count { width: 96px; }
+html, body.details { overflow-x: hidden; }
 
-.files-cell { display: flex; flex-direction: column; align-items: flex-start; max-width: 100%; }
-.file-list { display: block; max-width: 100%; line-height: 1.4; }
-.file-item { display: inline-block; margin-right: 8px; margin-bottom: 4px; padding: 2px 8px; background: #f3f4f6; border-radius: 4px; font-size: 12px; color: #374151; border: 1px solid #e5e7eb; }
-.more-count { display: block; margin-top: 4px; font-size: 12px; color: #6b7280; font-style: italic; }
-.group { margin-bottom: 12px; padding: 8px; background: #f9fafb; border-radius: 6px; border: 1px solid #e5e7eb; }
-.group-head { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #4b5563; margin-bottom: 6px; font-weight: 500; }
-.group-label { font-weight: 600; color: #374151; }
-.group-count { background: #dbeafe; color: #1e40af; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 500; }
-.group-files { margin-left: 0; }
+.details-page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 16px 56px;
+}
 
-.label-row { max-width: 100%; }
-.label-text {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.details-shell {
+  background: #fff;
+  border-radius: 28px;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+  padding: 28px;
+  min-width: 0;
+}
+
+.details-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.details-title {
+  margin: 0;
+  font-size: clamp(2rem, 3.2vw, 2.6rem);
+  line-height: 1;
+  color: #18233a;
+  font-weight: 800;
+}
+
+.details-subtitle {
+  max-width: 560px;
+  color: #6b7280;
+  font-size: 15px;
+  line-height: 1.5;
+  text-align: right;
+}
+
+.details-tabs-wrap {
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin-bottom: 22px;
+}
+
+.details-tabs {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  min-width: max-content;
+  max-width: none;
+}
+
+.details-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  background: #fff;
+  color: #334155;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.details-tab.is-active {
+  background: linear-gradient(135deg, #4338ca, #4f46e5);
+  border-color: transparent;
+  color: #fff;
+}
+
+.details-count {
+  margin-left: 8px;
+  color: #6b7280;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.details-intro {
+  margin: 0 0 20px;
+  color: #4b5563;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.details-inline-code {
+  display: inline;
+  padding: 3px 12px;
+  border-radius: 10px;
+  background: #f3f4f6;
+  color: #4b5563;
+  font-size: 0.95em;
+  overflow-wrap: anywhere;
+}
+
+.details-link {
+  color: #1d4ed8;
+}
+
+.details-toolbar,
+.details-mobile-toolbar {
+  margin-bottom: 18px;
+}
+
+.details-mobile-toolbar {
+  display: none;
+}
+
+.details-groupby {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.details-select {
+  min-width: 240px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #fff;
+  color: #334155;
+  font-size: 14px;
+}
+
+.details-table-panel {
+  display: block;
+}
+
+.details-table-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+}
+
+.details-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.details-col-main { width: 46%; }
+.details-col-count { width: 110px; }
+.details-col-files { width: 34%; }
+
+.details-table th {
+  padding: 14px 16px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+  border-bottom: 1px solid #dbe3f0;
+}
+
+.details-table td {
+  padding: 16px;
+  border-bottom: 1px solid #e8eef6;
+  vertical-align: top;
+}
+
+.details-cell-label {
+  width: auto;
+}
+
+.details-cell-count {
+  width: auto;
+  text-align: center;
+}
+
+.details-cell-files {
+  width: auto;
+}
+
+.details-label-text,
+.details-card-title {
+  color: #334155;
+  font-size: 14px;
+  line-height: 1.5;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
-.label-row.expanded .label-text {
-  display: block;
-  -webkit-line-clamp: unset;
-  line-clamp: unset;
-  overflow: visible;
-}
-.btn-expand-label {
-  margin-top: 6px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #2563eb;
-  font-size: 12px;
-  line-height: 1.2;
-  cursor: pointer;
-  text-decoration: underline;
+
+.details-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #eff3f8;
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 700;
 }
 
-@media (max-width: 639px) {
-  .details-table { table-layout: auto; min-width: 620px; }
-  .label-text {
-    display: block;
-    -webkit-line-clamp: unset;
-    line-clamp: unset;
-    overflow: visible;
+.details-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+  min-width: 0;
+  width: 100%;
+}
+
+.details-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid #dbe3f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.details-group {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #dbe3f0;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.details-group-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.details-group-label {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.details-group-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.details-more {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.details-more-note {
+  width: 100%;
+  color: #6b7280;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.details-cards {
+  display: none;
+  min-width: 0;
+}
+
+.details-card {
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #ffffff, #fbfdff);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.details-card + .details-card {
+  margin-top: 14px;
+}
+
+.details-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.details-card-kicker,
+.details-card-files-head {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.details-card-files-head {
+  margin: 16px 0 10px;
+}
+
+@media (max-width: 1200px), (pointer: coarse) {
+  .details-page {
+    padding: 18px 12px 40px;
+    overflow-x: hidden;
   }
-  .btn-expand-label { display: none; }
+
+  .details-shell {
+    border-radius: 22px;
+    padding: 18px 16px;
+    overflow-x: hidden;
+  }
+
+  .details-head {
+    display: block;
+    margin-bottom: 18px;
+  }
+
+  .details-subtitle {
+    display: none;
+  }
+
+  .details-title {
+    font-size: 2rem;
+  }
+
+  .details-intro {
+    font-size: 14px;
+    margin-bottom: 18px;
+  }
+
+  .details-toolbar,
+  .details-table-panel {
+    display: none;
+  }
+
+  .details-mobile-toolbar,
+  .details-cards {
+    display: block;
+  }
+
+  .details-groupby {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .details-select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .details-tab {
+    min-height: 44px;
+    font-size: 13px;
+  }
+
+  .details-count {
+    font-size: 12px;
+  }
+
+  .details-card-title {
+    font-size: 14px;
+  }
+
+  .details-card-top {
+    align-items: flex-start;
+  }
+
+  .details-tabs {
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .details-files,
+  .details-group,
+  .details-chip {
+    min-width: 0;
+  }
+
+  .details-count {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .details-inline-code {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
 }
 </style>
 {% include 'footer.html' %}

@@ -149,7 +149,7 @@
 
 <style>
 html,body.preview{overflow-x:hidden;}
-.pv-wrap{max-width:700px;width:100%;margin:0 auto;padding:16px 12px 48px;overflow-x:hidden;}
+.pv-wrap{max-width:min(100%,1120px);width:100%;margin:0 auto;padding:16px 12px 48px;overflow-x:hidden;}
 .pv-back a{color:#1d4ed8;text-decoration:none;font-size:14px;}
 .pv-back a:hover{text-decoration:underline;}
 .pv-back{margin-bottom:14px;}
@@ -185,14 +185,14 @@ html,body.preview{overflow-x:hidden;}
 .pv-badge.green{background:#dcfce7;color:#166534;}
 .pv-badge.yellow{background:#fef9c3;color:#854d0e;}
 
-/* Desktop first: keep content inside cards without page-level horizontal scroll */
-.pv-scroll{display:block;width:100%;max-width:100%;overflow-x:hidden;overflow-y:visible;box-sizing:border-box;}
+/* Keep horizontal scrolling inside the table wrapper instead of clipping the right edge */
+.pv-scroll{display:block;width:100%;max-width:100%;overflow-x:auto;overflow-y:visible;box-sizing:border-box;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;padding-bottom:6px;}
 .pv-frozen-head{display:none;position:fixed;top:0;z-index:30;overflow:hidden;background:#f8fafc;border-bottom:1.5px solid #e2e8f0;box-shadow:0 4px 10px rgba(15,23,42,.06);}
 .pv-frozen-head.visible{display:block;}
 .pv-frozen-head .pv-table{margin:0;}
 
 /* Table base */
-.pv-table{border-collapse:separate;border-spacing:0;font-size:13px;width:100%;table-layout:auto;}
+.pv-table{border-collapse:separate;border-spacing:0;font-size:13px;width:100%;min-width:100%;table-layout:auto;}
 .pv-table thead{background:#f8fafc;}
 .pv-table th{padding:8px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#64748b;border-bottom:1.5px solid #e2e8f0;white-space:nowrap;}
 .pv-table td{padding:8px 14px;color:#334155;border-bottom:1px solid #f1f5f9;vertical-align:top;}
@@ -233,6 +233,10 @@ html,body.preview{overflow-x:hidden;}
   .pv-table-meta{width:max-content;min-width:100%;table-layout:auto;}
   .pv-table-meta th:first-child,.pv-table-meta td:first-child{width:1%;min-width:max-content;white-space:nowrap;}
   .pv-table-meta td:last-child{white-space:normal;min-width:240px;}
+}
+
+@media (min-width: 1024px){
+  .pv-wrap{padding-left:20px;padding-right:20px;}
 }
 </style>
 
