@@ -35,7 +35,8 @@
           <label for="filterValidation" class="block text-xs font-medium text-slate-700 mb-1">Validation</label>
           <select id="filterValidation" class="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs text-slate-800 focus:ring-2 focus:ring-indigo-500">
             <option value="">All files</option>
-            <option value="valid">Valid only</option>
+            <option value="valid_clean">Valid only (no warnings)</option>
+            <option value="valid_with_warnings">Valid with warnings</option>
             <option value="invalid">Invalid only</option>
           </select>
         </div>
@@ -88,10 +89,15 @@
 
         <!-- Filter buttons with counts -->
         <div class="mb-4 flex items-center gap-3">
-          <button type="button" id="filterBtnValid" class="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 cursor-pointer transition-colors text-sm font-medium shadow-sm" title="Click to filter valid files">
+          <button type="button" id="filterBtnValidClean" class="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 cursor-pointer transition-colors text-sm font-medium shadow-sm" title="Click to filter valid files without warnings">
             <span class="text-base">✓</span>
             <span>Valid</span>
-            <span id="validCount" class="ml-1 px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 text-xs font-semibold">0</span>
+            <span id="validCleanCount" class="ml-1 px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 text-xs font-semibold">0</span>
+          </button>
+          <button type="button" id="filterBtnWarnings" class="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200 cursor-pointer transition-colors text-sm font-medium shadow-sm" title="Click to filter valid files with warnings">
+            <span class="text-base">⚠</span>
+            <span>Warnings</span>
+            <span id="warningCount" class="ml-1 px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-xs font-semibold">0</span>
           </button>
           <button type="button" id="filterBtnInvalid" class="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-red-300 bg-red-100 text-red-800 hover:bg-red-200 cursor-pointer transition-colors text-sm font-medium shadow-sm" title="Click to filter invalid files">
             <span class="text-base">✗</span>
@@ -235,12 +241,25 @@
 
         <div class="mt-6 mb-12 space-y-4" id="tilesContainer">
     {% for t in tiles %}
-    <section class="rounded-lg shadow p-4 tile-preview relative cursor-pointer hover:ring-4 transition-all {{ 'bg-red-50 ring-2 ring-red-200' if not t.validation.valid else 'bg-emerald-50 ring-2 ring-emerald-200' }}"
+    {% set validation_state = 'invalid' %}
+    {% if t.validation.valid %}
+      {% if (t.warning_count or 0) > 0 %}
+        {% set validation_state = 'valid_with_warnings' %}
+      {% else %}
+        {% set validation_state = 'valid_clean' %}
+      {% endif %}
+    {% endif %}
+    <section class="rounded-lg shadow p-4 tile-preview relative cursor-pointer hover:ring-4 transition-all
+      {% if validation_state == 'valid_clean' %}bg-emerald-50 ring-2 ring-emerald-200
+      {% elif validation_state == 'valid_with_warnings' %}bg-amber-50 ring-2 ring-amber-200
+      {% else %}bg-red-50 ring-2 ring-red-200{% endif %}"
       data-title="{{ t.title|e }}"
       data-desc="{{ t.description|e }}"
       data-file="{{ t.file_name|e }}"
       data-exists="{{ '1' if t.exists_conflict else '' }}"
       data-valid="{{ '1' if t.validation.valid else '0' }}"
+      data-validation-state="{{ validation_state }}"
+      data-warnings="{{ t.warning_count or 0 }}"
       data-public="{{ '1' if t.public_submission else '' }}"
       data-email="{{ (t.submitted_email or '')|lower }}"
       onclick="toggleTileSelection(this, event)"
@@ -311,13 +330,26 @@
         <div class="w-64 shrink-0 border-l border-slate-200 pl-4">
           <div class="text-xs font-medium text-slate-600 mb-2" title="Results produced by the Checker">Validation Report (Checker)</div>
           <div class="flex items-start gap-2 mb-2">
-            <span class="text-xl {{ 'text-emerald-600' if t.validation.valid else ('text-orange-600' if t.validation.error_message else 'text-red-600') }}">
-              {{ '✓' if t.validation.valid else ('⚠' if t.validation.error_message else '✗') }}
+            <span class="text-xl
+              {% if validation_state == 'valid_clean' %}text-emerald-600
+              {% elif validation_state == 'valid_with_warnings' %}text-amber-600
+              {% elif t.validation.error_message %}text-orange-600
+              {% else %}text-red-600{% endif %}">
+              {% if validation_state == 'valid_clean' %}✓
+              {% elif validation_state == 'valid_with_warnings' %}⚠
+              {% elif t.validation.error_message %}⚠
+              {% else %}✗{% endif %}
             </span>
             <div class="flex-1 text-xs">
-              <div class="{{ 'text-emerald-700 font-medium' if t.validation.valid else ('text-orange-700' if t.validation.error_message else 'text-red-700 font-medium') }}">
-                {% if t.validation.valid %}
-                  Valid file
+              <div class="
+                {% if validation_state == 'valid_clean' %}text-emerald-700 font-medium
+                {% elif validation_state == 'valid_with_warnings' %}text-amber-700 font-medium
+                {% elif t.validation.error_message %}text-orange-700
+                {% else %}text-red-700 font-medium{% endif %}">
+                {% if validation_state == 'valid_clean' %}
+                  Valid file (no warnings)
+                {% elif validation_state == 'valid_with_warnings' %}
+                  Valid file with warning{{ 's' if (t.warning_count or 0) != 1 else '' }}
                 {% elif t.validation.error_message %}
                   {{ t.validation.error_message }}
                   {% if 'corrupted' in t.validation.error_message.lower() or 'parse error' in t.validation.error_message.lower() %}
@@ -715,25 +747,25 @@
   }
 
   function updateValidationCounts() {
-    const validCountEl = document.getElementById('validCount');
+    const validCleanCountEl = document.getElementById('validCleanCount');
+    const warningCountEl = document.getElementById('warningCount');
     const invalidCountEl = document.getElementById('invalidCount');
     const newCountEl = document.getElementById('newCount');
     const overwriteCountEl = document.getElementById('overwriteCount');
     
-    let validCount = 0;
+    let validCleanCount = 0;
+    let warningCount = 0;
     let invalidCount = 0;
     let newCount = 0;
     let overwriteCount = 0;
     
     tiles.forEach(t => {
-      const isValid = t.dataset.valid === '1';
+      const validationState = t.dataset.validationState || 'invalid';
       const exists = t.dataset.exists === '1';
       
-      if (isValid) {
-        validCount++;
-      } else {
-        invalidCount++;
-      }
+      if (validationState === 'valid_clean') validCleanCount++;
+      else if (validationState === 'valid_with_warnings') warningCount++;
+      else invalidCount++;
       
       if (exists) {
         overwriteCount++;
@@ -742,7 +774,8 @@
       }
     });
     
-    if (validCountEl) validCountEl.textContent = validCount;
+    if (validCleanCountEl) validCleanCountEl.textContent = validCleanCount;
+    if (warningCountEl) warningCountEl.textContent = warningCount;
     if (invalidCountEl) invalidCountEl.textContent = invalidCount;
     if (newCountEl) newCountEl.textContent = newCount;
     if (overwriteCountEl) overwriteCountEl.textContent = overwriteCount;
@@ -767,8 +800,8 @@
       let sourceMatch = true;
       if(fsrc === 'admins') sourceMatch = !isPublic;
       else if(fsrc === 'submitters') sourceMatch = isPublic;
-      const isValid = t.dataset.valid === '1';
-      const validationMatch = !fv || (fv === 'valid' ? isValid : !isValid);
+      const validationState = t.dataset.validationState || 'invalid';
+      const validationMatch = !fv || validationState === fv;
       const email = (t.dataset.email || '').toLowerCase();
       const emailMatch = (!qEmailSel || email === qEmailSel);
       const match = textMatch && statusMatch && validationMatch && sourceMatch && emailMatch;
@@ -840,8 +873,9 @@
     clearFilters.addEventListener('click', ()=>{ if(statusSel) statusSel.value=''; if(validationSel) validationSel.value=''; if(sourceSel) sourceSel.value=''; if(emailSelect) emailSelect.value=''; if(search) search.value=''; if(searchClear) searchClear.classList.add('hidden'); updateFilterButtonStates(); filter(); });
   }
 
-  // Filter button handlers for Valid/Invalid labels
-  const filterBtnValid = document.getElementById('filterBtnValid');
+  // Filter button handlers for validation/status labels
+  const filterBtnValidClean = document.getElementById('filterBtnValidClean');
+  const filterBtnWarnings = document.getElementById('filterBtnWarnings');
   const filterBtnInvalid = document.getElementById('filterBtnInvalid');
   const filterBtnNew = document.getElementById('filterBtnNew');
   const filterBtnOverwrite = document.getElementById('filterBtnOverwrite');
@@ -850,11 +884,18 @@
     const currentFilter = validationSel ? validationSel.value : '';
     const currentStatus = statusSel ? statusSel.value : '';
     
-    if (filterBtnValid) {
-      if (currentFilter === 'valid') {
-        filterBtnValid.classList.add('ring-2', 'ring-emerald-500', 'ring-offset-1');
+    if (filterBtnValidClean) {
+      if (currentFilter === 'valid_clean') {
+        filterBtnValidClean.classList.add('ring-2', 'ring-emerald-500', 'ring-offset-1');
       } else {
-        filterBtnValid.classList.remove('ring-2', 'ring-emerald-500', 'ring-offset-1');
+        filterBtnValidClean.classList.remove('ring-2', 'ring-emerald-500', 'ring-offset-1');
+      }
+    }
+    if (filterBtnWarnings) {
+      if (currentFilter === 'valid_with_warnings') {
+        filterBtnWarnings.classList.add('ring-2', 'ring-amber-500', 'ring-offset-1');
+      } else {
+        filterBtnWarnings.classList.remove('ring-2', 'ring-amber-500', 'ring-offset-1');
       }
     }
     if (filterBtnInvalid) {
@@ -880,13 +921,27 @@
     }
   }
 
-  if (filterBtnValid) {
-    filterBtnValid.addEventListener('click', () => {
+  if (filterBtnValidClean) {
+    filterBtnValidClean.addEventListener('click', () => {
       if (validationSel) {
-        if (validationSel.value === 'valid') {
+        if (validationSel.value === 'valid_clean') {
           validationSel.value = '';
         } else {
-          validationSel.value = 'valid';
+          validationSel.value = 'valid_clean';
+        }
+        updateFilterButtonStates();
+        filter();
+      }
+    });
+  }
+
+  if (filterBtnWarnings) {
+    filterBtnWarnings.addEventListener('click', () => {
+      if (validationSel) {
+        if (validationSel.value === 'valid_with_warnings') {
+          validationSel.value = '';
+        } else {
+          validationSel.value = 'valid_with_warnings';
         }
         updateFilterButtonStates();
         filter();

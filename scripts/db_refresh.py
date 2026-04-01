@@ -83,14 +83,14 @@ def _parse_comments_from_meta(meta: Dict[str, Any]) -> list[str]:
         start = s.find(marker)
         if start == -1:
             if expecting == 1 and s:
-                txt = s.strip().strip(";.")
+                txt = s.strip().rstrip(";")
                 if txt:
                     parts.append(txt)
             break
         start_text = start + len(marker)
         end = s.find(next_marker, start_text)
         chunk = s[start_text:] if end == -1 else s[start_text:end]
-        txt = chunk.strip().strip(";.")
+        txt = chunk.strip().rstrip(";")
         if txt:
             parts.append(txt)
         expecting += 1

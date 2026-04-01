@@ -52,13 +52,35 @@
     <input id="files" type="file" accept=".pb" multiple class="hidden" />
   </div>
 
-    <!-- Subtle legend (mirrors admin) -->
-    <div class="text-xs text-slate-500 mt-4 mb-2 flex flex-wrap items-center gap-2">
-      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-emerald-200 bg-emerald-100 text-emerald-800" title="Valid file">✓ Valid</span>
-      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-red-200 bg-red-100 text-red-800" title="Invalid file">✗ Invalid</span>
-      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-700" title="File will be uploaded as a new dataset">New</span>
-      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-orange-200 bg-orange-50 text-orange-700" title="File will overwrite an existing dataset">Overwrite</span>
+  <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div class="flex flex-wrap items-center gap-2">
+      <button type="button" id="filterBtnValidClean" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 text-sm font-medium" title="Valid files without warnings">
+        <span>✓ Valid</span>
+        <span id="validCleanCount" class="px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 text-xs font-semibold">0</span>
+      </button>
+      <button type="button" id="filterBtnWarnings" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200 text-sm font-medium" title="Valid files with warnings">
+        <span>⚠ Warnings</span>
+        <span id="warningCount" class="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-xs font-semibold">0</span>
+      </button>
+      <button type="button" id="filterBtnInvalid" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-red-300 bg-red-100 text-red-800 hover:bg-red-200 text-sm font-medium" title="Invalid files">
+        <span>✗ Invalid</span>
+        <span id="invalidCount" class="px-2 py-0.5 rounded-full bg-red-200 text-red-900 text-xs font-semibold">0</span>
+      </button>
+      <span class="text-xs text-slate-400 px-1">|</span>
+      <button type="button" id="filterBtnNew" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-medium" title="Files that would be uploaded as new datasets">
+        <span>New</span>
+        <span id="newCount" class="px-2 py-0.5 rounded-full bg-blue-200 text-blue-900 text-xs font-semibold">0</span>
+      </button>
+      <button type="button" id="filterBtnOverwrite" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 text-sm font-medium" title="Files that would overwrite an existing dataset">
+        <span>Overwrite</span>
+        <span id="overwriteCount" class="px-2 py-0.5 rounded-full bg-orange-200 text-orange-900 text-xs font-semibold">0</span>
+      </button>
     </div>
+    <button id="clearFilters" type="button" class="self-start sm:self-auto px-3 py-1.5 rounded-md border border-slate-300 text-sm text-slate-700 hover:bg-slate-50">Clear filters</button>
+  </div>
+  <p class="mt-2 text-xs text-slate-600">
+    <strong>Warnings:</strong> the file is valid and can be uploaded, but the checker found potential issues. Please review them before submitting, to decide whether the file should be uploaded as-is or corrected first.
+  </p>
 
   <!-- Progress bar (hidden by default) -->
   <div id="uploadProgress" class="hidden mt-4">
@@ -101,9 +123,23 @@
   <!-- Tiles list (mirrors admin layout, without admin-only actions) -->
   <div id="tiles" class="mt-6 space-y-4">
     {% for t in tiles or [] %}
-      <section class="rounded-lg shadow p-4 tile-preview relative cursor-pointer hover:ring-4 transition-all {{ 'bg-emerald-50 ring-2 ring-emerald-200' if t.validation.valid else 'bg-red-50 ring-2 ring-red-200' }}"
+      {% set validation_state = 'invalid' %}
+      {% if t.validation.valid %}
+        {% if (t.warning_count or 0) > 0 %}
+          {% set validation_state = 'valid_with_warnings' %}
+        {% else %}
+          {% set validation_state = 'valid_clean' %}
+        {% endif %}
+      {% endif %}
+      <section class="rounded-lg shadow p-4 tile-preview relative cursor-pointer hover:ring-4 transition-all
+        {% if validation_state == 'valid_clean' %}bg-emerald-50 ring-2 ring-emerald-200
+        {% elif validation_state == 'valid_with_warnings' %}bg-amber-50 ring-2 ring-amber-200
+        {% else %}bg-red-50 ring-2 ring-red-200{% endif %}"
         data-name="{{ t.file_name }}"
+        data-exists="{{ '1' if t.exists_conflict else '' }}"
         data-valid="{{ 'true' if t.validation.valid else 'false' }}"
+        data-warnings="{{ t.warning_count or 0 }}"
+        data-validation-state="{{ validation_state }}"
         onclick="toggleTileSelection(this, event)"
       >
         <div class="flex flex-wrap items-start gap-x-4 gap-y-3">
@@ -161,8 +197,15 @@
           <div class="w-full sm:w-64 sm:shrink-0 sm:border-l sm:pl-4 border-t sm:border-t-0 border-slate-200 pt-3 sm:pt-0">
             <div class="text-xs font-medium text-slate-600 mb-2" title="Results produced by the Checker">Validation Report (Checker)</div>
             <div class="flex items-start gap-2 mb-2">
-              <span class="text-xl {{ 'text-emerald-600' if t.validation.valid else ('text-orange-600' if t.validation.error_message else 'text-red-600') }}">
-                {{ '✓' if t.validation.valid else ('!' if t.validation.error_message else '✗') }}
+              <span class="text-xl
+                {% if validation_state == 'valid_clean' %}text-emerald-600
+                {% elif validation_state == 'valid_with_warnings' %}text-amber-600
+                {% elif t.validation.error_message %}text-orange-600
+                {% else %}text-red-600{% endif %}">
+                {% if validation_state == 'valid_clean' %}✓
+                {% elif validation_state == 'valid_with_warnings' %}⚠
+                {% elif t.validation.error_message %}!
+                {% else %}✗{% endif %}
               </span>
               <div class="flex-1 text-xs">
                 {% if t.validation_summary %}
@@ -219,6 +262,18 @@
   const countLabel = document.getElementById('countLabel');
   const submitSelected = document.getElementById('submitSelected');
   const deleteSelected = document.getElementById('deleteSelected');
+  const clearFilters = document.getElementById('clearFilters');
+  const filterBtnValidClean = document.getElementById('filterBtnValidClean');
+  const filterBtnWarnings = document.getElementById('filterBtnWarnings');
+  const filterBtnInvalid = document.getElementById('filterBtnInvalid');
+  const filterBtnNew = document.getElementById('filterBtnNew');
+  const filterBtnOverwrite = document.getElementById('filterBtnOverwrite');
+  const validCleanCountEl = document.getElementById('validCleanCount');
+  const warningCountEl = document.getElementById('warningCount');
+  const invalidCountEl = document.getElementById('invalidCount');
+  const newCountEl = document.getElementById('newCount');
+  const overwriteCountEl = document.getElementById('overwriteCount');
+  let activeFilter = '';
   const maxMb = parseInt('{{ (upload_settings.max_file_mb if upload_settings else 10) | int }}',10)||10;
   const maxBatch = parseInt('{{ (upload_settings.max_batch if upload_settings else 100) | int }}',10)||100;
   const MAX_SIZE = maxMb*1024*1024;
@@ -273,8 +328,71 @@
     deleteSelected.disabled = checked.length===0;
   }
 
+  function updateValidationCounts(){
+    const allTiles = Array.from(tiles.querySelectorAll('[data-name]'));
+    let validCleanCount = 0;
+    let warningCount = 0;
+    let invalidCount = 0;
+    let newCount = 0;
+    let overwriteCount = 0;
+    allTiles.forEach(tile => {
+      const state = tile.getAttribute('data-validation-state') || 'invalid';
+      const exists = tile.getAttribute('data-exists') === '1';
+      if(state === 'valid_clean') validCleanCount++;
+      else if(state === 'valid_with_warnings') warningCount++;
+      else invalidCount++;
+      if(exists) overwriteCount++;
+      else newCount++;
+    });
+    if(validCleanCountEl) validCleanCountEl.textContent = validCleanCount;
+    if(warningCountEl) warningCountEl.textContent = warningCount;
+    if(invalidCountEl) invalidCountEl.textContent = invalidCount;
+    if(newCountEl) newCountEl.textContent = newCount;
+    if(overwriteCountEl) overwriteCountEl.textContent = overwriteCount;
+  }
+
+  function updateFilterButtonStates(){
+    if(filterBtnValidClean) filterBtnValidClean.classList.toggle('ring-2', activeFilter === 'valid_clean');
+    if(filterBtnValidClean) filterBtnValidClean.classList.toggle('ring-emerald-500', activeFilter === 'valid_clean');
+    if(filterBtnWarnings) filterBtnWarnings.classList.toggle('ring-2', activeFilter === 'valid_with_warnings');
+    if(filterBtnWarnings) filterBtnWarnings.classList.toggle('ring-amber-500', activeFilter === 'valid_with_warnings');
+    if(filterBtnInvalid) filterBtnInvalid.classList.toggle('ring-2', activeFilter === 'invalid');
+    if(filterBtnInvalid) filterBtnInvalid.classList.toggle('ring-red-500', activeFilter === 'invalid');
+    if(filterBtnNew) filterBtnNew.classList.toggle('ring-2', activeFilter === 'new');
+    if(filterBtnNew) filterBtnNew.classList.toggle('ring-blue-500', activeFilter === 'new');
+    if(filterBtnOverwrite) filterBtnOverwrite.classList.toggle('ring-2', activeFilter === 'existing');
+    if(filterBtnOverwrite) filterBtnOverwrite.classList.toggle('ring-orange-500', activeFilter === 'existing');
+    if(filterBtnValidClean) filterBtnValidClean.classList.toggle('ring-offset-1', activeFilter === 'valid_clean');
+    if(filterBtnWarnings) filterBtnWarnings.classList.toggle('ring-offset-1', activeFilter === 'valid_with_warnings');
+    if(filterBtnInvalid) filterBtnInvalid.classList.toggle('ring-offset-1', activeFilter === 'invalid');
+    if(filterBtnNew) filterBtnNew.classList.toggle('ring-offset-1', activeFilter === 'new');
+    if(filterBtnOverwrite) filterBtnOverwrite.classList.toggle('ring-offset-1', activeFilter === 'existing');
+  }
+
+  function applyFilters(){
+    Array.from(tiles.querySelectorAll('[data-name]')).forEach(tile => {
+      const state = tile.getAttribute('data-validation-state') || 'invalid';
+      const exists = tile.getAttribute('data-exists') === '1';
+      let match = true;
+      if(activeFilter === 'valid_clean' || activeFilter === 'valid_with_warnings' || activeFilter === 'invalid'){
+        match = state === activeFilter;
+      } else if(activeFilter === 'new'){
+        match = !exists;
+      } else if(activeFilter === 'existing'){
+        match = exists;
+      }
+      tile.style.display = match ? '' : 'none';
+    });
+    updateCount();
+    updateFilterButtonStates();
+  }
+
   selectAll.addEventListener('change', ()=>{
-    tiles.querySelectorAll('.tileChk').forEach(cb=>{ cb.checked = selectAll.checked; });
+    Array.from(tiles.querySelectorAll('[data-name]')).forEach(tile => {
+      if(tile.style.display === 'none') return;
+      const cb = tile.querySelector('.tileChk');
+      if(cb) cb.checked = selectAll.checked;
+    });
     updateCount();
   });
 
@@ -455,7 +573,46 @@
   };
 
   function bindInitial(){
+    updateValidationCounts();
+    applyFilters();
     updateCount();
+  }
+
+  if(clearFilters){
+    clearFilters.addEventListener('click', () => {
+      activeFilter = '';
+      applyFilters();
+    });
+  }
+  if(filterBtnValidClean){
+    filterBtnValidClean.addEventListener('click', () => {
+      activeFilter = (activeFilter === 'valid_clean') ? '' : 'valid_clean';
+      applyFilters();
+    });
+  }
+  if(filterBtnWarnings){
+    filterBtnWarnings.addEventListener('click', () => {
+      activeFilter = (activeFilter === 'valid_with_warnings') ? '' : 'valid_with_warnings';
+      applyFilters();
+    });
+  }
+  if(filterBtnInvalid){
+    filterBtnInvalid.addEventListener('click', () => {
+      activeFilter = (activeFilter === 'invalid') ? '' : 'invalid';
+      applyFilters();
+    });
+  }
+  if(filterBtnNew){
+    filterBtnNew.addEventListener('click', () => {
+      activeFilter = (activeFilter === 'new') ? '' : 'new';
+      applyFilters();
+    });
+  }
+  if(filterBtnOverwrite){
+    filterBtnOverwrite.addEventListener('click', () => {
+      activeFilter = (activeFilter === 'existing') ? '' : 'existing';
+      applyFilters();
+    });
   }
 
   submitSelected.addEventListener('click', async ()=>{

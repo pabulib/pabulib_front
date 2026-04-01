@@ -252,6 +252,25 @@ def _build_zip_in_background(
         _write_progress(token, progress)
 
 
+def _wants_permanent_link() -> bool:
+    """Return whether this request should use the permanent-link download flow."""
+    raw_value = (
+        request.form.get("skip_permanent_link")
+        or request.args.get("skip_permanent_link")
+        or ""
+    )
+    return str(raw_value).strip().lower() not in {"1", "true", "yes", "on"}
+
+
+def _zip_has_permanent_link(zip_path: Path) -> bool:
+    """Check whether a ZIP already contains the embedded permanent-link file."""
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            return "_PERMANENT_DOWNLOAD_LINK.txt" in zf.namelist()
+    except Exception:
+        return False
+
+
 bp = Blueprint(
     "main",
     __name__,
@@ -1232,6 +1251,7 @@ def download(filename: str):
 
 @bp.post("/download-selected")
 def download_selected():
+    use_permanent_link = _wants_permanent_link()
     names = request.form.getlist("files")
     # Deduplicate names to prevent issues with double submission (checkbox + hidden input)
     if names:
@@ -1282,64 +1302,70 @@ def download_selected():
             base_url = request.host_url.rstrip("/")
             ts_download = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             dl_name = f"all_pb_files_{ts_download}.zip"
-            try:
-                import re
-                import zipfile
+            if not use_permanent_link:
+                if not _zip_has_permanent_link(latest_export):
+                    return send_file(
+                        latest_export, as_attachment=True, download_name=dl_name
+                    )
+            else:
+                try:
+                    import re
 
-                with zipfile.ZipFile(latest_export, "r") as zf:
-                    if "_PERMANENT_DOWNLOAD_LINK.txt" in zf.namelist():
-                        try:
-                            txt = zf.read("_PERMANENT_DOWNLOAD_LINK.txt").decode(
-                                "utf-8", "ignore"
+                    with zipfile.ZipFile(latest_export, "r") as zf:
+                        if "_PERMANENT_DOWNLOAD_LINK.txt" in zf.namelist():
+                            try:
+                                txt = zf.read("_PERMANENT_DOWNLOAD_LINK.txt").decode(
+                                    "utf-8", "ignore"
+                                )
+                            except Exception:
+                                txt = ""
+                            m = re.search(r"/download/snapshot/([0-9a-f]{16})", txt)
+                            snapshot_id = m.group(1) if m else None
+                            resp = send_file(
+                                latest_export,
+                                as_attachment=True,
+                                download_name=dl_name,
                             )
-                        except Exception:
-                            txt = ""
-                        m = re.search(r"/download/snapshot/([0-9a-f]{16})", txt)
-                        snapshot_id = m.group(1) if m else None
-                        resp = send_file(
-                            latest_export,
-                            as_attachment=True,
-                            download_name=dl_name,
-                        )
-                        if snapshot_id:
-                            resp.headers["X-Download-Snapshot-ID"] = snapshot_id
-                            resp.headers["X-Download-Snapshot-URL"] = url_for(
-                                "main.download_snapshot",
-                                snapshot_id=snapshot_id,
-                                _external=True,
-                            )
-                        return resp
-            except Exception:
-                pass
+                            if snapshot_id:
+                                resp.headers["X-Download-Snapshot-ID"] = snapshot_id
+                                resp.headers["X-Download-Snapshot-URL"] = url_for(
+                                    "main.download_snapshot",
+                                    snapshot_id=snapshot_id,
+                                    _external=True,
+                                )
+                            return resp
+                except Exception:
+                    pass
 
             # If the prebuilt doesn't have a link (legacy zip), we need the current set
             all_file_pairs = get_all_current_file_paths()
             if not all_file_pairs:
                 abort(404, description="No current files found")
-            try:
-                from .services.snapshot_service import create_download_snapshot
+            if use_permanent_link:
+                try:
+                    from .services.snapshot_service import create_download_snapshot
 
-                snapshot_id = create_download_snapshot(
-                    file_pairs=all_file_pairs, download_name=dl_name
-                )
-                mem = _add_link_to_existing_zip(
-                    latest_export, snapshot_id, dl_name, base_url
-                )
-                response = send_file(
-                    mem,
-                    as_attachment=True,
-                    download_name=dl_name,
-                    mimetype="application/zip",
-                )
-                response.headers["X-Download-Snapshot-ID"] = snapshot_id
-                response.headers["X-Download-Snapshot-URL"] = url_for(
-                    "main.download_snapshot", snapshot_id=snapshot_id, _external=True
-                )
-                return response
-            except Exception:
-                return send_file(
-                    latest_export, as_attachment=True, download_name=dl_name
-                )
+                    snapshot_id = create_download_snapshot(
+                        file_pairs=all_file_pairs, download_name=dl_name
+                    )
+                    mem = _add_link_to_existing_zip(
+                        latest_export, snapshot_id, dl_name, base_url
+                    )
+                    response = send_file(
+                        mem,
+                        as_attachment=True,
+                        download_name=dl_name,
+                        mimetype="application/zip",
+                    )
+                    response.headers["X-Download-Snapshot-ID"] = snapshot_id
+                    response.headers["X-Download-Snapshot-URL"] = url_for(
+                        "main.download_snapshot", snapshot_id=snapshot_id, _external=True
+                    )
+                    return response
+                except Exception:
+                    return send_file(
+                        latest_export, as_attachment=True, download_name=dl_name
+                    )
 
         # 2) No timestamped export found; build a fresh timestamped export now
         all_file_pairs = get_all_current_file_paths()
@@ -1357,6 +1383,8 @@ def download_selected():
                 zf.write(file_path, arcname=file_name)
         ts_download = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         dl_name = f"all_pb_files_{ts_download}.zip"
+        if not use_permanent_link:
+            return send_file(out_zip, as_attachment=True, download_name=dl_name)
         # Add link file to streamed response (cached zip on disk remains unchanged)
         try:
             from .services.snapshot_service import create_download_snapshot
@@ -1400,6 +1428,18 @@ def download_selected():
     file_pairs = [(p.name, p) for p in files]
     stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     filename = f"pb_selected_{len(files)}_{stamp}.zip"
+    if not use_permanent_link:
+        memory_file = io.BytesIO()
+        with zipfile.ZipFile(memory_file, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for arcname, path in file_pairs:
+                zf.write(path, arcname=arcname)
+        memory_file.seek(0)
+        return send_file(
+            memory_file,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/zip",
+        )
     base_url = request.host_url.rstrip("/")
     mem, _snapshot_id = _create_download_with_link(
         file_pairs=file_pairs, download_name=filename, base_url=base_url
@@ -1424,6 +1464,7 @@ def download_selected_start():
     """Kick off a background zipping job and return a token to poll progress.
     Accepts same form data as /download-selected (files=..., select_all=true|false).
     """
+    use_permanent_link = _wants_permanent_link()
     _cleanup_old_jobs()
     names = request.form.getlist("files")
     if names:
@@ -1504,7 +1545,8 @@ def download_selected_start():
         except Exception:
             latest_export = None
         if latest_export is not None:
-            reuse_path = latest_export
+            if use_permanent_link or not _zip_has_permanent_link(latest_export):
+                reuse_path = latest_export
         else:
             # 2) Build on the fly (do not use root-level canonical cache)
             all_file_pairs = get_all_current_file_paths()
@@ -1627,8 +1669,11 @@ def download_selected_start():
             # If only one file will be downloaded, do not create a snapshot link
             if len(file_pairs) == 1:
                 file_ids_for_snapshot = []
-            stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-            download_name = f"pb_selected_{len(file_pairs)}_{stamp}.zip"
+        stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        download_name = f"pb_selected_{len(file_pairs)}_{stamp}.zip"
+
+    if not use_permanent_link:
+        file_ids_for_snapshot = []
 
     if len(file_pairs) == 1 and reuse_path is None:
         arcname, path = file_pairs[0]

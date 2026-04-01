@@ -91,3 +91,7 @@ config/.env
 # Cache directory for generated files (keep directory, ignore contents)
 cache/*
 !cache/.gitkeep
+
+
+# Codex
+.codex

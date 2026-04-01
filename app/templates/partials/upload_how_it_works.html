@@ -4,8 +4,9 @@
     <li>Files are uploaded to a temporary area (tmp) and then analyzed by our <strong>Checker</strong>. The per-tile panel below shows the <em>Validation Report (Checker)</em>.</li>
     <li>Outcomes:
       <ul class="list-disc pl-5 mt-1 space-y-1">
-        <li><strong>Valid</strong> — file parsed successfully and is ready to upload to the main library.</li>
-        <li><strong>Processed but invalid</strong> — file was parsed, but the Checker found issues (e.g., inconsistent metadata or schema problems). Review details under “Show details”.</li>
+        <li><strong>Valid</strong> — file parsed successfully with no warnings, and is ready to upload to the main library.</li>
+        <li><strong>Valid with warnings</strong> — file is valid and can be uploaded, but the Checker found potential issues. Please review warnings to decide whether to upload as-is or fix the file first.</li>
+        <li><strong>Processed but invalid</strong> — file was parsed, but the Checker found errors (for example, inconsistent metadata or schema problems). Review details under “Show details”.</li>
         <li><strong>Not processed</strong> — file was skipped (e.g., not a .pb file, cannot be parsed, or exceeds the size limit).</li>
       </ul>
     </li>

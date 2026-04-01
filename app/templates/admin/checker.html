@@ -1124,6 +1124,12 @@
       form.appendChild(input);
     });
 
+    const skipPermanentLink = document.createElement('input');
+    skipPermanentLink.type = 'hidden';
+    skipPermanentLink.name = 'skip_permanent_link';
+    skipPermanentLink.value = 'true';
+    form.appendChild(skipPermanentLink);
+
     document.body.appendChild(form);
     form.submit();
     window.setTimeout(() => {

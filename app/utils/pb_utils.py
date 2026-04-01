@@ -31,14 +31,14 @@ def parse_comments_from_meta(meta: Dict[str, Any]) -> List[str]:
             # No marker found. If it's the first expected marker, treat whole
             # string as a single comment.
             if expecting == 1 and s:
-                txt = s.strip().strip(";.")
+                txt = s.strip().rstrip(";")
                 if txt:
                     parts.append(txt)
             break
         start_text = start + len(marker)
         end = s.find(next_marker, start_text)
         chunk = s[start_text:] if end == -1 else s[start_text:end]
-        txt = chunk.strip().strip(";.")
+        txt = chunk.strip().rstrip(";")
         if txt:
             parts.append(txt)
         expecting += 1
