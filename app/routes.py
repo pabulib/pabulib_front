@@ -82,6 +82,45 @@ _ZIP_JOBS: Dict[str, Dict[str, Any]] = {}
 _ZIP_JOBS_LOCK = threading.Lock()
 
 
+def _capture_public_submission_sentry(email: str, filenames: List[str]) -> None:
+    clean_email = (email or "").strip() or "unknown-email"
+    clean_filenames = [name for name in filenames if name]
+    file_count = len(clean_filenames)
+    if file_count <= 0:
+        return
+    display_email = (
+        clean_email.replace("@", " [at] ").replace(".", " [dot] ")
+        if clean_email != "unknown-email"
+        else clean_email
+    )
+
+    if file_count == 1:
+        message = (
+            f"Public upload waiting for review: {clean_filenames[0]} "
+            f"from {display_email}"
+        )
+    else:
+        message = (
+            f"Public upload waiting for review: {file_count} files "
+            f"from {display_email}"
+        )
+
+    with sentry_sdk.push_scope() as scope:
+        scope.set_tag("event_type", "public_submission")
+        scope.set_tag("submission_source", "upload_tab")
+        scope.set_tag("file_count", str(file_count))
+        scope.set_context(
+            "public_submission",
+            {
+                "email": clean_email,
+                "email_display": display_email,
+                "file_count": file_count,
+                "filenames": clean_filenames,
+            },
+        )
+        sentry_sdk.capture_message(message, level="info")
+
+
 
 
 
@@ -880,10 +919,7 @@ def upload_submit_selected():
 
     if saved > 0:
         uploaded_names = [r["name"] for r in results if r.get("ok")]
-        sentry_sdk.capture_message(
-            f"New Public Submission (Batch): {email} uploaded {saved} files: {', '.join(uploaded_names)}",
-            level="info",
-        )
+        _capture_public_submission_sentry(email, uploaded_names)
 
     return jsonify({"ok": True, "saved": saved, "results": results})
 
@@ -1096,9 +1132,7 @@ def upload_submit():
             json.dumps(marker), encoding="utf-8"
         )
 
-        sentry_sdk.capture_message(
-            f"New Public Submission: {dest.name} from {email}", level="info"
-        )
+        _capture_public_submission_sentry(email, [dest.name])
         _log_security_event(
             current_app.logger,
             "public_submission_saved",

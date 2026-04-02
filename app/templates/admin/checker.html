@@ -96,8 +96,8 @@
 
     <div class="w-full max-w-6xl min-w-0">
       <div class="w-full bg-white rounded-lg shadow-lg p-8 mt-8">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div class="max-w-3xl">
+        <div class="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_440px] lg:items-start lg:gap-8">
+          <div class="min-w-0 max-w-2xl">
             <div class="flex flex-wrap items-center gap-3">
               <h1 class="text-3xl font-bold text-slate-900">Admin – Checker</h1>
               <div class="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
@@ -105,11 +105,8 @@
                 <span class="ml-2 font-mono text-[13px] text-slate-800">{{ checker_version or 'not installed' }}</span>
               </div>
             </div>
-            <p class="mt-2 text-base text-slate-600">
-              Validate current library files and immediately see what errors and warnings were reported.
-            </p>
           </div>
-          <div class="flex flex-col items-stretch gap-3 lg:w-[350px]">
+          <div class="flex flex-col items-stretch gap-3 lg:w-[440px] lg:justify-self-end">
             <div class="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3">
               <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-700">Not checked</div>
               <div class="mt-2 flex items-end justify-between gap-4">
@@ -118,7 +115,6 @@
                     <span class="text-[2rem] font-semibold leading-none">{{ summary.unchecked }}</span>
                     <span class="pb-0.5 text-sm text-indigo-600">/ {{ count }}</span>
                   </div>
-                  <div id="summaryUncheckedLabel" class="mt-1 text-xs text-indigo-700 {% if not summary.unchecked %}hidden{% endif %}">{{ summary.unchecked }} files waiting</div>
                 </div>
                 <button id="runUncheckedCardBtn" type="button" class="inline-flex shrink-0 items-center justify-center rounded-lg border border-indigo-300 bg-white/80 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed">
                   Run not checked
