@@ -902,6 +902,7 @@ nav#mainNav {
 .tile-header .tag{font-size:11px;font-weight:700;border-radius:999px;padding:4px 7px;border:1px solid transparent}
 .tile-header .tag.exp{color:#8a2be2;background:#f2e9ff;border-color:#e4d4ff}
 .tile-header .tag.funded{color:#1a7f37;background:#e9f7ef;border-color:#cfe9da}
+.tile-header .tag.new{color:#047857;background:#ecfdf5;border-color:#a7f3d0}
 .tile-header .tag.geo{color:#0369a1;background:#e0f2fe;border-color:#bae6fd}
 .tile-header .tag.category{color:#c2410c;background:#ffedd5;border-color:#fed7aa}
 .tile-header .tag.target{color:#7c2d12;background:#fef3c7;border-color:#fde68a}
@@ -919,7 +920,9 @@ nav#mainNav {
 .badge.geo{color:#0369a1;background:#e0f2fe;border-color:#bae6fd}
 .badge.category{color:#c2410c;background:#ffedd5;border-color:#fed7aa}
 .badge.target{color:#7c2d12;background:#fef3c7;border-color:#fde68a}
+.badge.new{color:#047857;background:#ecfdf5;border-color:#a7f3d0}
 .sidebar .checkbox .badge{margin-left:4px;margin-right:6px}
+.filter-note{margin-top:8px;color:var(--muted);font-size:14px;line-height:1.4}
 
 /* Hidden by default; shown only on mobile breakpoint */
 .mobile-meta{display:none}

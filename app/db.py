@@ -2,7 +2,7 @@ import os
 from contextlib import contextmanager
 from typing import Iterator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 Base = declarative_base()
@@ -39,6 +39,39 @@ SessionLocal = sessionmaker(
     expire_on_commit=False,  # keep loaded attributes valid after commit
     future=True,
 )
+
+
+def get_runtime_schema_statements() -> list[str]:
+    inspector = inspect(engine)
+    if "pb_files" not in inspector.get_table_names():
+        return []
+
+    columns = {col["name"] for col in inspector.get_columns("pb_files")}
+    indexes = {idx["name"] for idx in inspector.get_indexes("pb_files")}
+    statements = []
+
+    if "is_first_addition" not in columns:
+        statements.append(
+            "ALTER TABLE pb_files ADD COLUMN is_first_addition BOOLEAN NULL"
+        )
+    if "search_text_norm" not in columns:
+        statements.append("ALTER TABLE pb_files ADD COLUMN search_text_norm TEXT NULL")
+    if "ix_pb_files_is_first_addition" not in indexes:
+        statements.append(
+            "CREATE INDEX ix_pb_files_is_first_addition ON pb_files (is_first_addition)"
+        )
+
+    return statements
+
+
+def ensure_runtime_schema() -> None:
+    statements = get_runtime_schema_statements()
+    if not statements:
+        return
+
+    with engine.begin() as conn:
+        for stmt in statements:
+            conn.execute(text(stmt))
 
 
 @contextmanager

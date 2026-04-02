@@ -1815,9 +1815,21 @@ def upload_tiles_ingest():
                 max_total_cost=tile.get("max_total_cost"),
                 file_mtime=file_mtime,
                 ingested_at=datetime.utcnow(),
+                is_first_addition=pb_service.compute_is_first_addition(
+                    s, name, webpage_name
+                ),
                 is_current=True,
                 supersedes_id=supersedes_id,
                 group_key=group_key,
+                search_text_norm=pb_service.build_pbfile_search_text_norm(
+                    name,
+                    webpage_name,
+                    description,
+                    country,
+                    unit,
+                    instance,
+                    subunit,
+                ),
             )
             s.add(rec)
             s.flush()  # ensure rec.id is available
@@ -3153,9 +3165,19 @@ def admin_replace_file():
             max_total_cost=tile.get("max_total_cost"),
             file_mtime=file_mtime,
             ingested_at=datetime.utcnow(),
+            is_first_addition=False,
             is_current=True,
             supersedes_id=existing_rec.id,
             group_key=group_key or "",
+            search_text_norm=pb_service.build_pbfile_search_text_norm(
+                existing_name,
+                tile.get("webpage_name"),
+                tile.get("description"),
+                tile.get("country"),
+                tile.get("unit"),
+                tile.get("instance"),
+                tile.get("subunit"),
+            ),
         )
         s.add(new_rec)
         s.flush()

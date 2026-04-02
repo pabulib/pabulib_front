@@ -349,6 +349,7 @@ def api_search():
     require_geo = request.args.get("require_geo") == "true"
     require_target = request.args.get("require_target") == "true"
     require_category = request.args.get("require_category") == "true"
+    require_new = request.args.get("require_new") == "true"
     
     order_by = request.args.get("order_by", "quality")
     order_dir = request.args.get("order_dir", "desc")
@@ -373,6 +374,7 @@ def api_search():
         require_geo=require_geo,
         require_target=require_target,
         require_category=require_category,
+        require_new=require_new,
         order_by=order_by,
         order_dir=order_dir,
         limit=limit,
@@ -1529,11 +1531,12 @@ def download_selected_start():
     require_geo = request.form.get("require_geo") == "true"
     require_target = request.form.get("require_target") == "true"
     require_category = request.form.get("require_category") == "true"
+    require_new = request.form.get("require_new") == "true"
 
     has_filters = any([
         query, country, city, year, votes_min, votes_max, projects_min, projects_max,
         len_min, len_max, vote_type, exclude_fully, exclude_experimental,
-        require_geo, require_target, require_category
+        require_geo, require_target, require_category, require_new
     ])
 
     # If select_all is not set and no explicit names provided, reject.
@@ -1603,7 +1606,8 @@ def download_selected_start():
             exclude_experimental=exclude_experimental,
             require_geo=require_geo,
             require_target=require_target,
-            require_category=require_category
+            require_category=require_category,
+            require_new=require_new,
         )
         # Apply excludes if any
         if excludes:

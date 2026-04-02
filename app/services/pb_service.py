@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 import logging
 from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional, Tuple
-import unicodedata
 
 _logger = logging.getLogger(__name__)
 
-from sqlalchemy import or_, and_, desc, asc
+from sqlalchemy import and_, asc, desc, or_
 from ..db import get_session
 from ..models import PBCategory, PBComment, PBFile, PBTarget, RefreshState
 from ..utils.formatting import (
@@ -18,6 +18,7 @@ from ..utils.formatting import (
     format_vote_length,
 )
 from ..utils.load_pb_file import parse_pb_lines as _parse_pb_lines
+from ..utils.search_normalization import build_search_text_norm, fold_search_text
 
 # Optional optimization helper (load_only)
 try:  # pragma: no cover
@@ -77,11 +78,103 @@ _SEARCH_ORDER_COLUMNS = {
     "vote_length": PBFile.vote_length,
 }
 
+_NEW_FILE_WINDOW_DAYS = 30
+
+
+def _new_file_cutoff() -> datetime:
+    return datetime.utcnow() - timedelta(days=_NEW_FILE_WINDOW_DAYS)
+
+
+def build_pbfile_search_text_norm(
+    file_name: Optional[str],
+    webpage_name: Optional[str],
+    description: Optional[str],
+    country: Optional[str],
+    unit: Optional[str],
+    instance: Optional[str],
+    subunit: Optional[str],
+) -> str:
+    return build_search_text_norm(
+        file_name,
+        webpage_name,
+        description,
+        country,
+        unit,
+        instance,
+        subunit,
+    )
+
+
+def compute_is_new_value(
+    is_first_addition: Optional[bool], ingested_at: Optional[datetime]
+) -> bool:
+    return bool(is_first_addition) and bool(
+        ingested_at and ingested_at >= _new_file_cutoff()
+    )
+
+
+def compute_is_first_addition(
+    session, file_name: Optional[str], webpage_name: Optional[str]
+) -> bool:
+    predicates = []
+    clean_file_name = (file_name or "").strip()
+    clean_webpage_name = (webpage_name or "").strip()
+    if clean_file_name:
+        predicates.append(PBFile.file_name == clean_file_name)
+    if clean_webpage_name:
+        predicates.append(PBFile.webpage_name == clean_webpage_name)
+    if not predicates:
+        return True
+    return session.query(PBFile.id).filter(or_(*predicates)).first() is None
+
+
+def backfill_pbfile_derived_fields() -> None:
+    with get_session() as s:
+        missing_count = (
+            s.query(PBFile.id)
+            .filter(
+                or_(
+                    PBFile.search_text_norm.is_(None),
+                    PBFile.is_first_addition.is_(None),
+                )
+            )
+            .count()
+        )
+        if missing_count <= 0:
+            return
+
+        rows: List[PBFile] = (
+            s.query(PBFile)
+            .order_by(PBFile.ingested_at.asc(), PBFile.id.asc())
+            .all()
+        )
+        seen_file_names = set()
+        seen_webpage_names = set()
+
+        for row in rows:
+            row.search_text_norm = build_pbfile_search_text_norm(
+                row.file_name,
+                row.webpage_name,
+                row.description,
+                row.country,
+                row.unit,
+                row.instance,
+                row.subunit,
+            )
+            file_key = (row.file_name or "").strip().casefold()
+            webpage_key = (row.webpage_name or "").strip().casefold()
+            prior_exists = bool(file_key and file_key in seen_file_names) or bool(
+                webpage_key and webpage_key in seen_webpage_names
+            )
+            row.is_first_addition = not prior_exists
+            if file_key:
+                seen_file_names.add(file_key)
+            if webpage_key:
+                seen_webpage_names.add(webpage_key)
+
 
 def _slugify_text(value: str) -> str:
-    text = unicodedata.normalize("NFKD", str(value or ""))
-    text = text.encode("ascii", "ignore").decode("ascii")
-    text = text.lower().strip()
+    text = fold_search_text(value).strip()
     text = re.sub(r"[^a-z0-9]+", "-", text)
     text = re.sub(r"-+", "-", text).strip("-")
     return text
@@ -344,7 +437,7 @@ def _row_to_tile(
     r: Any,
     comments_map: Dict[int, List[str]],
 ) -> Dict[str, Any]:
-    """Convert a raw SQLAlchemy row tuple (32 fields) into the tile dict
+    """Convert a raw SQLAlchemy row tuple into the tile dict
     returned by the public API.  Both search_tiles() and get_tiles_cached()
     query the same columns in the same order and use this helper."""
     (
@@ -380,6 +473,8 @@ def _row_to_tile(
         max_sum_cost,
         max_sum_cost_per_category,
         max_total_cost,
+        is_first_addition,
+        ingested_at,
     ) = r
 
     meta: Dict[str, Any] = {"subunit": subunit}
@@ -454,6 +549,7 @@ def _row_to_tile(
         "has_geo": bool(has_geo),
         "has_category": bool(has_category),
         "has_target": bool(has_target),
+        "is_new": compute_is_new_value(is_first_addition, ingested_at),
         "approval_k_label": approval_k_label,
         "approval_knapsack": approval_knapsack,
         "approval_k_type": approval_k_type,
@@ -481,20 +577,13 @@ def _apply_search_filters(
     require_geo: bool = False,
     require_target: bool = False,
     require_category: bool = False,
+    require_new: bool = False,
 ):
     if query:
         # Split query into tokens (AND logic for each token)
         for token in query.split():
-            term = f"%{token}%"
-            criteria = [
-                PBFile.file_name.ilike(term),
-                PBFile.webpage_name.ilike(term),
-                PBFile.description.ilike(term),
-                PBFile.country.ilike(term),
-                PBFile.unit.ilike(term),
-                PBFile.instance.ilike(term),     # Added also instance/subunit just in case
-                PBFile.subunit.ilike(term)
-            ]
+            term = f"%{fold_search_text(token)}%"
+            criteria = [PBFile.search_text_norm.like(term)]
             if token.isdigit():
                 criteria.append(PBFile.year == int(token))
             
@@ -540,6 +629,11 @@ def _apply_search_filters(
         q = q.filter(PBFile.has_target == True)  # noqa: E712
     if require_category:
         q = q.filter(PBFile.has_category == True)  # noqa: E712
+    if require_new:
+        q = q.filter(
+            PBFile.is_first_addition == True,  # noqa: E712
+            PBFile.ingested_at >= _new_file_cutoff(),
+        )
         
     return q
 
@@ -561,6 +655,7 @@ def get_filtered_file_paths(
     require_geo: bool = False,
     require_target: bool = False,
     require_category: bool = False,
+    require_new: bool = False,
 ) -> List[Tuple[str, Path]]:
     
     with get_session() as s:
@@ -568,7 +663,7 @@ def get_filtered_file_paths(
         q = _apply_search_filters(
             q, query, country, city, year, votes_min, votes_max,
             projects_min, projects_max, len_min, len_max, vote_type,
-            exclude_fully, exclude_experimental, require_geo, require_target, require_category
+            exclude_fully, exclude_experimental, require_geo, require_target, require_category, require_new
         )
         rows = q.all()
         
@@ -597,6 +692,7 @@ def search_tiles(
     require_geo: bool = False,
     require_target: bool = False,
     require_category: bool = False,
+    require_new: bool = False,
     order_by: str = "quality",
     order_dir: str = "desc",
     limit: int = 50,
@@ -637,6 +733,8 @@ def search_tiles(
             PBFile.max_sum_cost,
             PBFile.max_sum_cost_per_category,
             PBFile.max_total_cost,
+            PBFile.is_first_addition,
+            PBFile.ingested_at,
         ).filter(PBFile.is_current == True)  # noqa: E712
 
         q = _apply_search_filters(
@@ -657,6 +755,7 @@ def search_tiles(
             require_geo=require_geo,
             require_target=require_target,
             require_category=require_category,
+            require_new=require_new,
         )
 
         # Count total before pagination
@@ -765,6 +864,8 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 PBFile.max_sum_cost,
                 PBFile.max_sum_cost_per_category,
                 PBFile.max_total_cost,
+                PBFile.is_first_addition,
+                PBFile.ingested_at,
             )
             .filter(PBFile.is_current == True)  # noqa: E712
             .order_by(

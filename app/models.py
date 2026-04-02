@@ -83,10 +83,14 @@ class PBFile(Base):
     # Versioning & timestamps
     file_mtime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     ingested_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    is_first_addition: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=None, index=True
+    )
     is_current: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     supersedes_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("pb_files.id"), nullable=True
     )
+    search_text_norm: Mapped[Optional[str]] = mapped_column(Text)
 
     # Keep this reasonably small to avoid MySQL index length limits (utf8mb4: 4 bytes/char)
     # We'll also create explicit prefix indexes below.

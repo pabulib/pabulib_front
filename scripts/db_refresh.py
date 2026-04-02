@@ -26,10 +26,15 @@ from typing import Any, Dict, List
 
 from sqlalchemy.exc import OperationalError
 
-from app.db import Base, engine, get_session
+from app.db import Base, engine, ensure_runtime_schema, get_session
 from app.models import PBCategory, PBComment, PBFile, PBTarget, RefreshState
 from app.services import export_service
-from app.services.pb_service import invalidate_caches as _invalidate_pb_caches
+from app.services.pb_service import (
+    backfill_pbfile_derived_fields,
+    build_pbfile_search_text_norm,
+    compute_is_first_addition,
+    invalidate_caches as _invalidate_pb_caches,
+)
 from app.utils.load_pb_file import parse_pb_lines
 from app.utils.pb_utils import (
     build_group_key,
@@ -52,6 +57,7 @@ def ensure_db(max_tries: int = 30, sleep_secs: float = 2.0) -> None:
         attempt += 1
         try:
             Base.metadata.create_all(bind=engine)
+            ensure_runtime_schema()
             print("[DB] Schema ready", flush=True)
             return
         except OperationalError as e:
@@ -181,8 +187,18 @@ def ingest_file(
         max_total_cost=_pi(meta_lower.get("max_total_cost")),
         file_mtime=mtime,
         ingested_at=datetime.utcnow(),
+        is_first_addition=None,
         is_current=True,
         group_key=group_key,
+        search_text_norm=build_pbfile_search_text_norm(
+            p.name,
+            webpage_name,
+            tile.get("description"),
+            country,
+            unit,
+            instance,
+            subunit,
+        ),
     )
     comments = _parse_comments_from_meta(meta)
     # Extract per-file category/target token counts from tile (computed in parse_pb_to_tile)
@@ -264,6 +280,9 @@ def refresh(full: bool = False) -> Dict[str, Any]:
                         continue
                 if prev:
                     rec.supersedes_id = prev.id
+                rec.is_first_addition = compute_is_first_addition(
+                    s, rec.file_name, rec.webpage_name
+                )
                 s.add(rec)
                 s.flush()
                 # Insert comments for this version (default active)
@@ -363,6 +382,7 @@ def refresh(full: bool = False) -> Dict[str, Any]:
 
     # Invalidate in-process caches so admin/public pages reflect latest immediately
     try:
+        backfill_pbfile_derived_fields()
         _invalidate_pb_caches()
     except Exception:
         pass

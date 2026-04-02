@@ -54,6 +54,7 @@
     requireGeo: $('#requireGeo'),
     requireTarget: $('#requireTarget'),
     requireCategory: $('#requireCategory'),
+    requireNew: $('#requireNew'),
     orderBy: $('#orderBy'),
     orderDir: $('#orderDir')
   };
@@ -77,6 +78,7 @@
       require_geo: filters.requireGeo ? filters.requireGeo.checked : false,
       require_target: filters.requireTarget ? filters.requireTarget.checked : false,
       require_category: filters.requireCategory ? filters.requireCategory.checked : false,
+      require_new: filters.requireNew ? filters.requireNew.checked : false,
       order_by: filters.orderBy ? filters.orderBy.value : 'quality',
       order_dir: filters.orderDir ? (filters.orderDir.dataset.dir || 'desc') : 'desc'
     };
@@ -107,6 +109,7 @@
     if (v.require_geo) n++;
     if (v.require_target) n++;
     if (v.require_category) n++;
+    if (v.require_new) n++;
     return n;
   }
 
@@ -181,6 +184,7 @@
     // Helper for tags
     let tags = '';
     // Removed country/city/year tags to match server-side rendering
+    if (t.is_new) tags += `<span class="tag new" title="Added within the last 30 days">NEW</span>`;
     if (t.has_geo) tags += `<span class="tag geo" title="Dataset includes project coordinates">Geo</span>`;
     if (t.has_category) tags += `<span class="tag category" title="Dataset includes project categories">Cat</span>`;
     if (t.has_target) tags += `<span class="tag target" title="Dataset includes project targets">Tgt</span>`;
@@ -240,6 +244,7 @@
         data-geo="${t.has_geo ? '1' : '0'}"
         data-target="${t.has_target ? '1' : '0'}"
         data-category="${t.has_category ? '1' : '0'}"
+        data-new="${t.is_new ? '1' : '0'}"
         ${t.num_selected_projects_raw != null ? `data-selected="${t.num_selected_projects_raw}"` : ''}
         data-rule="${escapeHtml(t.rule_raw)}"
         data-edition="${escapeHtml(t.edition)}"
@@ -406,6 +411,7 @@
     setCheck(filters.requireGeo, 'require_geo');
     setCheck(filters.requireTarget, 'require_target');
     setCheck(filters.requireCategory, 'require_category');
+    setCheck(filters.requireNew, 'require_new');
     
     set(filters.orderBy, 'order_by');
     
@@ -1156,7 +1162,7 @@
              } else {
                // Ensure we request an unfiltered full archive.
                fd.delete('exclude');
-               ['search','country','city','year','votes_min','votes_max','projects_min','projects_max','len_min','len_max','type','exclude_fully','exclude_experimental','require_geo','require_target','require_category'].forEach((k) => fd.delete(k));
+               ['search','country','city','year','votes_min','votes_max','projects_min','projects_max','len_min','len_max','type','exclude_fully','exclude_experimental','require_geo','require_target','require_category','require_new'].forEach((k) => fd.delete(k));
              }
           }
 
