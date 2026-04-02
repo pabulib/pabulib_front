@@ -15,6 +15,7 @@
   let isSelectAllActive = false;
   let cityToSlug = {};
   let slugToCity = {};
+  let availabilityRequestId = 0;
   const LARGE_SELECTION_HINT_THRESHOLD = 300;
   
   // Elements
@@ -533,51 +534,49 @@
     }
   }
 
-  function updateFilterAvailability() {
-    if (!combinations || combinations.length === 0) return;
+  async function updateFilterAvailability() {
+    const requestId = ++availabilityRequestId;
+    try {
+      const params = new URLSearchParams(getFilterValues());
+      params.delete('order_by');
+      params.delete('order_dir');
 
-    const selCountry = filters.country ? filters.country.value : '';
-    const selCity = filters.city ? filters.city.value : '';
-    const selYear = filters.year ? filters.year.value : '';
+      const res = await fetch(`/api/options?${params.toString()}`);
+      const data = await res.json();
+      if (requestId !== availabilityRequestId) return;
 
-    const isValid = (c, u, y, ignoreField) => {
-        if (ignoreField !== 'country' && selCountry && c !== selCountry) return false;
-        if (ignoreField !== 'city' && selCity && u !== selCity) return false;
-        if (ignoreField !== 'year' && selYear && y !== selYear) return false;
-        return true;
-    };
+      const availableCountries = new Set(data.available_countries || []);
+      const availableCities = new Set(data.available_cities || []);
+      const availableYears = new Set(data.available_years || []);
 
-    if (filters.country) {
+      if (filters.country) {
         Array.from(filters.country.options).forEach(opt => {
-            if (!opt.value) return;
-            const exists = combinations.some(comb => 
-                comb.c === opt.value && isValid(comb.c, comb.u, comb.y, 'country')
-            );
-            opt.disabled = !exists;
-            opt.style.color = exists ? '' : '#ccc';
+          if (!opt.value) return;
+          const exists = availableCountries.has(opt.value);
+          opt.disabled = !exists;
+          opt.style.color = exists ? '' : '#ccc';
         });
-    }
+      }
 
-    if (filters.city) {
+      if (filters.city) {
         Array.from(filters.city.options).forEach(opt => {
-            if (!opt.value) return;
-            const exists = combinations.some(comb => 
-                comb.u === opt.value && isValid(comb.c, comb.u, comb.y, 'city')
-            );
-            opt.disabled = !exists;
-            opt.style.color = exists ? '' : '#ccc';
+          if (!opt.value) return;
+          const exists = availableCities.has(opt.value);
+          opt.disabled = !exists;
+          opt.style.color = exists ? '' : '#ccc';
         });
-    }
+      }
 
-    if (filters.year) {
+      if (filters.year) {
         Array.from(filters.year.options).forEach(opt => {
-            if (!opt.value) return;
-            const exists = combinations.some(comb => 
-                comb.y === opt.value && isValid(comb.c, comb.u, comb.y, 'year')
-            );
-            opt.disabled = !exists;
-            opt.style.color = exists ? '' : '#ccc';
+          if (!opt.value) return;
+          const exists = availableYears.has(opt.value);
+          opt.disabled = !exists;
+          opt.style.color = exists ? '' : '#ccc';
         });
+      }
+    } catch (e) {
+      console.error("Failed to update filter availability", e);
     }
   }
 

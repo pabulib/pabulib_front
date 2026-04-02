@@ -818,6 +818,112 @@ def get_filter_options() -> Dict[str, Any]:
     }
 
 
+def get_filter_availability(
+    query: Optional[str] = None,
+    country: Optional[str] = None,
+    city: Optional[str] = None,
+    year: Optional[str] = None,
+    votes_min: Optional[int] = None,
+    votes_max: Optional[int] = None,
+    projects_min: Optional[int] = None,
+    projects_max: Optional[int] = None,
+    len_min: Optional[float] = None,
+    len_max: Optional[float] = None,
+    vote_type: Optional[str] = None,
+    exclude_fully: bool = False,
+    exclude_experimental: bool = False,
+    require_geo: bool = False,
+    require_target: bool = False,
+    require_category: bool = False,
+    require_new: bool = False,
+) -> Dict[str, Any]:
+    with get_session() as s:
+        countries_q = s.query(PBFile.country).filter(PBFile.is_current == True)  # noqa: E712
+        countries_q = _apply_search_filters(
+            countries_q,
+            query=query,
+            country=None,
+            city=city,
+            year=year,
+            votes_min=votes_min,
+            votes_max=votes_max,
+            projects_min=projects_min,
+            projects_max=projects_max,
+            len_min=len_min,
+            len_max=len_max,
+            vote_type=vote_type,
+            exclude_fully=exclude_fully,
+            exclude_experimental=exclude_experimental,
+            require_geo=require_geo,
+            require_target=require_target,
+            require_category=require_category,
+            require_new=require_new,
+        )
+        available_countries = [
+            r[0]
+            for r in countries_q.distinct().order_by(PBFile.country).all()
+            if r[0]
+        ]
+
+        cities_q = s.query(PBFile.unit).filter(PBFile.is_current == True)  # noqa: E712
+        cities_q = _apply_search_filters(
+            cities_q,
+            query=query,
+            country=country,
+            city=None,
+            year=year,
+            votes_min=votes_min,
+            votes_max=votes_max,
+            projects_min=projects_min,
+            projects_max=projects_max,
+            len_min=len_min,
+            len_max=len_max,
+            vote_type=vote_type,
+            exclude_fully=exclude_fully,
+            exclude_experimental=exclude_experimental,
+            require_geo=require_geo,
+            require_target=require_target,
+            require_category=require_category,
+            require_new=require_new,
+        )
+        available_cities = [
+            r[0] for r in cities_q.distinct().order_by(PBFile.unit).all() if r[0]
+        ]
+
+        years_q = s.query(PBFile.year).filter(PBFile.is_current == True)  # noqa: E712
+        years_q = _apply_search_filters(
+            years_q,
+            query=query,
+            country=country,
+            city=city,
+            year=None,
+            votes_min=votes_min,
+            votes_max=votes_max,
+            projects_min=projects_min,
+            projects_max=projects_max,
+            len_min=len_min,
+            len_max=len_max,
+            vote_type=vote_type,
+            exclude_fully=exclude_fully,
+            exclude_experimental=exclude_experimental,
+            require_geo=require_geo,
+            require_target=require_target,
+            require_category=require_category,
+            require_new=require_new,
+        )
+        available_years = [
+            str(r[0])
+            for r in years_q.distinct().order_by(PBFile.year.desc()).all()
+            if r[0] is not None
+        ]
+
+    return {
+        "available_countries": available_countries,
+        "available_cities": available_cities,
+        "available_years": available_years,
+    }
+
+
 def get_tiles_cached() -> List[Dict[str, Any]]:
     global _TILES_CACHE
     import time

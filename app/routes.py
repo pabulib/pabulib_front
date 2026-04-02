@@ -43,6 +43,7 @@ from .services.pb_service import (
     aggregate_statistics_cached as _aggregate_statistics_cached,
     aggregate_targets_cached as _aggregate_targets_cached,
     get_all_current_file_paths,
+    get_filter_availability as _get_filter_availability,
     get_current_file_path,
     get_filter_options as _get_filter_options,
     get_filtered_file_paths as _get_filtered_file_paths,
@@ -391,7 +392,50 @@ def api_search():
 
 @bp.route("/api/options")
 def api_options():
-    return jsonify(_get_filter_options())
+    query = request.args.get("search")
+    country = request.args.get("country")
+    city = request.args.get("city")
+    year = request.args.get("year")
+
+    votes_min = request.args.get("votes_min", type=int)
+    votes_max = request.args.get("votes_max", type=int)
+    projects_min = request.args.get("projects_min", type=int)
+    projects_max = request.args.get("projects_max", type=int)
+    len_min = request.args.get("len_min", type=float)
+    len_max = request.args.get("len_max", type=float)
+
+    vote_type = request.args.get("type")
+
+    exclude_fully = request.args.get("exclude_fully") == "true"
+    exclude_experimental = request.args.get("exclude_experimental") == "true"
+
+    require_geo = request.args.get("require_geo") == "true"
+    require_target = request.args.get("require_target") == "true"
+    require_category = request.args.get("require_category") == "true"
+    require_new = request.args.get("require_new") == "true"
+
+    options = _get_filter_options()
+    availability = _get_filter_availability(
+        query=query,
+        country=country,
+        city=city,
+        year=year,
+        votes_min=votes_min,
+        votes_max=votes_max,
+        projects_min=projects_min,
+        projects_max=projects_max,
+        len_min=len_min,
+        len_max=len_max,
+        vote_type=vote_type,
+        exclude_fully=exclude_fully,
+        exclude_experimental=exclude_experimental,
+        require_geo=require_geo,
+        require_target=require_target,
+        require_category=require_category,
+        require_new=require_new,
+    )
+    options.update(availability)
+    return jsonify(options)
 
 
 @bp.route("/api/tiles")
