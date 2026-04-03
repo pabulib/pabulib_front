@@ -68,36 +68,67 @@
 (function(){
   const PREVIEW_COUNT = 5;
   function getGroupMode(){ const el = document.getElementById('groupMode'); return el ? el.value : 'none'; }
+  function clearNode(node){
+    while(node.firstChild) node.removeChild(node.firstChild);
+  }
+  function appendFileChip(container, value){
+    const chip = document.createElement('span');
+    chip.className = 'file-item';
+    chip.textContent = String(value ?? '');
+    container.appendChild(chip);
+  }
+  function appendMoreCount(container, text){
+    const more = document.createElement('span');
+    more.className = 'more-count text-muted';
+    more.textContent = text;
+    container.appendChild(more);
+  }
   function renderFilesFlat(container, files, expanded){
+    clearNode(container);
     if(expanded){
-      container.innerHTML = files.map(f => `<span class="file-item">${f}</span>`).join('');
+      files.forEach((file) => appendFileChip(container, file));
       container.dataset.expanded = '1';
     } else {
       const rest = Math.max(files.length - PREVIEW_COUNT, 0);
-      const preview = files.slice(0, PREVIEW_COUNT).map(f => `<span class="file-item">${f}</span>`).join('');
-      const more = rest > 0 ? `<span class="more-count text-muted">+ ${rest} more</span>` : '';
-      container.innerHTML = preview + more;
+      files.slice(0, PREVIEW_COUNT).forEach((file) => appendFileChip(container, file));
+      if(rest > 0){
+        appendMoreCount(container, `+ ${rest} more`);
+      }
       container.dataset.expanded = '0';
     }
   }
   function renderFilesGrouped(container, groups, expanded){
     // groups: [{label, count, files}]
-    let html = '';
+    clearNode(container);
     const toRender = expanded ? groups : groups.slice(0, 3);
     toRender.forEach(g => {
       const list = (expanded ? g.files : g.files.slice(0, Math.max(2, Math.ceil(PREVIEW_COUNT/Math.max(1, toRender.length)))));
-      html += `<div class="group">
-        <div class="group-head"><span class="group-label">${g.label || '—'}</span><span class="group-count">${g.count}</span></div>
-        <div class="group-files">${list.map(f=>`<span class="file-item">${f}</span>`).join('')}</div>
-      </div>`;
+      const group = document.createElement('div');
+      group.className = 'group';
+      const head = document.createElement('div');
+      head.className = 'group-head';
+      const label = document.createElement('span');
+      label.className = 'group-label';
+      label.textContent = g.label || '—';
+      const count = document.createElement('span');
+      count.className = 'group-count';
+      count.textContent = String(g.count ?? '');
+      head.appendChild(label);
+      head.appendChild(count);
+      group.appendChild(head);
+
+      const filesWrap = document.createElement('div');
+      filesWrap.className = 'group-files';
+      list.forEach((file) => appendFileChip(filesWrap, file));
+      group.appendChild(filesWrap);
+      container.appendChild(group);
     });
     if(!expanded){
       const restGroups = Math.max(groups.length - toRender.length, 0);
       if(restGroups > 0){
-        html += `<span class="more-count text-muted">+ ${restGroups} more groups</span>`;
+        appendMoreCount(container, `+ ${restGroups} more groups`);
       }
     }
-    container.innerHTML = html;
     container.dataset.expanded = expanded ? '1' : '0';
   }
   function render(container, expanded){

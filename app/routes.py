@@ -1095,9 +1095,10 @@ def upload_validate():
         return jsonify({"ok": False, "error": "Invalid email"}), 400
 
     name = (f.filename or "").strip()
-    if not name:
+    safe_name = secure_filename(name)
+    if not safe_name:
         return jsonify({"ok": False, "error": "Empty filename"}), 400
-    if not _is_allowed_ext(name):
+    if not _is_allowed_ext(safe_name):
         return jsonify({"ok": False, "error": "Only .pb files are allowed"}), 400
 
     settings = _load_upload_settings()
@@ -1108,7 +1109,7 @@ def upload_validate():
         return jsonify({"ok": False, "error": "File too large"}), 413
 
     tmp_dir = _public_tmp_dir()
-    tmp_path = tmp_dir / name
+    tmp_path = tmp_dir / safe_name
     try:
         f.save(str(tmp_path))
         # Post-save checks
@@ -1166,14 +1167,15 @@ def upload_submit():
     if not _validate_email_address(email):
         return jsonify({"ok": False, "error": "Valid email required"}), 400
     name = (f.filename or "").strip()
-    if not name or not _is_allowed_ext(name):
+    safe_name = secure_filename(name)
+    if not safe_name or not _is_allowed_ext(safe_name):
         return jsonify({"ok": False, "error": "Only .pb files are allowed"}), 400
 
     settings = _load_upload_settings()
     max_bytes = int(settings.get("max_file_mb", 10)) * 1024 * 1024
 
     tmp_dir = _public_tmp_dir()
-    tmp_path = tmp_dir / name
+    tmp_path = tmp_dir / safe_name
     try:
         f.save(str(tmp_path))
         # size + text checks
@@ -1214,7 +1216,6 @@ def upload_submit():
         from .routes_admin import _tmp_upload_dir  # avoid cycle at top
 
         admin_tmp = _tmp_upload_dir()
-        safe_name = secure_filename(name)
         dest = admin_tmp / safe_name
         if dest.exists() and dest.is_symlink():
             return jsonify({"ok": False, "error": "Unsafe destination path"}), 400

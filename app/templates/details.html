@@ -189,30 +189,43 @@
     }
   }
 
+  function clearNode(node){
+    while (node.firstChild) node.removeChild(node.firstChild);
+  }
+
+  function appendChip(container, className, value){
+    const chip = document.createElement('span');
+    chip.className = className;
+    chip.textContent = String(value ?? '');
+    container.appendChild(chip);
+  }
+
   function renderFlat(el, files, expanded){
+    clearNode(el);
     const shown = expanded ? files : files.slice(0, PREVIEW_COUNT);
-    const html = shown.map((file) => `<span class="details-chip">${file}</span>`).join('');
+    shown.forEach((file) => appendChip(el, 'details-chip', file));
     const rest = Math.max(files.length - shown.length, 0);
-    el.innerHTML = html + (!expanded && rest > 0 ? `<div class="details-more-note">+ ${rest} more</div>` : '');
+    if (!expanded && rest > 0) {
+      appendChip(el, 'details-more-note', `+ ${rest} more`);
+    }
     el.dataset.expanded = expanded ? '1' : '0';
   }
 
   function renderGrouped(el, groups, expanded){
+    clearNode(el);
     const shown = expanded ? groups : groups.slice(0, PREVIEW_COUNT);
-    let html = '';
     shown.forEach((group) => {
-      html += `
-        <div class="details-group">
-          <div class="details-group-head">
-            <span class="details-group-label">${group.label || '—'}</span>
-            <span class="details-group-count">${group.count}</span>
-          </div>
-        </div>
-      `;
+      const groupEl = document.createElement('div');
+      groupEl.className = 'details-group';
+      const head = document.createElement('div');
+      head.className = 'details-group-head';
+      appendChip(head, 'details-group-label', group.label || '—');
+      appendChip(head, 'details-group-count', group.count ?? '');
+      groupEl.appendChild(head);
+      el.appendChild(groupEl);
     });
     const rest = Math.max(groups.length - shown.length, 0);
-    if (!expanded && rest > 0) html += `<div class="details-more-note">+ ${rest} more groups</div>`;
-    el.innerHTML = html;
+    if (!expanded && rest > 0) appendChip(el, 'details-more-note', `+ ${rest} more groups`);
     el.dataset.expanded = expanded ? '1' : '0';
   }
 
