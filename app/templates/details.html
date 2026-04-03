@@ -2,6 +2,8 @@
 
 {% block bodyClass %}details{% endblock %}
 {% block title %}Pabulib – Details{% endblock %}
+{% block meta_description %}Inspect participatory budgeting details in Pabulib, including rules, categories, targets, vote types, and dataset structure summaries.{% endblock %}
+{% block meta_canonical %}{{ url_for('main.details_page', tab=tab, _external=True) if tab and tab != 'comments' else url_for('main.details_page', _external=True) }}{% endblock %}
 
 {% block body %}
 {% if tab=='comments' %}

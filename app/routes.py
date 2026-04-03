@@ -10,6 +10,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from xml.sax.saxutils import escape as _xml_escape
 
 import sentry_sdk
 from flask import (
@@ -320,11 +321,75 @@ bp = Blueprint(
 )
 
 
+def _public_base_url() -> str:
+    configured = (os.environ.get("PUBLIC_BASE_URL") or "").strip().rstrip("/")
+    if configured:
+        return configured
+    return request.url_root.rstrip("/")
+
+
+def _sitemap_entries() -> List[Dict[str, str]]:
+    base = _public_base_url()
+    now_iso = datetime.utcnow().date().isoformat()
+    return [
+        {"loc": f"{base}/", "changefreq": "daily", "priority": "1.0", "lastmod": now_iso},
+        {"loc": f"{base}/format", "changefreq": "monthly", "priority": "0.8", "lastmod": now_iso},
+        {"loc": f"{base}/statistics", "changefreq": "daily", "priority": "0.8", "lastmod": now_iso},
+        {"loc": f"{base}/details", "changefreq": "daily", "priority": "0.7", "lastmod": now_iso},
+        {"loc": f"{base}/details?tab=categories", "changefreq": "daily", "priority": "0.7", "lastmod": now_iso},
+        {"loc": f"{base}/details?tab=targets", "changefreq": "daily", "priority": "0.7", "lastmod": now_iso},
+        {"loc": f"{base}/details?tab=rules", "changefreq": "daily", "priority": "0.7", "lastmod": now_iso},
+        {"loc": f"{base}/comments", "changefreq": "daily", "priority": "0.7", "lastmod": now_iso},
+        {"loc": f"{base}/tools", "changefreq": "monthly", "priority": "0.6", "lastmod": now_iso},
+        {"loc": f"{base}/upload", "changefreq": "monthly", "priority": "0.6", "lastmod": now_iso},
+        {"loc": f"{base}/citations", "changefreq": "monthly", "priority": "0.6", "lastmod": now_iso},
+        {"loc": f"{base}/about", "changefreq": "monthly", "priority": "0.5", "lastmod": now_iso},
+        {"loc": f"{base}/contact", "changefreq": "yearly", "priority": "0.4", "lastmod": now_iso},
+    ]
+
+
 @bp.route("/")
 def home():
     # Initial load: get first 20 tiles
     tiles, total = _search_tiles(limit=20)
     return render_template("index.html", tiles=tiles, count=total)
+
+
+@bp.route("/robots.txt")
+def robots_txt():
+    base = _public_base_url()
+    lines = [
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /admin/",
+        "Disallow: /api/",
+        "Disallow: /download/",
+        "Disallow: /preview/",
+        "Disallow: /visualize/",
+        f"Sitemap: {base}/sitemap.xml",
+    ]
+    return Response("\n".join(lines) + "\n", mimetype="text/plain")
+
+
+@bp.route("/sitemap.xml")
+def sitemap_xml():
+    parts = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    for entry in _sitemap_entries():
+        parts.extend(
+            [
+                "  <url>",
+                f"    <loc>{_xml_escape(entry['loc'])}</loc>",
+                f"    <lastmod>{entry['lastmod']}</lastmod>",
+                f"    <changefreq>{entry['changefreq']}</changefreq>",
+                f"    <priority>{entry['priority']}</priority>",
+                "  </url>",
+            ]
+        )
+    parts.append("</urlset>")
+    return Response("\n".join(parts) + "\n", mimetype="application/xml")
 
 
 @bp.route("/api/search")

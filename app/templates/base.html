@@ -4,6 +4,28 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}Pabulib{% endblock %}</title>
+    {% set meta_description %}{% block meta_description %}Pabulib is an open participatory budgeting library with searchable PB datasets, statistics, data format documentation, and tools for researchers and practitioners.{% endblock %}{% endset %}
+    {% set meta_type %}{% block meta_type %}website{% endblock %}{% endset %}
+    {% set meta_image %}{% block meta_image %}{{ url_for('main.static', filename='images/uj_logo.png', _external=True) }}{% endblock %}{% endset %}
+    {% set meta_robots %}{% block meta_robots %}{{ 'noindex, nofollow' if (request.endpoint or '').startswith('admin.') else 'index, follow, max-image-preview:large' }}{% endblock %}{% endset %}
+    {% set meta_canonical %}{% block meta_canonical %}{{ request.base_url }}{% endblock %}{% endset %}
+    {% set page_title = self.title()|striptags|trim %}
+    {% set meta_title = page_title if 'Pabulib' in page_title else page_title ~ ' – Pabulib' %}
+    <meta name="description" content="{{ meta_description|striptags|trim }}" />
+    <meta name="robots" content="{{ meta_robots|striptags|trim }}" />
+    <link rel="canonical" href="{{ meta_canonical|striptags|trim }}" />
+    <meta property="og:site_name" content="Pabulib" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:type" content="{{ meta_type|striptags|trim }}" />
+    <meta property="og:title" content="{{ meta_title }}" />
+    <meta property="og:description" content="{{ meta_description|striptags|trim }}" />
+    <meta property="og:url" content="{{ meta_canonical|striptags|trim }}" />
+    <meta property="og:image" content="{{ meta_image|striptags|trim }}" />
+    <meta property="og:image:alt" content="Pabulib" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="{{ meta_title }}" />
+    <meta name="twitter:description" content="{{ meta_description|striptags|trim }}" />
+    <meta name="twitter:image" content="{{ meta_image|striptags|trim }}" />
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('main.static', filename='favicon/apple-touch-icon.png') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('main.static', filename='favicon/favicon-32x32.png') }}">
     <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('main.static', filename='favicon/favicon-16x16.png') }}">
