@@ -148,6 +148,47 @@
       .replace(/'/g, "&#039;");
   }
 
+  function renderCheckerBadge(t) {
+    if (!t || !t.show_checker_badge || !t.checker_short_label) return '';
+    const tooltip = escapeHtml(t.checker_tooltip || 'Checker result available.');
+    return `<span class="checker-ribbon checker-${escapeHtml(t.checker_status)}" data-tooltip="${tooltip}" aria-label="${tooltip}">${escapeHtml(t.checker_short_label)}</span>`;
+  }
+
+  let checkerTip = null, hideCheckerTipT = null;
+  function getCheckerTip() {
+    if (checkerTip) return checkerTip;
+    checkerTip = document.createElement('div');
+    checkerTip.className = 'checker-tip';
+    document.body.appendChild(checkerTip);
+    checkerTip.addEventListener('mouseenter', ()=>{ if(hideCheckerTipT){ clearTimeout(hideCheckerTipT); hideCheckerTipT=null; } });
+    checkerTip.addEventListener('mouseleave', ()=> scheduleCheckerTipHide());
+    return checkerTip;
+  }
+  function scheduleCheckerTipHide() {
+    if (hideCheckerTipT) clearTimeout(hideCheckerTipT);
+    hideCheckerTipT = setTimeout(() => {
+      if (checkerTip) checkerTip.classList.remove('show');
+    }, 180);
+  }
+  function showCheckerTip(anchor) {
+    const text = (anchor && anchor.dataset && anchor.dataset.tooltip) ? anchor.dataset.tooltip : '';
+    if (!text) return;
+    const tip = getCheckerTip();
+    if (hideCheckerTipT) { clearTimeout(hideCheckerTipT); hideCheckerTipT = null; }
+    tip.textContent = text;
+    tip.classList.add('show');
+
+    const r = anchor.getBoundingClientRect();
+    const tipRect = tip.getBoundingClientRect();
+    const top = Math.max(8, r.top - tipRect.height - 12);
+    const left = Math.min(
+      window.innerWidth - tipRect.width - 8,
+      Math.max(8, r.right - tipRect.width)
+    );
+    tip.style.top = `${top}px`;
+    tip.style.left = `${left}px`;
+  }
+
   function slugifyText(text) {
     if (text == null) return '';
     return String(text)
@@ -246,6 +287,11 @@
         data-target="${t.has_target ? '1' : '0'}"
         data-category="${t.has_category ? '1' : '0'}"
         data-new="${t.is_new ? '1' : '0'}"
+        data-checker-status="${escapeHtml(t.checker_status || '')}"
+        data-checker-label="${escapeHtml(t.checker_short_label || '')}"
+        data-checker-tooltip="${escapeHtml(t.checker_tooltip || '')}"
+        data-checker-errors="${t.checker_error_count != null ? t.checker_error_count : 0}"
+        data-checker-warnings="${t.checker_warning_count != null ? t.checker_warning_count : 0}"
         ${t.num_selected_projects_raw != null ? `data-selected="${t.num_selected_projects_raw}"` : ''}
         data-rule="${escapeHtml(t.rule_raw)}"
         data-edition="${escapeHtml(t.edition)}"
@@ -254,6 +300,7 @@
 
     return `
       <section class="tile" ${dataAttrs}>
+        ${renderCheckerBadge(t)}
         <div class="tile-header">
           <input class="row-check" type="checkbox" data-file="${escapeHtml(t.file_name)}" ${isSelected ? 'checked' : ''} />
           <div class="title-row">
@@ -1079,6 +1126,9 @@
     if(tile.dataset.city) rowHtml('Unit', `<strong>${escapeHtml(tile.dataset.city)}</strong>`);
     if(tile.dataset.year) rowHtml('Year (of voting)', `<strong>${escapeHtml(tile.dataset.year)}</strong>`);
     // Show items that are NOT already shown in the tile grid itself
+  if(tile.dataset.checkerStatus && tile.dataset.checkerStatus !== 'not_checked'){
+    row('Checker status', tile.dataset.checkerLabel || tile.dataset.checkerStatus);
+  }
   if(tile.dataset.rule) row('Rule', tile.dataset.rule);
   if(tile.dataset.edition) row('Edition', tile.dataset.edition);
   if(tile.dataset.language) row('Language', tile.dataset.language);
@@ -1117,6 +1167,20 @@
     scheduleMiniHide();
   }, true);
   window.addEventListener('scroll', ()=>{ if(mini) mini.classList.remove('show'); }, {passive:true});
+
+  document.addEventListener('mouseover', (e) => {
+    const badge = e.target && e.target.closest && e.target.closest('.checker-ribbon');
+    if (!badge) return;
+    showCheckerTip(badge);
+  }, true);
+  document.addEventListener('mouseout', (e) => {
+    const badge = e.target && e.target.closest && e.target.closest('.checker-ribbon');
+    if (!badge) return;
+    const toEl = e.relatedTarget;
+    if (toEl && checkerTip && (toEl === checkerTip || (toEl.closest && toEl.closest('.checker-tip')))) return;
+    scheduleCheckerTipHide();
+  }, true);
+  window.addEventListener('scroll', ()=>{ if(checkerTip) checkerTip.classList.remove('show'); }, {passive:true});
 
   // Download Form Handler (Progress Bar & Polling)
   const downloadForm = document.getElementById('downloadForm');

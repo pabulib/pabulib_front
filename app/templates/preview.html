@@ -7,36 +7,94 @@
 
 {% block body %}
 <div class="pv-wrap">
-
-  <!-- Back -->
-  <div class="pv-back">
-    <a href="{{ url_for('main.home') }}">← Back to search</a>
-  </div>
-
-  <!-- Header card -->
-  <div class="pv-card">
-    <h1 class="pv-title">{{ filename }}</h1>
-    <div class="pv-stats">
-      <div class="pv-stat">
-        <span class="pv-stat-num">{{ counts.projects }}</span>
-        <span class="pv-stat-lbl">projects</span>
-      </div>
-      <div class="pv-stat-sep"></div>
-      <div class="pv-stat">
-        <span class="pv-stat-num">{{ counts.votes }}</span>
-        <span class="pv-stat-lbl">votes</span>
-      </div>
+  <div class="pv-topbar">
+    <div class="pv-hero-copy">
+      <h1 class="pv-title">{{ preview_title }}</h1>
+      <div class="pv-file-subtitle">{{ filename }}</div>
     </div>
-    <div class="pv-actions">
-      <a class="pv-btn" href="{{ url_for('main.download', filename=filename) }}">
+    <div class="pv-top-actions">
+      <a class="pv-top-link" href="{{ url_for('main.home') }}">← Back to search</a>
+      <a class="pv-btn pv-btn-top" href="{{ url_for('main.download', filename=filename) }}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Download
       </a>
-      <a class="pv-btn" href="{{ url_for('main.visualize_file', filename=filename) }}">
+      <a class="pv-btn pv-btn-top" href="{{ url_for('main.visualize_file', filename=filename) }}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/></svg>
         Visualize
       </a>
     </div>
+  </div>
+
+  <div class="pv-stats pv-stats-hero">
+    <div class="pv-stat">
+      <span class="pv-stat-num">{{ counts.projects }}</span>
+      <span class="pv-stat-lbl">projects</span>
+    </div>
+    <div class="pv-stat">
+      <span class="pv-stat-num">{{ counts.votes }}</span>
+      <span class="pv-stat-lbl">votes</span>
+    </div>
+  </div>
+
+  <div class="pv-card pv-checker-card">
+    <div class="pv-checker-head">
+      <div class="pv-checker-main">
+        <div class="pv-checker-kicker">
+          <span class="pv-checker-kicker-label">Checker</span>
+          {% if checker.version %}
+          <span class="pv-checker-kicker-version">v. {{ checker.version }}</span>
+          {% endif %}
+        </div>
+        <div class="pv-checker-status-row">
+          <span class="pv-checker-badge pv-checker-{{ checker.status }}">{{ checker.status_label }}</span>
+          <div class="pv-checker-meta-group">
+            {% if checker.checked_at %}
+            <span class="pv-checker-meta">Checked: {{ checker.checked_at }}</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% if checker.has_result %}
+      <div class="pv-checker-counts">
+        <span>{{ checker.error_count }} error{{ 's' if checker.error_count != 1 else '' }}</span>
+        <span>{{ checker.warning_count }} warning{{ 's' if checker.warning_count != 1 else '' }}</span>
+      </div>
+      {% endif %}
+    </div>
+    <div class="pv-checker-summary">{{ checker.explanation }}</div>
+    {% if checker.error_message %}
+    <div class="pv-checker-note pv-checker-note-error">{{ checker.error_message }}</div>
+    {% endif %}
+    {% if checker.warnings %}
+    <div class="pv-checker-groups">
+      <div class="pv-checker-group-title">Warnings</div>
+      {% for group in checker.warnings %}
+      <div class="pv-checker-group">
+        <div class="pv-checker-group-head">{{ group.section }}</div>
+        <ul class="pv-checker-list">
+          {% for item in group["items"] %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if checker.errors %}
+    <div class="pv-checker-groups">
+      <div class="pv-checker-group-title">Errors</div>
+      {% for group in checker.errors %}
+      <div class="pv-checker-group pv-checker-group-error">
+        <div class="pv-checker-group-head">{{ group.section }}</div>
+        <ul class="pv-checker-list">
+          {% for item in group["items"] %}
+          <li>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
 
   <!-- Meta -->
@@ -152,23 +210,54 @@
 <style>
 html,body.preview{overflow-x:hidden;}
 .pv-wrap{max-width:min(100%,1120px);width:100%;margin:0 auto;padding:16px 12px 48px;overflow-x:hidden;}
-.pv-back a{color:#1d4ed8;text-decoration:none;font-size:14px;}
-.pv-back a:hover{text-decoration:underline;}
-.pv-back{margin-bottom:14px;}
+.pv-topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:14px;padding:0 6px;}
+.pv-top-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;flex:0 0 auto;}
+.pv-top-link{color:#1d4ed8;text-decoration:none;font-size:14px;font-weight:600;}
+.pv-top-link:hover{text-decoration:underline;}
 
 /* Card */
 .pv-card{background:#fff;border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.05);margin-bottom:16px;max-width:100%;overflow:hidden;}
 
 /* Header card */
-.pv-title{font-size:15px;font-weight:700;color:#1e293b;padding:16px 16px 12px;word-break:break-all;margin:0;line-height:1.4;}
-.pv-stats{display:flex;align-items:center;gap:0;padding:0 16px 14px;}
-.pv-stat{display:flex;flex-direction:column;align-items:center;min-width:80px;}
-.pv-stat-num{font-size:22px;font-weight:800;color:#1e293b;line-height:1;}
-.pv-stat-lbl{font-size:11px;color:#94a3b8;margin-top:2px;text-transform:uppercase;letter-spacing:.04em;}
-.pv-stat-sep{width:1px;height:36px;background:#e2e8f0;margin:0 16px;}
-.pv-actions{display:flex;gap:10px;padding:0 16px 16px;}
+.pv-hero-copy{min-width:0;flex:1 1 auto;}
+.pv-title{font-size:36px;font-weight:800;color:#1e293b;word-break:break-word;margin:0;line-height:1.1;letter-spacing:-.03em;}
+.pv-file-subtitle{margin-top:6px;font-size:14px;color:#94a3b8;word-break:break-all;}
+.pv-stats{display:flex;align-items:flex-end;justify-content:center;gap:72px;padding:8px 6px 18px;}
+.pv-stats-hero{flex-wrap:wrap;}
+.pv-stat{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:180px;padding:0;background:transparent;border:none;border-radius:0;}
+.pv-stat-num{font-size:56px;font-weight:800;color:#0f172a;line-height:.95;letter-spacing:-.04em;}
+.pv-stat-lbl{font-size:12px;color:#94a3b8;margin-top:8px;text-transform:uppercase;letter-spacing:.18em;}
 .pv-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:10px;border:1.5px solid #cbd5e1;background:#f8fafc;color:#334155;font-size:14px;font-weight:600;text-decoration:none;transition:background .15s,border-color .15s;}
 .pv-btn:hover{background:#f1f5f9;border-color:#94a3b8;}
+.pv-btn-top{background:#fff;}
+
+/* Checker */
+.pv-checker-card{padding:18px;}
+.pv-checker-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.pv-checker-main{min-width:0;flex:1 1 auto;}
+.pv-checker-kicker{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+.pv-checker-kicker-label{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#64748b;}
+.pv-checker-kicker-version{font-size:13px;font-weight:500;color:#94a3b8;font-style:normal;font-family:inherit;letter-spacing:0;}
+.pv-checker-status-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.pv-checker-meta-group{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.pv-checker-badge{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800;border:1px solid transparent;white-space:nowrap;}
+.pv-checker-valid{color:#166534;background:#dcfce7;border-color:#86efac;}
+.pv-checker-valid_with_warning{color:#9a3412;background:#ffedd5;border-color:#fdba74;}
+.pv-checker-invalid{color:#991b1b;background:#fee2e2;border-color:#fca5a5;}
+.pv-checker-not_checked{color:#475569;background:#f1f5f9;border-color:#cbd5e1;}
+.pv-checker-meta{font-size:13px;color:#64748b;}
+.pv-checker-counts{display:flex;gap:8px;flex-wrap:wrap;font-size:12px;color:#475569;}
+.pv-checker-counts span{padding:5px 8px;border-radius:999px;background:#f8fafc;border:1px solid #e2e8f0;}
+.pv-checker-summary{margin-top:14px;font-size:16px;line-height:1.6;color:#334155;max-width:72ch;}
+.pv-checker-note{margin-top:12px;padding:10px 12px;border-radius:10px;font-size:13px;line-height:1.5;}
+.pv-checker-note-error{background:#fef2f2;color:#991b1b;border:1px solid #fecaca;}
+.pv-checker-groups{margin-top:14px;display:grid;gap:10px;}
+.pv-checker-group-title{font-size:13px;font-weight:700;color:#1e293b;}
+.pv-checker-group{border:1px solid #fed7aa;background:#fff7ed;border-radius:12px;padding:12px;}
+.pv-checker-group-error{border-color:#fecaca;background:#fef2f2;}
+.pv-checker-group-head{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#1e293b;margin-bottom:8px;}
+.pv-checker-list{margin:0;padding-left:18px;color:#475569;font-size:13px;line-height:1.55;}
+.pv-checker-list li + li{margin-top:4px;}
 
 /* Section */
 .pv-section-toggle{width:100%;display:flex;align-items:center;gap:8px;padding:14px 16px;background:none;border:none;cursor:pointer;text-align:left;}
@@ -224,10 +313,21 @@ html,body.preview{overflow-x:hidden;}
 
 @media (max-width: 640px){
   .pv-wrap{padding-left:10px;padding-right:10px;}
-  .pv-actions{flex-wrap:wrap;}
-  .pv-btn{flex:1 1 140px;justify-content:center;}
+  .pv-topbar{flex-direction:column;align-items:flex-start;padding:0;gap:12px;}
+  .pv-top-actions{display:grid;grid-template-columns:1fr 1fr;align-items:stretch;justify-content:stretch;gap:10px;width:100%;}
+  .pv-top-link{grid-column:1 / -1;}
+  .pv-btn-top{width:100%;justify-content:center;}
+  .pv-title{font-size:24px;}
+  .pv-file-subtitle{font-size:13px;}
+  .pv-btn{justify-content:center;}
+  .pv-stats{justify-content:center;gap:28px;padding:6px 0 12px;}
+  .pv-stat{min-width:120px;flex:0 1 auto;}
+  .pv-stat-num{font-size:40px;}
   .pv-section-toggle{flex-wrap:wrap;align-items:center;}
   .pv-section-badges{order:3;flex-basis:100%;}
+  .pv-checker-card{padding:16px;}
+  .pv-checker-head{flex-direction:column;align-items:flex-start;}
+  .pv-checker-counts{width:100%;}
   .pv-table th,.pv-table td{padding:8px 12px;}
   .pv-scroll{overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;padding-bottom:6px;}
   .pv-scroll .pv-table{width:max-content;min-width:100%;}

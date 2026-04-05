@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+
+{% block bodyClass %}bg-slate-50{% endblock %}
+{% block title %}Pabulib – Blog{% endblock %}
+{% block meta_description %}Read Pabulib updates, announcements, and future blog posts about participatory budgeting datasets, tooling, and research infrastructure.{% endblock %}
+{% block meta_canonical %}{{ url_for('main.blog_index', tag=selected_tag, _external=True) if selected_tag else url_for('main.blog_index', _external=True) }}{% endblock %}
+
+{% block body %}
+<section class="blog-shell blog-shell-index">
+  <header class="blog-index-header">
+    <h1 class="blog-page-title">Blog</h1>
+    <p class="blog-page-subtitle">Mostly small updates for now, and from time to time also longer posts.</p>
+  </header>
+
+  {% if tags %}
+  <div class="blog-filter-row">
+    <span class="blog-filter-label">Filter by tag:</span>
+    <div class="blog-tags-bar">
+      <a href="{{ url_for('main.blog_index') }}" class="blog-tag-chip {{ 'is-active' if not selected_tag else '' }}">All</a>
+      {% for tag in tags %}
+      <a href="{{ url_for('main.blog_index', tag=tag) }}" class="blog-tag-chip {{ 'is-active' if selected_tag == tag else '' }}">{{ tag }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="blog-list">
+    {% for post in posts %}
+    <a href="{{ url_for('main.blog_post', slug=post.slug) }}" class="blog-card">
+      <div class="blog-card-header">
+        <h2 class="blog-card-title">
+          {{ post.title }}
+        </h2>
+        <div class="blog-card-meta">
+          <span>{{ post.published_on.day }} {{ post.published_on.strftime('%B %Y') }}</span>
+          <span class="blog-meta-sep">-</span>
+          <span>{{ post.author }}</span>
+        </div>
+      </div>
+      <p class="blog-card-summary">{{ post.summary }}</p>
+    </a>
+    {% else %}
+    <article class="blog-empty-state">
+      <h2>No posts yet</h2>
+      <p>The blog is ready. Add a Markdown file in <code>app/blog_posts/</code> to publish the next update.</p>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+
+{% include 'footer.html' %}
+{% endblock %}

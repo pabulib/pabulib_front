@@ -10,7 +10,14 @@ _logger = logging.getLogger(__name__)
 
 from sqlalchemy import and_, asc, desc, or_
 from ..db import get_session
-from ..models import PBCategory, PBComment, PBFile, PBTarget, RefreshState
+from ..models import (
+    CheckerValidationCache,
+    PBCategory,
+    PBComment,
+    PBFile,
+    PBTarget,
+    RefreshState,
+)
 from ..utils.formatting import (
     format_budget,
     format_int,
@@ -19,6 +26,12 @@ from ..utils.formatting import (
 )
 from ..utils.load_pb_file import parse_pb_lines as _parse_pb_lines
 from ..utils.search_normalization import build_search_text_norm, fold_search_text
+from ..utils.validation import (
+    checker_public_label,
+    checker_public_short_label,
+    checker_public_status,
+    checker_public_tooltip,
+)
 
 # Optional optimization helper (load_only)
 try:  # pragma: no cover
@@ -413,11 +426,22 @@ def _db_signature() -> Optional[str]:
     try:
         with get_session() as s:
             rs = s.get(RefreshState, "pb")
-            return (
+            refresh_sig = (
                 rs.last_completed_at.isoformat()
                 if rs and rs.last_completed_at
-                else None
+                else ""
             )
+            checker_sig_row = (
+                s.query(CheckerValidationCache.checked_at)
+                .order_by(desc(CheckerValidationCache.checked_at))
+                .first()
+            )
+            checker_sig = (
+                checker_sig_row[0].isoformat()
+                if checker_sig_row and checker_sig_row[0]
+                else ""
+            )
+            return f"{refresh_sig}|{checker_sig}"
     except Exception:
         return None
 
@@ -475,7 +499,24 @@ def _row_to_tile(
         max_total_cost,
         is_first_addition,
         ingested_at,
+        file_mtime,
+        checker_status,
+        checker_error_count,
+        checker_warning_count,
+        checker_file_mtime,
     ) = r
+
+    cache_is_fresh = bool(
+        checker_status
+        and checker_file_mtime is not None
+        and file_mtime is not None
+        and checker_file_mtime == file_mtime
+    )
+    public_checker_status = (
+        checker_public_status(checker_status) if cache_is_fresh else "not_checked"
+    )
+    checker_error_total = int(checker_error_count or 0) if cache_is_fresh else 0
+    checker_warning_total = int(checker_warning_count or 0) if cache_is_fresh else 0
 
     meta: Dict[str, Any] = {"subunit": subunit}
     if min_length is not None:
@@ -556,6 +597,18 @@ def _row_to_tile(
         "ordinal_k_label": ordinal_k_label,
         "ordinal_k_type": ordinal_k_type,
         "cumulative_points_label": cumulative_points_label,
+        "checker_status": public_checker_status,
+        "checker_status_label": checker_public_label(public_checker_status),
+        "checker_short_label": checker_public_short_label(public_checker_status),
+        "checker_tooltip": checker_public_tooltip(
+            public_checker_status,
+            error_count=checker_error_total,
+            warning_count=checker_warning_total,
+        ),
+        "checker_error_count": checker_error_total,
+        "checker_warning_count": checker_warning_total,
+        "has_checker_result": cache_is_fresh,
+        "show_checker_badge": True,
     }
 
 
@@ -735,6 +788,14 @@ def search_tiles(
             PBFile.max_total_cost,
             PBFile.is_first_addition,
             PBFile.ingested_at,
+            PBFile.file_mtime,
+            CheckerValidationCache.checker_status,
+            CheckerValidationCache.error_count,
+            CheckerValidationCache.warning_count,
+            CheckerValidationCache.file_mtime,
+        ).outerjoin(
+            CheckerValidationCache,
+            CheckerValidationCache.file_id == PBFile.id,
         ).filter(PBFile.is_current == True)  # noqa: E712
 
         q = _apply_search_filters(
@@ -972,7 +1033,13 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 PBFile.max_total_cost,
                 PBFile.is_first_addition,
                 PBFile.ingested_at,
+                PBFile.file_mtime,
+                CheckerValidationCache.checker_status,
+                CheckerValidationCache.error_count,
+                CheckerValidationCache.warning_count,
+                CheckerValidationCache.file_mtime,
             )
+            .outerjoin(CheckerValidationCache, CheckerValidationCache.file_id == PBFile.id)
             .filter(PBFile.is_current == True)  # noqa: E712
             .order_by(
                 PBFile.country,

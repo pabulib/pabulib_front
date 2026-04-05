@@ -34,7 +34,7 @@ from sklearn.manifold import MDS
 
 from .__init__ import limiter
 from .db import get_session
-from .models import PBFile
+from .models import CheckerValidationCache, PBFile
 from .routes_admin import _format_preview_tile  # reuse tile formatting
 from .routes_admin import _load_upload_settings  # reuse limits
 from .services.pb_service import (
@@ -56,6 +56,12 @@ from .services.snapshot_service import (
     create_download_with_link as _create_download_with_link,
     serve_snapshot_download as _serve_snapshot_download,
 )
+from .services.blog_service import (
+    blog_sitemap_entries as _blog_sitemap_entries,
+    get_blog_post as _get_blog_post,
+    list_blog_posts as _list_blog_posts,
+    list_blog_tags as _list_blog_tags,
+)
 from .services.visualization_service import get_or_compute_visualization_data
 from .utils.file_helpers import is_safe_filename as _is_safe_filename
 from .utils.formatting import format_int as _format_int
@@ -73,9 +79,13 @@ from .utils.upload_security import (
     validate_email_address as _validate_email_address,
 )
 from .utils.validation import (
+    checker_public_explanation,
+    checker_public_label,
+    checker_public_status,
     count_issues,
     format_validation_summary,
     get_checker_version as _get_checker_version,
+    normalize_issue_groups,
     validate_pb_file,
 )
 
@@ -331,7 +341,7 @@ def _public_base_url() -> str:
 def _sitemap_entries() -> List[Dict[str, str]]:
     base = _public_base_url()
     now_iso = datetime.utcnow().date().isoformat()
-    return [
+    entries = [
         {"loc": f"{base}/", "changefreq": "daily", "priority": "1.0", "lastmod": now_iso},
         {"loc": f"{base}/format", "changefreq": "monthly", "priority": "0.8", "lastmod": now_iso},
         {"loc": f"{base}/statistics", "changefreq": "daily", "priority": "0.8", "lastmod": now_iso},
@@ -346,6 +356,8 @@ def _sitemap_entries() -> List[Dict[str, str]]:
         {"loc": f"{base}/about", "changefreq": "monthly", "priority": "0.5", "lastmod": now_iso},
         {"loc": f"{base}/contact", "changefreq": "yearly", "priority": "0.4", "lastmod": now_iso},
     ]
+    entries.extend(_blog_sitemap_entries(base))
+    return entries
 
 
 @bp.route("/")
@@ -517,6 +529,26 @@ def format_page():
 @bp.route("/tools")
 def tools_page():
     return render_template("tools.html")
+
+
+@bp.route("/blog")
+def blog_index():
+    selected_tag = (request.args.get("tag") or "").strip() or None
+    posts = _list_blog_posts(tag=selected_tag)
+    return render_template(
+        "blog_index.html",
+        posts=posts,
+        tags=_list_blog_tags(),
+        selected_tag=selected_tag,
+    )
+
+
+@bp.route("/blog/<slug>")
+def blog_post(slug: str):
+    post = _get_blog_post(slug)
+    if post is None:
+        abort(404)
+    return render_template("blog_post.html", post=post)
 
 
 @bp.route("/citations")
@@ -2203,14 +2235,43 @@ def _order_columns(all_keys: List[str], preferred_order: List[str]) -> List[str]
     return cols
 
 
+def _load_checker_validation_payload(
+    row: PBFile,
+    cache_row: Optional[CheckerValidationCache],
+) -> Optional[Dict[str, Any]]:
+    if cache_row is None or cache_row.file_mtime != row.file_mtime:
+        return None
+    file_path = Path(row.path)
+    if not file_path.exists() or not file_path.is_file():
+        return None
+    try:
+        data = json.loads(cache_row.validation_json)
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
 @bp.route("/preview/<path:filename>")
 def preview_file(filename: str):
     # Validate and locate file
     if not _is_safe_filename(filename):
         abort(400, description="Invalid filename")
-    # Read path from DB record only (DB is the source of truth)
-    path = get_current_file_path(filename)
-    if not path or not path.exists() or not path.is_file():
+    with get_session() as s:
+        file_row = (
+            s.query(PBFile)
+            .filter(PBFile.file_name == filename, PBFile.is_current == True)  # noqa: E712
+            .one_or_none()
+        )
+        if file_row is None:
+            abort(404)
+        cache_row = (
+            s.query(CheckerValidationCache)
+            .filter(CheckerValidationCache.file_id == file_row.id)
+            .one_or_none()
+        )
+        path = Path(file_row.path)
+        checker_validation = _load_checker_validation_payload(file_row, cache_row)
+    if not path.exists() or not path.is_file():
         abort(404)
     try:
         with path.open("r", encoding="utf-8", newline="") as f:
@@ -2319,10 +2380,63 @@ def preview_file(filename: str):
         "projects": len(project_rows),
         "votes": total_votes_count,
     }
+    preview_title = (
+        ((file_row.webpage_name or "").strip().replace("_", " "))
+        or Path(filename).stem.replace("_", " ")
+    )
+
+    checker_internal_status = (
+        cache_row.checker_status if checker_validation and cache_row is not None else None
+    )
+    checker_status = checker_public_status(checker_internal_status)
+    checker_counts = (
+        count_issues(checker_validation)
+        if checker_validation
+        else {"errors": 0, "warnings": 0}
+    )
+    checker_info = {
+        "status": checker_status,
+        "status_label": checker_public_label(checker_status),
+        "version": cache_row.checker_version if checker_validation and cache_row else None,
+        "checked_at": (
+            cache_row.checked_at.strftime("%d/%m/%Y")
+            if checker_validation and cache_row and cache_row.checked_at
+            else None
+        ),
+        "summary": (
+            format_validation_summary(checker_validation)
+            if checker_validation
+            else "Not checked"
+        ),
+        "explanation": checker_public_explanation(
+            checker_status,
+            error_count=checker_counts["errors"],
+            warning_count=checker_counts["warnings"],
+        ),
+        "error_count": checker_counts["errors"],
+        "warning_count": checker_counts["warnings"],
+        "errors": (
+            normalize_issue_groups(checker_validation.get("errors"))
+            if checker_validation
+            else []
+        ),
+        "warnings": (
+            normalize_issue_groups(checker_validation.get("warnings"))
+            if checker_validation
+            else []
+        ),
+        "error_message": (
+            str(checker_validation.get("error_message") or "").strip()
+            if checker_validation
+            else ""
+        ),
+        "has_result": bool(checker_validation),
+    }
 
     return render_template(
         "preview.html",
         filename=filename,
+        preview_title=preview_title,
         meta_items=meta_items,
         project_columns=project_columns,
         project_rows=project_rows,
@@ -2333,6 +2447,7 @@ def preview_file(filename: str):
         votes_in_projects=votes_in_projects,
         scores_in_projects=scores_in_projects,
         counts=counts,
+        checker=checker_info,
     )
 
 

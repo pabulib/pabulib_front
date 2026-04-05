@@ -12,7 +12,7 @@ import re
 import tempfile
 from io import StringIO
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -294,3 +294,119 @@ def count_issues(validation: Dict[str, Any]) -> Dict[str, int]:
         warning_count = sum(len(w) for w in validation["warnings"].values())
 
     return {"errors": error_count, "warnings": warning_count}
+
+
+def checker_public_status(checker_status: Optional[str]) -> str:
+    """Map internal checker statuses to a small public-facing status set."""
+    status = str(checker_status or "").strip().lower()
+    if status == "correct":
+        return "valid"
+    if status == "warnings":
+        return "valid_with_warning"
+    if status in {"errors", "failed"}:
+        return "invalid"
+    return "not_checked"
+
+
+def checker_public_label(public_status: Optional[str]) -> str:
+    return {
+        "valid": "VALID",
+        "valid_with_warning": "VALID with WARNING",
+        "invalid": "INVALID",
+        "not_checked": "NOT CHECKED",
+    }.get(str(public_status or "").strip().lower(), "NOT CHECKED")
+
+
+def checker_public_short_label(public_status: Optional[str]) -> str:
+    return {
+        "valid": "valid",
+        "valid_with_warning": "warning",
+        "invalid": "invalid",
+        "not_checked": "not checked",
+    }.get(str(public_status or "").strip().lower(), "not checked")
+
+
+def checker_public_explanation(
+    public_status: Optional[str],
+    *,
+    error_count: int = 0,
+    warning_count: int = 0,
+) -> str:
+    status = str(public_status or "").strip().lower()
+    if status == "valid":
+        return "The checker did not report any errors or warnings."
+    if status == "valid_with_warning":
+        noun = "warning" if int(warning_count) == 1 else "warnings"
+        return f"The file is valid, but the checker reported {int(warning_count)} {noun}."
+    if status == "invalid":
+        if int(error_count) > 0:
+            noun = "error" if int(error_count) == 1 else "errors"
+            return f"The checker reported {int(error_count)} {noun}, so this file should be treated as invalid."
+        return "The checker could not validate this file successfully, so it should be treated as invalid."
+    return "This file has not been checked yet."
+
+
+def checker_public_tooltip(
+    public_status: Optional[str],
+    *,
+    error_count: int = 0,
+    warning_count: int = 0,
+) -> str:
+    status = str(public_status or "").strip().lower()
+    if status == "valid":
+        return "Checker found this file valid."
+    if status == "valid_with_warning":
+        noun = "warning" if int(warning_count) == 1 else "warnings"
+        return f"Checker found this file valid but with {int(warning_count)} {noun}."
+    if status == "invalid":
+        if int(error_count) > 0:
+            noun = "error" if int(error_count) == 1 else "errors"
+            return f"Checker found {int(error_count)} {noun} in this file."
+        return "Checker could not validate this file successfully."
+    return "Checker has not checked this file yet."
+
+
+def normalize_issue_groups(issue_map: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Normalize checker warnings/errors for template rendering."""
+    if not isinstance(issue_map, dict):
+        return []
+
+    def _flatten(value: Any) -> List[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            text = value.strip()
+            return [text] if text else []
+        if isinstance(value, dict):
+            items: List[str] = []
+            for subkey, subvalue in value.items():
+                nested = _flatten(subvalue)
+                if nested:
+                    prefix = str(subkey).strip()
+                    for item in nested:
+                        if prefix and not prefix.isdigit():
+                            items.append(f"{prefix}: {item}")
+                        else:
+                            items.append(item)
+            return items
+        if isinstance(value, (list, tuple, set)):
+            items: List[str] = []
+            for entry in value:
+                items.extend(_flatten(entry))
+            return items
+        text = str(value).strip()
+        return [text] if text else []
+
+    groups: List[Dict[str, Any]] = []
+    for key, value in issue_map.items():
+        items = _flatten(value)
+        if not items:
+            continue
+        groups.append(
+            {
+                "section": str(key).replace("_", " ").strip() or "General",
+                "count": len(items),
+                "items": items,
+            }
+        )
+    return groups

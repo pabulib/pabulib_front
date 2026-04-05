@@ -200,11 +200,21 @@
   data-target="{{ '1' if t.has_target else '0' }}"
   data-category="{{ '1' if t.has_category else '0' }}"
   data-new="{{ '1' if t.is_new else '0' }}"
+        data-checker-status="{{ t.checker_status|e }}"
+        data-checker-label="{{ t.checker_short_label|e }}"
+        data-checker-tooltip="{{ t.checker_tooltip|e }}"
+        data-checker-errors="{{ t.checker_error_count }}"
+        data-checker-warnings="{{ t.checker_warning_count }}"
          {% if t.num_selected_projects_raw is not none %}data-selected="{{ t.num_selected_projects_raw }}"{% endif %}
          data-rule="{{ t.rule_raw }}"
          data-edition="{{ t.edition }}"
          data-language="{{ t.language }}"
       >
+        {% if t.show_checker_badge %}
+        <span class="checker-ribbon checker-{{ t.checker_status }}" data-tooltip="{{ t.checker_tooltip|e }}" aria-label="{{ t.checker_tooltip|e }}">
+          {{ t.checker_short_label }}
+        </span>
+        {% endif %}
         <div class="tile-header">
           <input class="row-check" type="checkbox" data-file="{{ t.file_name|e }}" />
           <div class="title-row">
