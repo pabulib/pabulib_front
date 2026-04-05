@@ -402,21 +402,21 @@ nav#mainNav {
   max-width:100%;
 }
 
-/* Desktop navbar - shorten long names on medium screens */
-@media (min-width:769px) and (max-width:1200px){
+/* Desktop navbar - start compacting earlier to avoid overlap */
+@media (min-width:769px) and (max-width:1450px){
   #navLinks {
-    gap:8px;
+    gap:6px;
   }
   
   #navLinks a {
     font-size:14px;
-    padding:8px 10px !important;
+    padding:8px 8px !important;
     white-space:nowrap;
   }
 }
 
 /* Very small desktop screens - shorten even more */
-@media (min-width:769px) and (max-width:1024px){
+@media (min-width:769px) and (max-width:1180px){
   #navLinks {
     gap:4px;
   }
@@ -446,7 +446,7 @@ nav#mainNav {
 @media (min-width:769px){
   #navLinks {
     display:flex !important;
-    flex-wrap:wrap;
+    flex-wrap:nowrap;
     justify-content:center;
     align-items:center;
   }

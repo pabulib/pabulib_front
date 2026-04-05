@@ -2,7 +2,7 @@
 title: A few recent updates in Pabulib
 slug: pabulib-updates-new-cities-checker-mobile
 author: Ignacy Janiszewski
-date: 2026-04-05
+date: 2026-04-02
 tags: updates
 summary: We recently added 112 new files, Checker and NEW labels, a mobile-friendly layout, and a snapshot repository for tracking changes in all .pb files.
 ---
