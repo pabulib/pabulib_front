@@ -152,6 +152,8 @@ def ingest_file(
 
     meta_lower = {str(k).strip().lower(): v for k, v in meta.items()}
 
+    ingested_at = datetime.utcnow()
+
     record = PBFile(
         file_name=p.name,
         path=str(p),
@@ -186,7 +188,8 @@ def ingest_file(
         max_sum_cost_per_category=_pi(meta_lower.get("max_sum_cost_per_category")),
         max_total_cost=_pi(meta_lower.get("max_total_cost")),
         file_mtime=mtime,
-        ingested_at=datetime.utcnow(),
+        ingested_at=ingested_at,
+        first_ingested_at=ingested_at,
         is_first_addition=None,
         is_current=True,
         group_key=group_key,
@@ -280,6 +283,11 @@ def refresh(full: bool = False) -> Dict[str, Any]:
                         continue
                 if prev:
                     rec.supersedes_id = prev.id
+                    rec.first_ingested_at = (
+                        prev.first_ingested_at or prev.ingested_at or rec.ingested_at
+                    )
+                else:
+                    rec.first_ingested_at = rec.ingested_at
                 rec.is_first_addition = compute_is_first_addition(
                     s, rec.file_name, rec.webpage_name
                 )

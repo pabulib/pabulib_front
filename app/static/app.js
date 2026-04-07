@@ -226,7 +226,7 @@
     // Helper for tags
     let tags = '';
     // Removed country/city/year tags to match server-side rendering
-    if (t.is_new) tags += `<span class="tag new" title="Added within the last 30 days">NEW</span>`;
+    if (t.is_new) tags += `<span class="tag new" title="Added within the last 6 months">NEW</span>`;
     if (t.has_geo) tags += `<span class="tag geo" title="Dataset includes project coordinates">Geo</span>`;
     if (t.has_category) tags += `<span class="tag category" title="Dataset includes project categories">Cat</span>`;
     if (t.has_target) tags += `<span class="tag target" title="Dataset includes project targets">Tgt</span>`;

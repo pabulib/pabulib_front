@@ -54,11 +54,19 @@ def get_runtime_schema_statements() -> list[str]:
         statements.append(
             "ALTER TABLE pb_files ADD COLUMN is_first_addition BOOLEAN NULL"
         )
+    if "first_ingested_at" not in columns:
+        statements.append(
+            "ALTER TABLE pb_files ADD COLUMN first_ingested_at DATETIME NULL"
+        )
     if "search_text_norm" not in columns:
         statements.append("ALTER TABLE pb_files ADD COLUMN search_text_norm TEXT NULL")
     if "ix_pb_files_is_first_addition" not in indexes:
         statements.append(
             "CREATE INDEX ix_pb_files_is_first_addition ON pb_files (is_first_addition)"
+        )
+    if "ix_pb_files_first_ingested_at" not in indexes:
+        statements.append(
+            "CREATE INDEX ix_pb_files_first_ingested_at ON pb_files (first_ingested_at)"
         )
 
     return statements

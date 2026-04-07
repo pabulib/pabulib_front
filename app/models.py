@@ -83,6 +83,9 @@ class PBFile(Base):
     # Versioning & timestamps
     file_mtime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     ingested_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    first_ingested_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True, index=True
+    )
     is_first_addition: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=None, index=True
     )

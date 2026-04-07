@@ -90,7 +90,7 @@
           <label class="checkbox"><input id="requireGeo" type="checkbox"> <span class="badge geo" title="Includes project coordinates">Geo</span> Project coordinates</label>
           <label class="checkbox"><input id="requireTarget" type="checkbox"> <span class="badge target" title="Includes project targets">Tgt</span> Project targets</label>
           <label class="checkbox"><input id="requireCategory" type="checkbox"> <span class="badge category" title="Includes project categories">Cat</span> Project categories</label>
-          <label class="checkbox"><input id="requireNew" type="checkbox"> <span class="badge new" title="Added within the last 30 days">NEW</span> Added within the last 30 days</label>
+          <label class="checkbox"><input id="requireNew" type="checkbox"> <span class="badge new" title="Added within the last 6 months">NEW</span> Added within the last 6 months</label>
         </div>
         <div class="field">
           <label>Exclude datasets if</label>
@@ -227,7 +227,7 @@
             <span class="tag funded" title="All selected projects are funded">Fully funded</span>
             {% endif %}
             {% if t.is_new %}
-            <span class="tag new" title="Added within the last 30 days">NEW</span>
+            <span class="tag new" title="Added within the last 6 months">NEW</span>
             {% endif %}
             {% if t.has_geo %}
             <span class="tag geo" title="Dataset includes project coordinates">Geo</span>

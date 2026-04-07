@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 _logger = logging.getLogger(__name__)
 
-from sqlalchemy import and_, asc, desc, or_
+from sqlalchemy import and_, asc, desc, func, or_
 from ..db import get_session
 from ..models import (
     CheckerValidationCache,
@@ -91,7 +91,7 @@ _SEARCH_ORDER_COLUMNS = {
     "vote_length": PBFile.vote_length,
 }
 
-_NEW_FILE_WINDOW_DAYS = 30
+_NEW_FILE_WINDOW_DAYS = 183
 
 
 def _new_file_cutoff() -> datetime:
@@ -118,12 +118,8 @@ def build_pbfile_search_text_norm(
     )
 
 
-def compute_is_new_value(
-    is_first_addition: Optional[bool], ingested_at: Optional[datetime]
-) -> bool:
-    return bool(is_first_addition) and bool(
-        ingested_at and ingested_at >= _new_file_cutoff()
-    )
+def compute_is_new_value(first_ingested_at: Optional[datetime]) -> bool:
+    return bool(first_ingested_at and first_ingested_at >= _new_file_cutoff())
 
 
 def compute_is_first_addition(
@@ -499,6 +495,7 @@ def _row_to_tile(
         max_total_cost,
         is_first_addition,
         ingested_at,
+        first_ingested_at,
         file_mtime,
         checker_status,
         checker_error_count,
@@ -590,7 +587,7 @@ def _row_to_tile(
         "has_geo": bool(has_geo),
         "has_category": bool(has_category),
         "has_target": bool(has_target),
-        "is_new": compute_is_new_value(is_first_addition, ingested_at),
+        "is_new": compute_is_new_value(first_ingested_at or ingested_at),
         "approval_k_label": approval_k_label,
         "approval_knapsack": approval_knapsack,
         "approval_k_type": approval_k_type,
@@ -684,8 +681,8 @@ def _apply_search_filters(
         q = q.filter(PBFile.has_category == True)  # noqa: E712
     if require_new:
         q = q.filter(
-            PBFile.is_first_addition == True,  # noqa: E712
-            PBFile.ingested_at >= _new_file_cutoff(),
+            func.coalesce(PBFile.first_ingested_at, PBFile.ingested_at)
+            >= _new_file_cutoff(),
         )
         
     return q
@@ -788,6 +785,7 @@ def search_tiles(
             PBFile.max_total_cost,
             PBFile.is_first_addition,
             PBFile.ingested_at,
+            PBFile.first_ingested_at,
             PBFile.file_mtime,
             CheckerValidationCache.checker_status,
             CheckerValidationCache.error_count,
@@ -1033,6 +1031,7 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 PBFile.max_total_cost,
                 PBFile.is_first_addition,
                 PBFile.ingested_at,
+                PBFile.first_ingested_at,
                 PBFile.file_mtime,
                 CheckerValidationCache.checker_status,
                 CheckerValidationCache.error_count,

@@ -512,7 +512,7 @@ voter_id; age; sex; vote
             "datatype": null,
             "description": "",
             "additional_info": [
-                "<code>max_length</code> may differ across files from the same city or election and should reflect the effective constraint for the specific file, for example <code>max_length = min(city_max_length, num_projects)</code>."
+                "<code>max_length</code> may differ across files from the same city or election and should reflect the effective constraint for the specific file. For example, the city-wide limit may be 5, but if a given file contains only 3 projects, the effective <code>max_length</code> is 3.<br><code>max_length = min(city_max_length, num_projects)</code>"
             ],
             "if_obligatory": false
         },

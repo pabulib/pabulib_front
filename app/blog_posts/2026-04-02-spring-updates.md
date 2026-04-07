@@ -25,7 +25,7 @@ Newly added datasets are now easier to find. We introduced a **`NEW` flag** on t
 
 [https://pabulib.org/?require_new=true](https://pabulib.org/?require_new=true)
 
-At the moment, the `NEW` label is shown for 30 days after a file is added, but maybe 60 days might make more sense?
+The `NEW` label is shown for 6 months after a file is first added.
 
 ## Checker coverage for older uploads
 

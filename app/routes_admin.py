@@ -1780,6 +1780,13 @@ def upload_tiles_ingest():
             if prev:
                 prev.is_current = False
 
+            now = datetime.utcnow()
+            first_ingested_at = now
+            if prev:
+                first_ingested_at = (
+                    prev.first_ingested_at or prev.ingested_at or now
+                )
+
             rec = PBFile(
                 file_name=name,
                 path=str(target),
@@ -1814,7 +1821,8 @@ def upload_tiles_ingest():
                 max_sum_cost_per_category=tile.get("max_sum_cost_per_category"),
                 max_total_cost=tile.get("max_total_cost"),
                 file_mtime=file_mtime,
-                ingested_at=datetime.utcnow(),
+                ingested_at=now,
+                first_ingested_at=first_ingested_at,
                 is_first_addition=pb_service.compute_is_first_addition(
                     s, name, webpage_name
                 ),
@@ -3125,6 +3133,11 @@ def admin_replace_file():
         if archived_to:
             existing_rec.path = str(archived_to)
 
+        now = datetime.utcnow()
+        first_ingested_at = (
+            existing_rec.first_ingested_at or existing_rec.ingested_at or now
+        )
+
         # Create new record with updated data
         new_rec = PBFile(
             file_name=existing_name,  # Keep original filename
@@ -3164,7 +3177,8 @@ def admin_replace_file():
             max_sum_cost_per_category=tile.get("max_sum_cost_per_category"),
             max_total_cost=tile.get("max_total_cost"),
             file_mtime=file_mtime,
-            ingested_at=datetime.utcnow(),
+            ingested_at=now,
+            first_ingested_at=first_ingested_at,
             is_first_addition=False,
             is_current=True,
             supersedes_id=existing_rec.id,
