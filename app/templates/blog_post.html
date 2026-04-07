@@ -4,6 +4,50 @@
 {% block meta_description %}{{ post.summary }}{% endblock %}
 {% block meta_type %}article{% endblock %}
 {% block meta_canonical %}{{ url_for('main.blog_post', slug=post.slug, _external=True) }}{% endblock %}
+{% block meta_image %}{{ url_for('main.blog_post_og_image', slug=post.slug, _external=True) }}{% endblock %}
+{% block meta_image_alt %}Preview image for {{ post.title }}{% endblock %}
+{% block meta_image_type %}image/png{% endblock %}
+{% block meta_image_width %}1200{% endblock %}
+{% block meta_image_height %}630{% endblock %}
+{% block twitter_card %}summary_large_image{% endblock %}
+
+{% block head %}
+  <meta property="article:published_time" content="{{ post.published_on.isoformat() }}" />
+  <meta property="article:author" content="{{ post.author }}" />
+  {% for tag in post.tags %}
+  <meta property="article:tag" content="{{ tag }}" />
+  {% endfor %}
+  <link rel="alternate" type="application/atom+xml" title="Pabulib Blog feed" href="{{ url_for('main.feed_xml', _external=True) }}" />
+  <script type="application/ld+json">
+    {{ {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "headline": post.title,
+      "description": post.summary,
+      "datePublished": post.published_on.isoformat(),
+      "dateModified": post.published_on.isoformat(),
+      "author": {
+        "@type": "Person",
+        "name": post.author
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Pabulib",
+        "url": url_for('main.home', _external=True),
+        "logo": {
+          "@type": "ImageObject",
+          "url": url_for('main.static', filename='images/logo-pabulib.png', _external=True),
+          "width": 512,
+          "height": 512
+        }
+      },
+      "mainEntityOfPage": url_for('main.blog_post', slug=post.slug, _external=True),
+      "url": url_for('main.blog_post', slug=post.slug, _external=True),
+      "image": url_for('main.blog_post_og_image', slug=post.slug, _external=True),
+      "keywords": post.tags
+    }|tojson }}
+  </script>
+{% endblock %}
 
 {% block body %}
 <section class="blog-shell blog-shell-post">

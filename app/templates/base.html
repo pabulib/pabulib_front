@@ -6,9 +6,14 @@
     <title>{% block title %}Pabulib{% endblock %}</title>
     {% set meta_description %}{% block meta_description %}Pabulib is an open participatory budgeting library with searchable PB datasets, statistics, data format documentation, and tools for researchers and practitioners.{% endblock %}{% endset %}
     {% set meta_type %}{% block meta_type %}website{% endblock %}{% endset %}
-    {% set meta_image %}{% block meta_image %}{{ url_for('main.static', filename='images/uj_logo.png', _external=True) }}{% endblock %}{% endset %}
+    {% set meta_image %}{% block meta_image %}{{ url_for('main.static', filename='images/logo-pabulib.png', _external=True) }}{% endblock %}{% endset %}
+    {% set meta_image_alt %}{% block meta_image_alt %}Pabulib{% endblock %}{% endset %}
+    {% set meta_image_type %}{% block meta_image_type %}image/png{% endblock %}{% endset %}
+    {% set meta_image_width %}{% block meta_image_width %}512{% endblock %}{% endset %}
+    {% set meta_image_height %}{% block meta_image_height %}512{% endblock %}{% endset %}
     {% set meta_robots %}{% block meta_robots %}{{ 'noindex, nofollow' if (request.endpoint or '').startswith('admin.') else 'index, follow, max-image-preview:large' }}{% endblock %}{% endset %}
     {% set meta_canonical %}{% block meta_canonical %}{{ request.base_url }}{% endblock %}{% endset %}
+    {% set twitter_card %}{% block twitter_card %}summary{% endblock %}{% endset %}
     {% set page_title = self.title()|striptags|trim %}
     {% set meta_title = page_title if 'Pabulib' in page_title else page_title ~ ' – Pabulib' %}
     <meta name="description" content="{{ meta_description|striptags|trim }}" />
@@ -21,18 +26,38 @@
     <meta property="og:description" content="{{ meta_description|striptags|trim }}" />
     <meta property="og:url" content="{{ meta_canonical|striptags|trim }}" />
     <meta property="og:image" content="{{ meta_image|striptags|trim }}" />
-    <meta property="og:image:alt" content="Pabulib" />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image:secure_url" content="{{ meta_image|striptags|trim }}" />
+    {% if meta_image_type|trim %}<meta property="og:image:type" content="{{ meta_image_type|striptags|trim }}" />{% endif %}
+    {% if meta_image_width|trim %}<meta property="og:image:width" content="{{ meta_image_width|striptags|trim }}" />{% endif %}
+    {% if meta_image_height|trim %}<meta property="og:image:height" content="{{ meta_image_height|striptags|trim }}" />{% endif %}
+    <meta property="og:image:alt" content="{{ meta_image_alt|striptags|trim }}" />
+    <meta name="twitter:card" content="{{ twitter_card|striptags|trim }}" />
     <meta name="twitter:title" content="{{ meta_title }}" />
     <meta name="twitter:description" content="{{ meta_description|striptags|trim }}" />
     <meta name="twitter:image" content="{{ meta_image|striptags|trim }}" />
+    <meta name="twitter:image:alt" content="{{ meta_image_alt|striptags|trim }}" />
+    <script type="application/ld+json">
+      {{ {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Pabulib",
+        "url": url_for('main.home', _external=True),
+        "logo": {
+          "@type": "ImageObject",
+          "url": url_for('main.static', filename='images/logo-pabulib.png', _external=True),
+          "width": 512,
+          "height": 512
+        }
+      }|tojson }}
+    </script>
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('main.static', filename='favicon/apple-touch-icon.png') }}">
+    <link rel="icon" href="{{ url_for('main.static', filename='favicon/favicon.ico') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('main.static', filename='favicon/favicon-32x32.png') }}">
     <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('main.static', filename='favicon/favicon-16x16.png') }}">
-    <link rel="mask-icon" href="{{ url_for('main.static', filename='favicon/safari-pinned-tab.svg') }}" color="#5bbad5">
+    <link rel="mask-icon" href="{{ url_for('main.static', filename='favicon/safari-pinned-tab.svg') }}" color="#0F172A">
     <link rel="manifest" href="{{ url_for('main.static', filename='manifest.json') }}">
-    <meta name="msapplication-TileColor" content="#da532c">
-    <meta name="theme-color" content="#ffffff">
+    <meta name="msapplication-TileColor" content="#0F172A">
+    <meta name="theme-color" content="#0F172A">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Raleway:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">

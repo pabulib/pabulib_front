@@ -463,7 +463,7 @@ voter_id; age; sex; vote
             "description": "",
             "options": [
                 {"value": "min_length", "description": "[default: 1]"},
-                {"value": "max_length", "description": "[default: num_projects]"},
+                {"value": "max_length*", "description": "[default: num_projects]"},
                 {"value": "min_sum_cost", "description": "[default: 0]"},
                 {"value": "max_sum_cost", "description": "[default: $\\infty$]"},
             ],
@@ -475,7 +475,7 @@ voter_id; age; sex; vote
             "description": "",
             "options": [
                 {"value": "min_length", "description": "[default: 1]"},
-                {"value": "max_length", "description": "[default: num_projects]"},
+                {"value": "max_length*", "description": "[default: num_projects]"},
                 {"value": "scoring_fn", "description": "[default: Borda]"},
             ],
             "if_obligatory": false
@@ -486,7 +486,7 @@ voter_id; age; sex; vote
             "description": "",
             "options": [
                 {"value": "min_length", "description": "[default: 1]"},
-                {"value": "max_length", "description": "[default: num_projects]"},
+                {"value": "max_length*", "description": "[default: num_projects]"},
                 {"value": "min_points", "description": "[default: 0]"},
                 {"value": "max_points", "description": "[default: max_sum_points]"},
                 {"value": "min_sum_points", "description": "[default: 0]"},
@@ -500,10 +500,19 @@ voter_id; age; sex; vote
             "description": "",
             "options": [
                 {"value": "min_length", "description": "[default: 1]"},
-                {"value": "max_length", "description": "[default: num_projects]"},
+                {"value": "max_length*", "description": "[default: num_projects]"},
                 {"value": "min_points", "description": "[default: $-\\infty$]"},
                 {"value": "max_points", "description": "[default: $\\infty$]"},
                 {"value": "default_score", "description": "[default: 0]"},
+            ],
+            "if_obligatory": false
+        },
+        {
+            "field_name": "note on <code>max_length*</code>",
+            "datatype": null,
+            "description": "",
+            "additional_info": [
+                "<code>max_length</code> may differ across files from the same city or election and should reflect the effective constraint for the specific file, for example <code>max_length = min(city_max_length, num_projects)</code>."
             ],
             "if_obligatory": false
         },

@@ -294,11 +294,12 @@ html,body.preview{overflow-x:hidden;}
 
 /* Meta table */
 .pv-table-meta{table-layout:fixed;}
-.pv-table-meta th:first-child,.pv-table-meta td:first-child{width:140px;white-space:nowrap;}
+.pv-table-meta th:first-child,.pv-table-meta td:first-child{width:32%;min-width:140px;max-width:240px;}
+.pv-table-meta th:last-child,.pv-table-meta td:last-child{width:68%;}
 .pv-table-meta td{white-space:normal;word-break:break-word;overflow-wrap:anywhere;}
 
 /* Meta key column */
-.pv-key{font-weight:600;color:#1e293b;white-space:nowrap;}
+.pv-key{font-weight:600;color:#1e293b;white-space:normal;word-break:break-word;overflow-wrap:anywhere;}
 
 /* Comment lines */
 .pv-comment{padding:2px 0;font-size:12px;}
@@ -332,9 +333,10 @@ html,body.preview{overflow-x:hidden;}
   .pv-scroll{overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;padding-bottom:6px;}
   .pv-scroll .pv-table{width:max-content;min-width:100%;}
   .pv-scroll .pv-table:not(.pv-table-meta){white-space:nowrap;}
-  .pv-table-meta{width:max-content;min-width:100%;table-layout:auto;}
-  .pv-table-meta th:first-child,.pv-table-meta td:first-child{width:1%;min-width:max-content;white-space:nowrap;}
-  .pv-table-meta td:last-child{white-space:normal;min-width:240px;}
+  .pv-table-meta{width:100%;min-width:100%;table-layout:fixed;}
+  .pv-table-meta th:first-child,.pv-table-meta td:first-child{width:38%;min-width:120px;max-width:none;}
+  .pv-table-meta th:last-child,.pv-table-meta td:last-child{width:62%;min-width:0;}
+  .pv-table-meta td:last-child{white-space:normal;}
 }
 
 @media (min-width: 1024px){

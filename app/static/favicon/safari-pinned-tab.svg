@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <mask id="icon-mask">
+    <rect width="512" height="512" fill="black"/>
+    <circle cx="256" cy="256" r="224" fill="white"/>
+    <text
+      x="256"
+      y="294"
+      text-anchor="middle"
+      dominant-baseline="middle"
+      fill="black"
+      font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+      font-size="250"
+      font-weight="700"
+      letter-spacing="-0.03em"
+    >P</text>
+  </mask>
+  <rect width="512" height="512" fill="black" mask="url(#icon-mask)"/>
+</svg>

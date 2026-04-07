@@ -32,6 +32,11 @@ from werkzeug.utils import secure_filename
 import numpy as np
 from sklearn.manifold import MDS
 
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except Exception:  # pragma: no cover
+    Image = ImageDraw = ImageFont = None
+
 from .__init__ import limiter
 from .db import get_session
 from .models import CheckerValidationCache, PBFile
@@ -331,11 +336,170 @@ bp = Blueprint(
 )
 
 
+@bp.before_app_request
+def enforce_public_canonical_host():
+    """Redirect legacy hosts/protocols to a single public canonical origin."""
+    configured = (os.environ.get("PUBLIC_BASE_URL") or "").strip().rstrip("/")
+    forwarded_proto = (
+        request.headers.get("X-Forwarded-Proto")
+        or request.headers.get("X-Forwarded-Scheme")
+        or request.scheme
+    )
+    host = (request.host or "").strip().lower()
+
+    canonical_base = configured
+    if not canonical_base and host in {"pabulib.org", "www.pabulib.org"}:
+        canonical_base = "https://pabulib.org"
+
+    if not canonical_base:
+        return None
+
+    expected = canonical_base.lower()
+    current = f"{forwarded_proto.lower()}://{host}"
+    if current == expected:
+        return None
+
+    query_string = request.query_string.decode("utf-8", "ignore")
+    suffix = request.path + (f"?{query_string}" if query_string else "")
+    return redirect(f"{canonical_base}{suffix}", code=301)
+
+
 def _public_base_url() -> str:
     configured = (os.environ.get("PUBLIC_BASE_URL") or "").strip().rstrip("/")
     if configured:
         return configured
     return request.url_root.rstrip("/")
+
+
+def _wrap_social_text(text: str, max_chars: int, max_lines: int) -> List[str]:
+    clean_text = re.sub(r"\s+", " ", (text or "")).strip()
+    if not clean_text:
+        return []
+
+    words = clean_text.split(" ")
+    lines: List[str] = []
+    current = ""
+    consumed = 0
+
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if current and len(candidate) > max_chars:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+        consumed += 1
+        if len(lines) >= max_lines:
+            break
+
+    if len(lines) < max_lines and current:
+        lines.append(current)
+
+    if consumed < len(words) and lines:
+        lines[-1] = lines[-1].rstrip(" .,;:") + "..."
+
+    return lines[:max_lines]
+
+
+def _load_social_font(size: int, *, bold: bool = False):
+    if ImageFont is None:
+        return None
+
+    font_candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+    ]
+    for font_path in font_candidates:
+        if Path(font_path).exists():
+            try:
+                return ImageFont.truetype(font_path, size=size)
+            except Exception:
+                continue
+    return ImageFont.load_default()
+
+
+def _blog_social_image_png(
+    *,
+    title: str,
+    summary: str,
+    eyebrow: str,
+    tags: Optional[List[str]] = None,
+) -> bytes:
+    if Image is None or ImageDraw is None:
+        fallback_path = (
+            Path(__file__).resolve().parent / "static" / "images" / "logo-pabulib.png"
+        )
+        if fallback_path.exists():
+            return fallback_path.read_bytes()
+        raise RuntimeError("Pillow is required to generate social preview images")
+
+    image = Image.new("RGB", (1200, 630), "#0f172a")
+    draw = ImageDraw.Draw(image, "RGBA")
+
+    for y in range(630):
+        ratio = y / 629.0
+        red = int(15 + (31 - 15) * ratio)
+        green = int(23 + (122 - 23) * ratio)
+        blue = int(42 + (140 - 42) * ratio)
+        draw.line([(0, y), (1200, y)], fill=(red, green, blue))
+
+    draw.ellipse((900, -80, 1260, 280), fill=(245, 158, 11, 45))
+    draw.ellipse((760, 330, 1240, 810), fill=(56, 189, 248, 30))
+    draw.ellipse((20, 370, 340, 690), fill=(248, 250, 252, 18))
+    draw.rounded_rectangle(
+        (58, 58, 1142, 572),
+        radius=32,
+        fill=(255, 255, 255, 20),
+        outline=(255, 255, 255, 45),
+        width=2,
+    )
+
+    eyebrow_font = _load_social_font(26, bold=True)
+    title_font = _load_social_font(64, bold=True)
+    summary_font = _load_social_font(30)
+    tag_font = _load_social_font(22, bold=True)
+    brand_font = _load_social_font(34, bold=True)
+    footer_font = _load_social_font(24)
+
+    title_lines = _wrap_social_text(title, max_chars=24, max_lines=3)
+    summary_lines = _wrap_social_text(summary, max_chars=54, max_lines=3)
+    safe_tags = [tag.strip() for tag in (tags or []) if tag.strip()][:4]
+
+    draw.text((92, 92), eyebrow.upper(), font=eyebrow_font, fill="#bae6fd")
+
+    title_y = 155
+    for line in title_lines:
+        draw.text((92, title_y), line, font=title_font, fill="#ffffff")
+        title_y += 76
+
+    summary_y = 395
+    for line in summary_lines:
+        draw.text((92, summary_y), line, font=summary_font, fill="#dbeafe")
+        summary_y += 40
+
+    chip_x = 92
+    for tag in safe_tags:
+        bbox = draw.textbbox((0, 0), tag, font=tag_font)
+        chip_width = min(280, max(120, bbox[2] - bbox[0] + 44))
+        draw.rounded_rectangle(
+            (chip_x, 505, chip_x + chip_width, 547),
+            radius=21,
+            fill=(255, 255, 255, 26),
+            outline=(255, 255, 255, 40),
+            width=1,
+        )
+        draw.text((chip_x + 22, 515), tag, font=tag_font, fill="#f8fafc")
+        chip_x += chip_width + 14
+
+    draw.text((92, 528), "Pabulib", font=brand_font, fill="#f8fafc")
+
+    footer_text = "pabulib.org"
+    footer_bbox = draw.textbbox((0, 0), footer_text, font=footer_font)
+    draw.text((1020 - (footer_bbox[2] - footer_bbox[0]), 534), footer_text, font=footer_font, fill="#e2e8f0")
+
+    output = io.BytesIO()
+    image.save(output, format="PNG", optimize=True)
+    return output.getvalue()
 
 
 def _sitemap_entries() -> List[Dict[str, str]]:
@@ -378,9 +542,56 @@ def robots_txt():
         "Disallow: /download/",
         "Disallow: /preview/",
         "Disallow: /visualize/",
+        f"# Blog feed: {base}/feed.xml",
         f"Sitemap: {base}/sitemap.xml",
     ]
     return Response("\n".join(lines) + "\n", mimetype="text/plain")
+
+
+@bp.route("/feed.xml")
+def feed_xml():
+    base = _public_base_url()
+    posts = _list_blog_posts()
+    updated = (
+        datetime.combine(posts[0].published_on, datetime.min.time()).isoformat() + "Z"
+        if posts
+        else datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    )
+
+    parts = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<feed xmlns="http://www.w3.org/2005/Atom">',
+        "  <title>Pabulib Blog</title>",
+        f"  <id>{_xml_escape(base)}/blog</id>",
+        f"  <link href=\"{_xml_escape(base)}/feed.xml\" rel=\"self\" />",
+        f"  <link href=\"{_xml_escape(base)}/blog\" rel=\"alternate\" />",
+        f"  <updated>{updated}</updated>",
+        "  <author><name>Pabulib</name></author>",
+        "  <subtitle>Updates, announcements, and notes from the Pabulib project.</subtitle>",
+    ]
+
+    for post in posts:
+        post_url = f"{base}/blog/{post.slug}"
+        post_updated = datetime.combine(
+            post.published_on, datetime.min.time()
+        ).isoformat() + "Z"
+        parts.extend(
+            [
+                "  <entry>",
+                f"    <title>{_xml_escape(post.title)}</title>",
+                f"    <id>{_xml_escape(post_url)}</id>",
+                f"    <link href=\"{_xml_escape(post_url)}\" rel=\"alternate\" />",
+                f"    <updated>{post_updated}</updated>",
+                f"    <published>{post_updated}</published>",
+                f"    <summary>{_xml_escape(post.summary)}</summary>",
+                f"    <author><name>{_xml_escape(post.author)}</name></author>",
+                f"    <content type=\"html\">{_xml_escape(post.body_html)}</content>",
+                "  </entry>",
+            ]
+        )
+
+    parts.append("</feed>")
+    return Response("\n".join(parts) + "\n", mimetype="application/atom+xml")
 
 
 @bp.route("/sitemap.xml")
@@ -543,12 +754,53 @@ def blog_index():
     )
 
 
+@bp.route("/blog/og-image.png")
+def blog_index_og_image():
+    selected_tag = (request.args.get("tag") or "").strip() or None
+    title = "Pabulib Blog"
+    summary = (
+        "Updates about the Pabulib website, plus analyses, research, and tooling "
+        "related to participatory budgeting."
+    )
+    eyebrow = "Blog"
+    tags: List[str] = []
+
+    if selected_tag:
+        title = f"Pabulib Blog: {selected_tag}"
+        summary = f"Posts tagged {selected_tag} on Pabulib."
+        eyebrow = f"Blog / {selected_tag}"
+        tags = [selected_tag]
+
+    image_bytes = _blog_social_image_png(
+        title=title,
+        summary=summary,
+        eyebrow=eyebrow,
+        tags=tags,
+    )
+    return Response(image_bytes, mimetype="image/png")
+
+
 @bp.route("/blog/<slug>")
 def blog_post(slug: str):
     post = _get_blog_post(slug)
     if post is None:
         abort(404)
     return render_template("blog_post.html", post=post)
+
+
+@bp.route("/blog/<slug>/og-image.png")
+def blog_post_og_image(slug: str):
+    post = _get_blog_post(slug)
+    if post is None:
+        abort(404)
+
+    image_bytes = _blog_social_image_png(
+        title=post.title,
+        summary=post.summary,
+        eyebrow=post.published_on.strftime("%d %b %Y"),
+        tags=post.tags,
+    )
+    return Response(image_bytes, mimetype="image/png")
 
 
 @bp.route("/citations")
@@ -588,6 +840,24 @@ def citations_page():
                     {"authors": authors_str, "year": year, "title": title, "url": url}
                 )
     return render_template("citations.html", publications=publications)
+
+
+@bp.get("/publications")
+def publications_alias():
+    """Legacy alias kept for old links and search engine history."""
+    return redirect(url_for("main.citations_page"), code=301)
+
+
+@bp.get("/code")
+def code_alias():
+    """Legacy alias that now points to the public source repository."""
+    return redirect("https://github.com/pabulib/pabulib_front", code=301)
+
+
+@bp.get("/Pabulib_A_Participatory_Budgeting_Library.pdf")
+def pabulib_paper_alias():
+    """Legacy paper URL kept alive for historical links."""
+    return redirect("https://arxiv.org/pdf/2012.06539", code=301)
 
 
 @bp.route("/about")

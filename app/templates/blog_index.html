@@ -2,14 +2,44 @@
 
 {% block bodyClass %}bg-slate-50{% endblock %}
 {% block title %}Pabulib – Blog{% endblock %}
-{% block meta_description %}Read Pabulib updates, announcements, and future blog posts about participatory budgeting datasets, tooling, and research infrastructure.{% endblock %}
+{% block meta_description %}Read updates about the Pabulib website, along with analyses, research, and tooling related to participatory budgeting.{% endblock %}
 {% block meta_canonical %}{{ url_for('main.blog_index', tag=selected_tag, _external=True) if selected_tag else url_for('main.blog_index', _external=True) }}{% endblock %}
+{% block meta_image %}{{ url_for('main.blog_index_og_image', tag=selected_tag, _external=True) if selected_tag else url_for('main.blog_index_og_image', _external=True) }}{% endblock %}
+{% block meta_image_alt %}Preview image for the Pabulib blog{% endblock %}
+{% block meta_image_type %}image/png{% endblock %}
+{% block meta_image_width %}1200{% endblock %}
+{% block meta_image_height %}630{% endblock %}
+{% block twitter_card %}summary_large_image{% endblock %}
+
+{% block head %}
+  <link rel="alternate" type="application/atom+xml" title="Pabulib Blog feed" href="{{ url_for('main.feed_xml', _external=True) }}" />
+  <script type="application/ld+json">
+    {{ {
+      "@context": "https://schema.org",
+      "@type": "Blog",
+      "name": "Pabulib Blog",
+      "description": "Updates about the Pabulib website, plus analyses, research, and tooling related to participatory budgeting.",
+      "url": url_for('main.blog_index', _external=True),
+      "publisher": {
+        "@type": "Organization",
+        "name": "Pabulib",
+        "url": url_for('main.home', _external=True),
+        "logo": {
+          "@type": "ImageObject",
+          "url": url_for('main.static', filename='images/logo-pabulib.png', _external=True),
+          "width": 512,
+          "height": 512
+        }
+      }
+    }|tojson }}
+  </script>
+{% endblock %}
 
 {% block body %}
 <section class="blog-shell blog-shell-index">
   <header class="blog-index-header">
     <h1 class="blog-page-title">Blog</h1>
-    <p class="blog-page-subtitle">Mostly small updates for now, and from time to time also longer posts.</p>
+    <p class="blog-page-subtitle">Updates about the Pabulib website, and over time also analyses, research, and tooling related to participatory budgeting.</p>
   </header>
 
   {% if tags %}

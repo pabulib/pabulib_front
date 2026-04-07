@@ -691,9 +691,10 @@
 .pm-table tr:last-child td{border-bottom:none;}
 .pm-table tr:hover td{background:#f8fafc;}
 .pm-meta-table{table-layout:fixed;width:100%;}
-.pm-meta-table th:first-child,.pm-meta-table td:first-child{width:150px;}
+.pm-meta-table th:first-child,.pm-meta-table td:first-child{width:32%;min-width:140px;max-width:240px;}
+.pm-meta-table th:last-child,.pm-meta-table td:last-child{width:68%;}
 .pm-meta-table td{white-space:normal;word-break:break-word;overflow:visible;text-overflow:unset;}
-.pm-meta-key{font-weight:600;color:#1e293b;white-space:nowrap;}
+.pm-meta-key{font-weight:600;color:#1e293b;white-space:normal;word-break:break-word;overflow-wrap:anywhere;}
 .pm-note{padding:8px 16px;font-size:11px;color:#64748b;background:#f8fafc;border-top:1px solid #f1f5f9;}
 .diff-pre{max-height:320px;overflow:auto;padding:12px 16px;background:#0f172a;color:#e2e8f0;font-size:12px;line-height:1.45;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;}
 </style>

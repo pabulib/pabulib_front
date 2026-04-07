@@ -1,6 +1,6 @@
 ---
 title: A few recent updates in Pabulib
-slug: pabulib-updates-new-cities-checker-mobile
+slug: updates-new-files-checker-snapshotrepo-greedy
 author: Ignacy Janiszewski
 date: 2026-04-02
 tags: updates
@@ -29,7 +29,7 @@ At the moment, the `NEW` label is shown for 30 days after a file is added, but m
 
 ## Checker coverage for older uploads
 
-As always, we are constantly improving **Checker**. When the first files were uploaded, Checker did not exist yet, so I also ran it on the files that had already been uploaded earlier.
+As always, we are constantly improving **Checker**. When the first files were uploaded, Checker did not exist yet, so we also ran it on the files that had already been uploaded earlier.
 
 This led to two visible changes on the website.
 
@@ -39,7 +39,7 @@ Second, each file preview page now includes a dedicated Checker section with the
 
 So, Checker is no longer only something used during upload. It is now also visible for the already published files in the library.
 
-At the moment, **5 files are invalid**. They are all older Warsaw datasets, and we already asked the city for clarification.
+At the moment, **5 files are invalid**. They are all older Warszawa datasets, and we already asked the city for clarification.
 
 ## More precise greedy rule variants
 
@@ -51,13 +51,15 @@ The new variants are: `greedy-no-skip`, `greedy-threshold`, `greedy-exclusive`, 
 
 By adding these variants, we can describe the actual rule more faithfully, make the metadata cleaner, and show the differences better on the rules page.
 
+See the actual usage: [https://pabulib.org/details?tab=rules](https://pabulib.org/details?tab=rules) .
+
 ## Mobile version improvements
 
 The website should now look much nicer on mobile devices too.
 
 ## Snapshot repository with change history
 
-Following a suggestion from **Dominik Peters**, I created a new repository:
+Following a suggestion from **Dominik Peters**, we created a new repository:
 
 [https://github.com/pabulib/pabulib_files](https://github.com/pabulib/pabulib_files)
 
@@ -73,7 +75,7 @@ For now, we want to use it to share updates like this one and to show that the p
 
 ## What comes next
 
-I asked more cities from Poland and Europe for their data, so stay tuned.
+We asked more cities from Poland and Europe for their data, so stay tuned.
 
 We are also constantly changing the layout of the website. If you notice that something should be added or fixed, please reach out to us.
 
