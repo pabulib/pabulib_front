@@ -69,14 +69,21 @@
     <div class="pv-checker-groups">
       <div class="pv-checker-group-title">Warnings</div>
       {% for group in checker.warnings %}
-      <div class="pv-checker-group">
-        <div class="pv-checker-group-head">{{ group.section }}</div>
+      {% set issue_count = group["items"]|length %}
+      <details class="pv-checker-group" {% if issue_count <= 8 %}open{% endif %}>
+        <summary class="pv-checker-group-head pv-checker-group-toggle">
+          <span>{{ group.section }}</span>
+          <span class="pv-checker-group-meta">
+            <span class="pv-checker-group-count">{{ issue_count }}</span>
+            <span class="pv-checker-group-chevron" aria-hidden="true"></span>
+          </span>
+        </summary>
         <ul class="pv-checker-list">
           {% for item in group["items"] %}
           <li>{{ item }}</li>
           {% endfor %}
         </ul>
-      </div>
+      </details>
       {% endfor %}
     </div>
     {% endif %}
@@ -84,14 +91,21 @@
     <div class="pv-checker-groups">
       <div class="pv-checker-group-title">Errors</div>
       {% for group in checker.errors %}
-      <div class="pv-checker-group pv-checker-group-error">
-        <div class="pv-checker-group-head">{{ group.section }}</div>
+      {% set issue_count = group["items"]|length %}
+      <details class="pv-checker-group pv-checker-group-error" {% if issue_count <= 8 %}open{% endif %}>
+        <summary class="pv-checker-group-head pv-checker-group-toggle">
+          <span>{{ group.section }}</span>
+          <span class="pv-checker-group-meta">
+            <span class="pv-checker-group-count">{{ issue_count }}</span>
+            <span class="pv-checker-group-chevron" aria-hidden="true"></span>
+          </span>
+        </summary>
         <ul class="pv-checker-list">
           {% for item in group["items"] %}
           <li>{{ item }}</li>
           {% endfor %}
         </ul>
-      </div>
+      </details>
       {% endfor %}
     </div>
     {% endif %}
@@ -256,6 +270,14 @@ html,body.preview{overflow-x:hidden;}
 .pv-checker-group{border:1px solid #fed7aa;background:#fff7ed;border-radius:12px;padding:12px;}
 .pv-checker-group-error{border-color:#fecaca;background:#fef2f2;}
 .pv-checker-group-head{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#1e293b;margin-bottom:8px;}
+.pv-checker-group-toggle{justify-content:space-between;cursor:pointer;list-style:none;margin-bottom:0;}
+.pv-checker-group-toggle::-webkit-details-marker{display:none;}
+.pv-checker-group[open] .pv-checker-group-toggle{margin-bottom:8px;}
+.pv-checker-group-meta{display:inline-flex;align-items:center;gap:8px;margin-left:auto;padding-left:12px;}
+.pv-checker-group-count{display:inline-flex;align-items:center;justify-content:center;min-width:28px;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.75);border:1px solid rgba(251,146,60,.35);font-size:12px;line-height:1;color:#9a3412;}
+.pv-checker-group-error .pv-checker-group-count{border-color:rgba(248,113,113,.35);color:#b91c1c;}
+.pv-checker-group-chevron{width:9px;height:9px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);transition:transform .18s ease;color:#94a3b8;margin-top:-2px;}
+.pv-checker-group[open] .pv-checker-group-chevron{transform:rotate(225deg);margin-top:2px;}
 .pv-checker-list{margin:0;padding-left:18px;color:#475569;font-size:13px;line-height:1.55;}
 .pv-checker-list li + li{margin-top:4px;}
 

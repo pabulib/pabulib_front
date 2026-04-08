@@ -2,20 +2,43 @@
 
 {% block bodyClass %}admin{% endblock %}
 {% block title %}Admin Checker{% endblock %}
+{% block head %}
+<style>
+  .checker-issue-summary{list-style:none;cursor:pointer;}
+  .checker-issue-summary::-webkit-details-marker{display:none;}
+  .checker-issue-chevron{
+    width: 9px;
+    height: 9px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    transition: transform .18s ease;
+    color: #94a3b8;
+    margin-top: -2px;
+  }
+  details[open] > .checker-issue-summary .checker-issue-chevron{
+    transform: rotate(225deg);
+    margin-top: 2px;
+  }
+</style>
+{% endblock %}
 
 {% macro issue_section(title, items, tone) -%}
   {% if items %}
-  <div class="rounded-lg border p-3 {% if tone == 'error' %}border-red-200 bg-red-50/80{% elif tone == 'warning' %}border-amber-200 bg-amber-50/80{% else %}border-slate-200 bg-slate-50{% endif %}">
-    <div class="flex items-center justify-between gap-3">
+  <details class="rounded-lg border p-3 {% if tone == 'error' %}border-red-200 bg-red-50/80{% elif tone == 'warning' %}border-amber-200 bg-amber-50/80{% else %}border-slate-200 bg-slate-50{% endif %}" {% if items|length <= 8 %}open{% endif %}>
+    <summary class="checker-issue-summary flex items-center justify-between gap-3">
       <div class="text-[11px] font-semibold uppercase tracking-wide {% if tone == 'error' %}text-red-700{% elif tone == 'warning' %}text-amber-700{% else %}text-slate-700{% endif %}">{{ title }}</div>
-      <div class="rounded-full px-2 py-0.5 text-[11px] font-semibold {% if tone == 'error' %}bg-red-100 text-red-700{% elif tone == 'warning' %}bg-amber-100 text-amber-700{% else %}bg-slate-100 text-slate-700{% endif %}">{{ items|length }}</div>
-    </div>
+      <div class="flex items-center gap-2">
+        <div class="rounded-full px-2 py-0.5 text-[11px] font-semibold {% if tone == 'error' %}bg-red-100 text-red-700{% elif tone == 'warning' %}bg-amber-100 text-amber-700{% else %}bg-slate-100 text-slate-700{% endif %}">{{ items|length }}</div>
+        <span class="checker-issue-chevron" aria-hidden="true"></span>
+      </div>
+    </summary>
     <ul class="mt-2 space-y-1 text-[13px] leading-5 text-slate-700">
       {% for item in items %}
       <li>{{ item }}</li>
       {% endfor %}
     </ul>
-  </div>
+  </details>
   {% endif %}
 {%- endmacro %}
 
@@ -326,6 +349,7 @@
 </script>
 <script>
 (function(){
+  const CHECKER_COLLAPSE_THRESHOLD = 8;
   const initialState = JSON.parse(document.getElementById('checkerInitialState').textContent);
   const validationState = new Map(initialState.map(item => [Number(item.id), item]));
   const rows = Array.from(document.querySelectorAll('.checker-row'));
@@ -495,14 +519,18 @@
       ? 'border-red-200 bg-red-50/80 text-red-700'
       : 'border-amber-200 bg-amber-50/80 text-amber-700';
     const listHtml = items.map(item => `<li>${escapeHtml(item)}</li>`).join('');
+    const isOpen = items.length <= CHECKER_COLLAPSE_THRESHOLD;
     return `
-      <div class="rounded-lg border p-3 ${toneClasses}">
-        <div class="flex items-center justify-between gap-3">
+      <details class="rounded-lg border p-3 ${toneClasses}" ${isOpen ? 'open' : ''}>
+        <summary class="checker-issue-summary flex items-center justify-between gap-3">
           <div class="text-[11px] font-semibold uppercase tracking-wide">${escapeHtml(title)}</div>
-          <div class="rounded-full px-2 py-0.5 text-[11px] font-semibold ${tone === 'error' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}">${items.length}</div>
-        </div>
+          <div class="flex items-center gap-2">
+            <div class="rounded-full px-2 py-0.5 text-[11px] font-semibold ${tone === 'error' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}">${items.length}</div>
+            <span class="checker-issue-chevron" aria-hidden="true"></span>
+          </div>
+        </summary>
         <ul class="mt-2 space-y-1 text-[13px] leading-5 text-slate-700">${listHtml}</ul>
-      </div>
+      </details>
     `;
   }
 
