@@ -437,14 +437,11 @@ voter_id; age; sex; vote
                 {"value": "greedy-threshold", "description": "behaves like standard greedy, but projects are only considered if they meet a defined <kbd>min_project_score_threshold</kbd>.", "note": "This rule implies the existence of a threshold parameter, but specifying the rule explicitly aids clarity."},
                 {"value": "greedy-exclusive", "description": "handles conflicting project groups. It functions as standard greedy, but if multiple 'winning' projects conflict (e.g., are in the same exclusive zone or category), a hierarchy rule is applied (e.g., district-level projects might take precedence over city-wide ones, or vice-versa) rather than relying solely on vote count."},
                 {"value": "greedy-custom", "description": "used for special cases that do not fit the standard algorithms, such as manual budget reallocations or complex hybrid rules.", "note": "If greedy-custom is used, the specific logic or reasoning is usually explained in the <kbd>comment</kbd> field of the META section."},
-                {"value": "equalshares", "description": "Method of Equal Shares (<kbd>MES</kbd>) without completion."},
-                {"value": "equalshares-comparison", "description": "Method of Equal Shares (<kbd>MES</kbd>) followed by the comparison step with respect to voter satisfaction."},
-                {"value": "equalshares/add1", "description": "Method of Equal Shares with <kbd>Add1</kbd> completion."},
-                {"value": "equalshares/add1-comparison", "description": "Method of Equal Shares with <kbd>Add1</kbd> completion, followed by the comparison step with respect to voter satisfaction."},
+                {"value": "equalshares", "description": "Method of Equal Shares (<kbd>MES</kbd>) without completion. In <kbd>MES</kbd>, each voter starts with an equal virtual share of the budget, and a project is selected when its supporters can jointly afford it. <a href='https://equalshares.net/explanation/' target='_blank' rel='noopener noreferrer' class='text-blue-700 hover:text-blue-900' style='white-space: nowrap;'>(learn more about MES →)</a>"},
+                {"value": "equalshares-comparison", "description": "Use basic <kbd>equalshares</kbd>, and then add one extra step: compare its outcome with a greedy benchmark, and switch only if more voters prefer the greedy outcome."},
+                {"value": "equalshares/add1", "description": "Use basic <kbd>equalshares</kbd>, but if it stops too early, keep increasing each voter's virtual budget by 1 unit at a time (<kbd>Add1</kbd>) and recompute, as long as the final selected projects still fit into the real budget."},
+                {"value": "equalshares/add1-comparison", "description": "Use <kbd>equalshares/add1</kbd>, and then apply the same comparison step as above.", "note": "This was used in Wieliczka 2023, so labeling the file only as <kbd>equalshares</kbd> or only as <kbd>equalshares/add1</kbd> wouldn’t be precise enough."},
                 {"value": "unknown", "description": "either the information is not available, or there were multiple possibilities, and it is unclear which one applies."},
-            ],
-            "additional_info": [
-                "About <kbd>MES</kbd>: the <kbd>-comparison</kbd> variants refer to the comparison step with respect to voter satisfaction, and the <kbd>Add1</kbd> variants use <kbd>Add1</kbd> completion before the final winner set is determined."
             ],
             "if_obligatory": true
         },
@@ -891,7 +888,7 @@ voter_id; age; sex; vote
                 <ul style="margin-left: 1em;">
                     ${field.options ? `<ul style='list-style-type: disc; margin-left: 0;'>${field.options.map((option, idx) => {
                         const optionClass = getOptionClass(field, option);
-                        return `<li><code class='${optionClass}'>${option.value}</code>${option.description ? ` &ndash; ${option.description}` : ''}${option.note ? `<br><em style="margin-left: 1.5em;">Note: ${option.note}</em>` : ''}</li>`;
+                        return `<li><code class='${optionClass}'>${option.value}</code>${option.description ? ` &ndash; ${option.description}` : ''}${option.note ? `<div class="field-info" style="margin-left: 1.5em;"><span class='field-info-marker' aria-hidden='true'>i</span>${option.note}</div>` : ''}</li>`;
                     }).join('')}</ul>` : ''}
                     ${Array.isArray(field.example) 
                     ? `<div style=\"margin-left: 1em;\"><em>e.g.:</em> ${field.example.map((example, index) => 
