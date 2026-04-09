@@ -76,6 +76,7 @@ def create_app():
     from .db import Base, engine, ensure_runtime_schema
     from .services.pb_service import backfill_pbfile_derived_fields
 
+    ensure_runtime_schema()
     Base.metadata.create_all(engine)
     ensure_runtime_schema()
     backfill_pbfile_derived_fields()

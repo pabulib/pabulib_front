@@ -68,7 +68,9 @@ class PBFile(Base):
     # Geo info
     has_geo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     # Project metadata flags
-    has_target: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    has_beneficiaries: Mapped[bool] = mapped_column(
+        Boolean, default=False, index=True
+    )
     has_category: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
     # Meta constraints for fast filtering
@@ -156,8 +158,8 @@ class PBCategory(Base):
     )
 
 
-class PBTarget(Base):
-    __tablename__ = "pb_targets"
+class PBBeneficiary(Base):
+    __tablename__ = "pb_beneficiaries"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     file_id: Mapped[int] = mapped_column(
@@ -169,8 +171,8 @@ class PBTarget(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
 
     __table_args__ = (
-        UniqueConstraint("file_id", "norm", name="uq_pb_targets_file_norm"),
-        Index("ix_pb_targets_norm_prefix", "norm", mysql_length=191),
+        UniqueConstraint("file_id", "norm", name="uq_pb_beneficiaries_file_norm"),
+        Index("ix_pb_beneficiaries_norm_prefix", "norm", mysql_length=191),
     )
 
 

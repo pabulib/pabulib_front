@@ -16,7 +16,6 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-
 def get_checker_version() -> str | None:
     """
     Return the installed pabulib-checker version string, if available.

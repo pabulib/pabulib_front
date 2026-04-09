@@ -89,7 +89,7 @@
         <div class="field">
           <label>Show datasets with</label>
           <label class="checkbox"><input id="requireGeo" type="checkbox"> <span class="badge geo" title="Includes project coordinates">Geo</span> Project coordinates</label>
-          <label class="checkbox"><input id="requireTarget" type="checkbox"> <span class="badge target" title="Includes project targets">Tgt</span> Project targets</label>
+          <label class="checkbox"><input id="requireBeneficiaries" type="checkbox"> <span class="badge beneficiaries" title="Includes project beneficiaries">Ben</span> Project beneficiaries</label>
           <label class="checkbox"><input id="requireCategory" type="checkbox"> <span class="badge category" title="Includes project categories">Cat</span> Project categories</label>
           <label class="checkbox"><input id="requireNew" type="checkbox"> <span class="badge new" title="Added within the last 6 months">NEW</span> Added within the last 6 months</label>
         </div>
@@ -198,7 +198,7 @@
         data-experimental="{{ '1' if t.experimental else '0' }}"
   data-quality="{{ '%.6f' % t.quality }}"
   data-geo="{{ '1' if t.has_geo else '0' }}"
-  data-target="{{ '1' if t.has_target else '0' }}"
+  data-beneficiaries="{{ '1' if t.has_beneficiaries else '0' }}"
   data-category="{{ '1' if t.has_category else '0' }}"
   data-new="{{ '1' if t.is_new else '0' }}"
         data-checker-status="{{ t.checker_status|e }}"
@@ -236,8 +236,8 @@
             {% if t.has_category %}
             <span class="tag category" title="Dataset includes project categories">Cat</span>
             {% endif %}
-            {% if t.has_target %}
-            <span class="tag target" title="Dataset includes project targets">Tgt</span>
+            {% if t.has_beneficiaries %}
+            <span class="tag beneficiaries" title="Dataset includes project beneficiaries">Ben</span>
             {% endif %}
             </div>
           </div>

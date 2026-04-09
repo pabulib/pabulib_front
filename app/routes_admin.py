@@ -38,9 +38,9 @@ from .models import (
     DownloadSnapshot,
     DownloadSnapshotFile,
     PBCategory,
+    PBBeneficiary,
     PBComment,
     PBFile,
-    PBTarget,
 )
 from .services import export_service, pb_service
 from .services.pb_service import get_comment_usages as _get_comment_usages
@@ -1755,7 +1755,7 @@ def upload_tiles_ingest():
     quality = float(tile.get("quality") or 0.0)
     has_geo = bool(tile.get("has_geo") or False)
     has_category = bool(tile.get("has_category") or False)
-    has_target = bool(tile.get("has_target") or False)
+    has_beneficiaries = bool(tile.get("has_beneficiaries") or False)
 
     group_key = _build_group_key(
         country or "",
@@ -1813,7 +1813,7 @@ def upload_tiles_ingest():
                 quality=quality,
                 has_geo=has_geo,
                 has_category=has_category,
-                has_target=has_target,
+                has_beneficiaries=has_beneficiaries,
                 min_length=tile.get("min_length"),
                 max_length=tile.get("max_length"),
                 min_sum_points=tile.get("min_sum_points"),
@@ -1858,7 +1858,7 @@ def upload_tiles_ingest():
                 # Do not fail the upload if comment insert has an issue
                 pass
 
-            # Insert categories/targets for the new record (active)
+            # Insert categories/beneficiaries for the new record (active)
             try:
                 # categories: counts keyed by normalized token; use display map for value
                 cat_counts = tile.get("categories_counts") or {}
@@ -1877,16 +1877,16 @@ def upload_tiles_ingest():
                             is_active=True,
                         )
                     )
-                # targets
-                tgt_counts = tile.get("targets_counts") or {}
-                tgt_disp = tile.get("targets_display") or {}
-                for norm, cnt in tgt_counts.items():
+                # beneficiaries
+                beneficiaries_counts = tile.get("beneficiaries_counts") or {}
+                beneficiaries_display = tile.get("beneficiaries_display") or {}
+                for norm, cnt in beneficiaries_counts.items():
                     norm_str = str(norm).strip().lower()
                     if not norm_str:
                         continue
-                    display = tgt_disp.get(norm_str, norm_str)
+                    display = beneficiaries_display.get(norm_str, norm_str)
                     s.add(
-                        PBTarget(
+                        PBBeneficiary(
                             file_id=rec.id,
                             value=str(display),
                             norm=norm_str,
@@ -1895,7 +1895,7 @@ def upload_tiles_ingest():
                         )
                     )
             except Exception:
-                # non-fatal if categories/targets fail to insert
+                # non-fatal if categories/beneficiaries fail to insert
                 pass
 
             # Deactivate comments from the previous current version (if any)
@@ -1913,8 +1913,10 @@ def upload_tiles_ingest():
                 except Exception:
                     pass
                 try:
-                    s.query(PBTarget).filter(PBTarget.file_id == prev.id).update(
-                        {PBTarget.is_active: False}, synchronize_session=False
+                    s.query(PBBeneficiary).filter(
+                        PBBeneficiary.file_id == prev.id
+                    ).update(
+                        {PBBeneficiary.is_active: False}, synchronize_session=False
                     )
                 except Exception:
                     pass
@@ -3169,7 +3171,7 @@ def admin_replace_file():
             quality=float(tile.get("quality") or 0.0),
             has_geo=bool(tile.get("has_geo") or False),
             has_category=bool(tile.get("has_category") or False),
-            has_target=bool(tile.get("has_target") or False),
+            has_beneficiaries=bool(tile.get("has_beneficiaries") or False),
             min_length=tile.get("min_length"),
             max_length=tile.get("max_length"),
             min_sum_points=tile.get("min_sum_points"),
@@ -3211,7 +3213,7 @@ def admin_replace_file():
         except Exception:
             pass
 
-        # Insert categories/targets for the replacement record (active)
+        # Insert categories/beneficiaries for the replacement record (active)
         try:
             cat_counts = tile.get("categories_counts") or {}
             cat_disp = tile.get("categories_display") or {}
@@ -3229,15 +3231,15 @@ def admin_replace_file():
                         is_active=True,
                     )
                 )
-            tgt_counts = tile.get("targets_counts") or {}
-            tgt_disp = tile.get("targets_display") or {}
-            for norm, cnt in tgt_counts.items():
+            beneficiaries_counts = tile.get("beneficiaries_counts") or {}
+            beneficiaries_display = tile.get("beneficiaries_display") or {}
+            for norm, cnt in beneficiaries_counts.items():
                 norm_str = str(norm).strip().lower()
                 if not norm_str:
                     continue
-                display = tgt_disp.get(norm_str, norm_str)
+                display = beneficiaries_display.get(norm_str, norm_str)
                 s.add(
-                    PBTarget(
+                    PBBeneficiary(
                         file_id=new_rec.id,
                         value=str(display),
                         norm=norm_str,
@@ -3255,7 +3257,7 @@ def admin_replace_file():
             )
         except Exception:
             pass
-        # Deactivate categories/targets for the old record
+        # Deactivate categories/beneficiaries for the old record
         try:
             s.query(PBCategory).filter(PBCategory.file_id == existing_rec.id).update(
                 {PBCategory.is_active: False}, synchronize_session=False
@@ -3263,8 +3265,10 @@ def admin_replace_file():
         except Exception:
             pass
         try:
-            s.query(PBTarget).filter(PBTarget.file_id == existing_rec.id).update(
-                {PBTarget.is_active: False}, synchronize_session=False
+            s.query(PBBeneficiary).filter(
+                PBBeneficiary.file_id == existing_rec.id
+            ).update(
+                {PBBeneficiary.is_active: False}, synchronize_session=False
             )
         except Exception:
             pass

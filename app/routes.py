@@ -44,10 +44,10 @@ from .routes_admin import _format_preview_tile  # reuse tile formatting
 from .routes_admin import _load_upload_settings  # reuse limits
 from .services.pb_service import (
     aggregate_categories_cached as _aggregate_categories_cached,
+    aggregate_beneficiaries_cached as _aggregate_beneficiaries_cached,
     aggregate_comments_cached as _aggregate_comments_cached,
     aggregate_rules_cached as _aggregate_rules_cached,
     aggregate_statistics_cached as _aggregate_statistics_cached,
-    aggregate_targets_cached as _aggregate_targets_cached,
     get_all_current_file_paths,
     get_filter_availability as _get_filter_availability,
     get_current_file_path,
@@ -512,7 +512,7 @@ def _sitemap_entries() -> List[Dict[str, str]]:
         {"loc": f"{base}/statistics", "changefreq": "daily", "priority": "0.8", "lastmod": now_iso},
         {"loc": f"{base}/details", "changefreq": "daily", "priority": "0.7", "lastmod": now_iso},
         {"loc": f"{base}/details?tab=categories", "changefreq": "daily", "priority": "0.7", "lastmod": now_iso},
-        {"loc": f"{base}/details?tab=targets", "changefreq": "daily", "priority": "0.7", "lastmod": now_iso},
+        {"loc": f"{base}/details?tab=beneficiaries", "changefreq": "daily", "priority": "0.7", "lastmod": now_iso},
         {"loc": f"{base}/details?tab=rules", "changefreq": "daily", "priority": "0.7", "lastmod": now_iso},
         {"loc": f"{base}/comments", "changefreq": "daily", "priority": "0.7", "lastmod": now_iso},
         {"loc": f"{base}/tools", "changefreq": "monthly", "priority": "0.6", "lastmod": now_iso},
@@ -637,7 +637,10 @@ def api_search():
     exclude_experimental = request.args.get("exclude_experimental") == "true"
     
     require_geo = request.args.get("require_geo") == "true"
-    require_target = request.args.get("require_target") == "true"
+    require_beneficiaries = (
+        request.args.get("require_beneficiaries") == "true"
+        or request.args.get("require_target") == "true"
+    )
     require_category = request.args.get("require_category") == "true"
     require_new = request.args.get("require_new") == "true"
     
@@ -662,7 +665,7 @@ def api_search():
         exclude_fully=exclude_fully,
         exclude_experimental=exclude_experimental,
         require_geo=require_geo,
-        require_target=require_target,
+        require_beneficiaries=require_beneficiaries,
         require_category=require_category,
         require_new=require_new,
         order_by=order_by,
@@ -699,7 +702,10 @@ def api_options():
     exclude_experimental = request.args.get("exclude_experimental") == "true"
 
     require_geo = request.args.get("require_geo") == "true"
-    require_target = request.args.get("require_target") == "true"
+    require_beneficiaries = (
+        request.args.get("require_beneficiaries") == "true"
+        or request.args.get("require_target") == "true"
+    )
     require_category = request.args.get("require_category") == "true"
     require_new = request.args.get("require_new") == "true"
 
@@ -719,7 +725,7 @@ def api_options():
         exclude_fully=exclude_fully,
         exclude_experimental=exclude_experimental,
         require_geo=require_geo,
-        require_target=require_target,
+        require_beneficiaries=require_beneficiaries,
         require_category=require_category,
         require_new=require_new,
     )
@@ -1593,7 +1599,9 @@ def comments_page():
 @bp.route("/details")
 def details_page():
     tab = (request.args.get("tab") or "comments").strip().lower()
-    if tab not in {"comments", "categories", "targets", "rules"}:
+    if tab == "targets":
+        tab = "beneficiaries"
+    if tab not in {"comments", "categories", "beneficiaries", "rules"}:
         tab = "comments"
 
     # Always compute all three so tab switch is instant without extra calls
@@ -1614,12 +1622,12 @@ def details_page():
     ) = _aggregate_categories_cached()
 
     (
-        _map_tgt,
-        rows_targets,
-        groups_targets_country,
-        groups_targets_country_unit,
-        groups_targets_country_unit_instance,
-    ) = _aggregate_targets_cached()
+        _map_beneficiaries,
+        rows_beneficiaries,
+        groups_beneficiaries_country,
+        groups_beneficiaries_country_unit,
+        groups_beneficiaries_country_unit_instance,
+    ) = _aggregate_beneficiaries_cached()
 
     (
         _map_rules,
@@ -1644,12 +1652,12 @@ def details_page():
         groups_categories_country_unit=groups_categories_country_unit,
         groups_categories_country_unit_instance=groups_categories_country_unit_instance,
         total_categories=len(rows_categories),
-        # targets
-        rows_targets=rows_targets,
-        groups_targets_country=groups_targets_country,
-        groups_targets_country_unit=groups_targets_country_unit,
-        groups_targets_country_unit_instance=groups_targets_country_unit_instance,
-        total_targets=len(rows_targets),
+        # beneficiaries
+        rows_beneficiaries=rows_beneficiaries,
+        groups_beneficiaries_country=groups_beneficiaries_country,
+        groups_beneficiaries_country_unit=groups_beneficiaries_country_unit,
+        groups_beneficiaries_country_unit_instance=groups_beneficiaries_country_unit_instance,
+        total_beneficiaries=len(rows_beneficiaries),
         # rules
         rows_rules=rows_rules,
         groups_rules_country=groups_rules_country,
@@ -1942,14 +1950,17 @@ def download_selected_start():
     exclude_fully = request.form.get("exclude_fully") == "true"
     exclude_experimental = request.form.get("exclude_experimental") == "true"
     require_geo = request.form.get("require_geo") == "true"
-    require_target = request.form.get("require_target") == "true"
+    require_beneficiaries = (
+        request.form.get("require_beneficiaries") == "true"
+        or request.form.get("require_target") == "true"
+    )
     require_category = request.form.get("require_category") == "true"
     require_new = request.form.get("require_new") == "true"
 
     has_filters = any([
         query, country, city, year, votes_min, votes_max, projects_min, projects_max,
         len_min, len_max, vote_type, exclude_fully, exclude_experimental,
-        require_geo, require_target, require_category, require_new
+        require_geo, require_beneficiaries, require_category, require_new
     ])
 
     # If select_all is not set and no explicit names provided, reject.
@@ -2018,7 +2029,7 @@ def download_selected_start():
             exclude_fully=exclude_fully,
             exclude_experimental=exclude_experimental,
             require_geo=require_geo,
-            require_target=require_target,
+            require_beneficiaries=require_beneficiaries,
             require_category=require_category,
             require_new=require_new,
         )

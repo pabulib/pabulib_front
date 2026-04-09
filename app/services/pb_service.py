@@ -9,9 +9,9 @@ from ..db import get_session
 from ..models import (
     CheckerValidationCache,
     PBCategory,
+    PBBeneficiary,
     PBComment,
     PBFile,
-    PBTarget,
     RefreshState,
 )
 from ..utils.formatting import (
@@ -56,7 +56,7 @@ _CATEGORIES_CACHE: Optional[
         Dict[str, List[Dict[str, Any]]],
     ]
 ] = None
-_TARGETS_CACHE: Optional[
+_BENEFICIARIES_CACHE: Optional[
     Tuple[
         Dict[str, List[str]],
         List[Tuple[str, int, List[str]]],
@@ -437,12 +437,12 @@ def _db_signature() -> Optional[str]:
 
 
 def invalidate_caches() -> None:
-    global _TILES_CACHE, _COMMENTS_CACHE, _STATS_CACHE, _CATEGORIES_CACHE, _TARGETS_CACHE, _RULES_CACHE, _CITY_SLUG_CACHE
+    global _TILES_CACHE, _COMMENTS_CACHE, _STATS_CACHE, _CATEGORIES_CACHE, _BENEFICIARIES_CACHE, _RULES_CACHE, _CITY_SLUG_CACHE
     _TILES_CACHE = None
     _COMMENTS_CACHE = None
     _STATS_CACHE = None
     _CATEGORIES_CACHE = None
-    _TARGETS_CACHE = None
+    _BENEFICIARIES_CACHE = None
     _RULES_CACHE = None
     _CITY_SLUG_CACHE = None
 
@@ -479,7 +479,7 @@ def _row_to_tile(
         subunit,
         has_geo,
         has_category,
-        has_target,
+        has_beneficiaries,
         min_length,
         max_length,
         min_sum_points,
@@ -580,7 +580,7 @@ def _row_to_tile(
         "instance_raw": instance or "",
         "has_geo": bool(has_geo),
         "has_category": bool(has_category),
-        "has_target": bool(has_target),
+        "has_beneficiaries": bool(has_beneficiaries),
         "is_new": compute_is_new_value(first_ingested_at or ingested_at),
         "approval_k_label": approval_k_label,
         "approval_knapsack": approval_knapsack,
@@ -619,7 +619,7 @@ def _apply_search_filters(
     exclude_fully: bool = False,
     exclude_experimental: bool = False,
     require_geo: bool = False,
-    require_target: bool = False,
+    require_beneficiaries: bool = False,
     require_category: bool = False,
     require_new: bool = False,
 ):
@@ -669,8 +669,8 @@ def _apply_search_filters(
         
     if require_geo:
         q = q.filter(PBFile.has_geo == True)  # noqa: E712
-    if require_target:
-        q = q.filter(PBFile.has_target == True)  # noqa: E712
+    if require_beneficiaries:
+        q = q.filter(PBFile.has_beneficiaries == True)  # noqa: E712
     if require_category:
         q = q.filter(PBFile.has_category == True)  # noqa: E712
     if require_new:
@@ -697,7 +697,7 @@ def get_filtered_file_paths(
     exclude_fully: bool = False,
     exclude_experimental: bool = False,
     require_geo: bool = False,
-    require_target: bool = False,
+    require_beneficiaries: bool = False,
     require_category: bool = False,
     require_new: bool = False,
 ) -> List[Tuple[str, Path]]:
@@ -707,7 +707,7 @@ def get_filtered_file_paths(
         q = _apply_search_filters(
             q, query, country, city, year, votes_min, votes_max,
             projects_min, projects_max, len_min, len_max, vote_type,
-            exclude_fully, exclude_experimental, require_geo, require_target, require_category, require_new
+            exclude_fully, exclude_experimental, require_geo, require_beneficiaries, require_category, require_new
         )
         rows = q.all()
         
@@ -734,7 +734,7 @@ def search_tiles(
     exclude_fully: bool = False,
     exclude_experimental: bool = False,
     require_geo: bool = False,
-    require_target: bool = False,
+    require_beneficiaries: bool = False,
     require_category: bool = False,
     require_new: bool = False,
     order_by: str = "quality",
@@ -769,7 +769,7 @@ def search_tiles(
             PBFile.subunit,
             PBFile.has_geo,
             PBFile.has_category,
-            PBFile.has_target,
+            PBFile.has_beneficiaries,
             PBFile.min_length,
             PBFile.max_length,
             PBFile.min_sum_points,
@@ -806,7 +806,7 @@ def search_tiles(
             exclude_fully=exclude_fully,
             exclude_experimental=exclude_experimental,
             require_geo=require_geo,
-            require_target=require_target,
+            require_beneficiaries=require_beneficiaries,
             require_category=require_category,
             require_new=require_new,
         )
@@ -886,7 +886,7 @@ def get_filter_availability(
     exclude_fully: bool = False,
     exclude_experimental: bool = False,
     require_geo: bool = False,
-    require_target: bool = False,
+    require_beneficiaries: bool = False,
     require_category: bool = False,
     require_new: bool = False,
 ) -> Dict[str, Any]:
@@ -908,7 +908,7 @@ def get_filter_availability(
             exclude_fully=exclude_fully,
             exclude_experimental=exclude_experimental,
             require_geo=require_geo,
-            require_target=require_target,
+            require_beneficiaries=require_beneficiaries,
             require_category=require_category,
             require_new=require_new,
         )
@@ -935,7 +935,7 @@ def get_filter_availability(
             exclude_fully=exclude_fully,
             exclude_experimental=exclude_experimental,
             require_geo=require_geo,
-            require_target=require_target,
+            require_beneficiaries=require_beneficiaries,
             require_category=require_category,
             require_new=require_new,
         )
@@ -960,7 +960,7 @@ def get_filter_availability(
             exclude_fully=exclude_fully,
             exclude_experimental=exclude_experimental,
             require_geo=require_geo,
-            require_target=require_target,
+            require_beneficiaries=require_beneficiaries,
             require_category=require_category,
             require_new=require_new,
         )
@@ -1015,7 +1015,7 @@ def get_tiles_cached() -> List[Dict[str, Any]]:
                 PBFile.subunit,
                 PBFile.has_geo,
                 PBFile.has_category,
-                PBFile.has_target,
+                PBFile.has_beneficiaries,
                 PBFile.min_length,
                 PBFile.max_length,
                 PBFile.min_sum_points,
@@ -1181,14 +1181,14 @@ def _aggregate_label_cached(
     Dict[str, List[Dict[str, Any]]],
     Dict[str, List[Dict[str, Any]]],
 ]:
-    """Generic aggregator for categories/targets.
+    """Generic aggregator for categories/beneficiaries.
 
-    kind: 'category' or 'target'
+    kind: 'category' or 'beneficiary'
     Returns same tuple shape as aggregate_comments_cached.
     """
-    global _CATEGORIES_CACHE, _TARGETS_CACHE
-    table = PBCategory if kind == "category" else PBTarget
-    global_cache = _CATEGORIES_CACHE if kind == "category" else _TARGETS_CACHE
+    global _CATEGORIES_CACHE, _BENEFICIARIES_CACHE
+    table = PBCategory if kind == "category" else PBBeneficiary
+    global_cache = _CATEGORIES_CACHE if kind == "category" else _BENEFICIARIES_CACHE
     db_sig = _db_signature()
     if global_cache is not None and getattr(global_cache, "_db_sig", None) == db_sig:
         return global_cache
@@ -1290,8 +1290,8 @@ def _aggregate_label_cached(
         _CATEGORIES_CACHE = result
         return _CATEGORIES_CACHE
     else:
-        _TARGETS_CACHE = result
-        return _TARGETS_CACHE
+        _BENEFICIARIES_CACHE = result
+        return _BENEFICIARIES_CACHE
 
 
 def aggregate_categories_cached() -> Tuple[
@@ -1304,14 +1304,14 @@ def aggregate_categories_cached() -> Tuple[
     return _aggregate_label_cached("category")
 
 
-def aggregate_targets_cached() -> Tuple[
+def aggregate_beneficiaries_cached() -> Tuple[
     Dict[str, List[str]],
     List[Tuple[str, int, List[str]]],
     Dict[str, List[Dict[str, Any]]],
     Dict[str, List[Dict[str, Any]]],
     Dict[str, List[Dict[str, Any]]],
 ]:
-    return _aggregate_label_cached("target")
+    return _aggregate_label_cached("beneficiary")
 
 
 def aggregate_rules_cached() -> Tuple[

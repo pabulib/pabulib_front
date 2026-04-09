@@ -151,7 +151,7 @@
                 <ul>
                     <li><strong>META</strong> section with general metadata like the country, budget, number of votes.</li>
                     <li><strong>PROJECTS</strong> section with projects costs and possibly some other metadata regarding
-                        projects like category, target etc.</li>
+                        projects like category, beneficiaries etc.</li>
                     <li><strong>VOTES</strong> section with votes, that can be in one of the four types: approval,
                         ordinal,
                         cumulative, scoring; and optionally with metadata regarding voters like age, sex etc.</li>
@@ -650,14 +650,15 @@ voter_id; age; sex; vote
             "if_obligatory": false
         },
         {
-            "field_name": "target",
+            "field_name": "beneficiaries",
             "datatype": "list",
-            "description": "target group, beneficiaries for whom the project is intended. Separated by commas. <a href='/details?tab=targets' class='text-blue-700 hover:text-blue-900 text-xs' style='white-space: nowrap;'>(see actual targets →)</a>",
+            "description": "beneficiaries for whom the project is intended, separated by commas. <a href='/details?tab=beneficiaries' class='text-blue-700 hover:text-blue-900 text-xs' style='white-space: nowrap;'>(see actual beneficiaries →)</a>",
             "options": null,
             "example": "people with disabilities,seniors",
             "additional_info": [
-                "<em>scenario 1</em>: a project targeted at 'youth' might include building a new skateboard park.",
-                "<em>scenario 2</em>: 'Seniors' might be the target for a project that introduces fitness programs tailored to older adults in community centers.",
+                "<strong>Field rename note.</strong> As of April 2026, the <code>PROJECTS</code> field <code>target</code> has been renamed to <code>beneficiaries</code>, because <code>target</code> was too ambiguous. Legacy files that still use <code>target</code> are treated as invalid.",
+                "<em>scenario 1</em>: a project benefiting 'youth' might include building a new skateboard park.",
+                "<em>scenario 2</em>: 'seniors' might be beneficiaries of a project that introduces fitness programs tailored to older adults in community centers.",
             ],
             "if_obligatory": false
         },

@@ -2,7 +2,7 @@
 
 {% block bodyClass %}details{% endblock %}
 {% block title %}Pabulib – Details{% endblock %}
-{% block meta_description %}Inspect participatory budgeting details in Pabulib, including rules, categories, targets, vote types, and dataset structure summaries.{% endblock %}
+{% block meta_description %}Inspect participatory budgeting details in Pabulib, including rules, categories, beneficiaries, vote types, and dataset structure summaries.{% endblock %}
 {% block meta_canonical %}{{ url_for('main.details_page', tab=tab, _external=True) if tab and tab != 'comments' else url_for('main.details_page', _external=True) }}{% endblock %}
 
 {% block body %}
@@ -26,15 +26,15 @@
   {% set intro_html %}
     Extracted from <code class="details-inline-code">PROJECTS.category</code> (comma-separated or lists). Grouped by distinct token per file. <a href="{{ url_for('main.format_page') }}#category-field" class="details-link">→ View field specification</a>
   {% endset %}
-{% elif tab=='targets' %}
-  {% set rows = rows_targets %}
-  {% set groups_country = groups_targets_country %}
-  {% set groups_country_unit = groups_targets_country_unit %}
-  {% set groups_country_unit_instance = groups_targets_country_unit_instance %}
-  {% set total_items = total_targets %}
-  {% set label_name = 'Target' %}
+{% elif tab=='beneficiaries' %}
+  {% set rows = rows_beneficiaries %}
+  {% set groups_country = groups_beneficiaries_country %}
+  {% set groups_country_unit = groups_beneficiaries_country_unit %}
+  {% set groups_country_unit_instance = groups_beneficiaries_country_unit_instance %}
+  {% set total_items = total_beneficiaries %}
+  {% set label_name = 'Beneficiary' %}
   {% set intro_html %}
-    Extracted from <code class="details-inline-code">PROJECTS.target</code> (comma-separated or lists). Grouped by distinct token per file. <a href="{{ url_for('main.format_page') }}#target-field" class="details-link">→ View field specification</a>
+    Extracted from <code class="details-inline-code">PROJECTS.beneficiaries</code> (comma-separated or lists). Grouped by distinct token per file. <a href="{{ url_for('main.format_page') }}#beneficiaries-field" class="details-link">→ View field specification</a>
   {% endset %}
 {% else %}
   {% set rows = rows_rules %}
@@ -54,7 +54,7 @@
       <div>
         <h1 class="details-title">Details</h1>
       </div>
-      <div class="details-subtitle">Explore comments, categories, targets and rules used across the library</div>
+      <div class="details-subtitle">Explore comments, categories, beneficiaries and rules used across the library</div>
     </div>
 
     <div class="details-tabs-wrap">
@@ -62,7 +62,7 @@
         {% set tabs = [
           {'id':'comments','label':'Comments'},
           {'id':'categories','label':'Categories'},
-          {'id':'targets','label':'Targets'},
+          {'id':'beneficiaries','label':'Beneficiaries'},
           {'id':'rules','label':'Rules'},
         ] %}
         {% for t in tabs %}

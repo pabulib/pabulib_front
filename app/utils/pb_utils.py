@@ -261,14 +261,14 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
     # Be robust to different header casings (e.g., Latitude/LATITUDE) and ensure values are numeric.
     has_geo = False
     has_category = False
-    has_target = False
-    # Collect unique category/target tokens and their counts per file
+    has_beneficiaries = False
+    # Collect unique category/beneficiaries tokens and their counts per file
     # Use normalized keys (lowercased, trimmed) for uniqueness per file to avoid duplicates like
     # "Groen en Duurzaamheid" vs "groen en duurzaamheid".
     category_counts: dict[str, int] = {}
     category_display: dict[str, str] = {}
-    target_counts: dict[str, int] = {}
-    target_display: dict[str, str] = {}
+    beneficiaries_counts: dict[str, int] = {}
+    beneficiaries_display: dict[str, str] = {}
     try:
         if projects:
             # Helper: try to coerce a value to float using dot/comma decimal
@@ -309,7 +309,7 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
                 if lat_val is not None and lon_val is not None:
                     if -90.0 <= lat_val <= 90.0 and -180.0 <= lon_val <= 180.0:
                         has_geo = True
-                # Detect category/target presence and collect tokens (comma-separated or lists)
+                # Detect category/beneficiaries presence and collect tokens (comma-separated or lists)
                 for ck in ("category", "categories"):
                     if ck in lower_map:
                         val = lower_map[ck]
@@ -326,7 +326,7 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
                             if norm not in category_display:
                                 category_display[norm] = t
                             category_counts[norm] = category_counts.get(norm, 0) + 1
-                for tk in ("target", "targets"):
+                for tk in ("beneficiaries",):
                     if tk in lower_map:
                         val = lower_map[tk]
                         tokens: list[str] = []
@@ -337,19 +337,21 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
                             if s:
                                 tokens = [t.strip() for t in s.split(",") if t.strip()]
                         for t in tokens:
-                            has_target = True
+                            has_beneficiaries = True
                             norm = t.lower()
-                            if norm not in target_display:
-                                target_display[norm] = t
-                            target_counts[norm] = target_counts.get(norm, 0) + 1
+                            if norm not in beneficiaries_display:
+                                beneficiaries_display[norm] = t
+                            beneficiaries_counts[norm] = (
+                                beneficiaries_counts.get(norm, 0) + 1
+                            )
                 # If all flags are detected we can stop scanning further projects
-                if has_geo and has_category and has_target:
+                if has_geo and has_category and has_beneficiaries:
                     # don't break early anymore; we want full token sets across projects
                     pass
     except Exception:
         has_geo = False
         has_category = False
-        has_target = False
+        has_beneficiaries = False
 
     return {
         "file_name": pb_path.name,
@@ -378,16 +380,18 @@ def parse_pb_to_tile(pb_path: Path) -> Dict[str, Any]:
         "language": language,
         "has_geo": has_geo,
         "has_category": has_category,
-        "has_target": has_target,
+        "has_beneficiaries": has_beneficiaries,
         # Provide collected tokens for ingestion/aggregation.
-        # categories/targets arrays are human-friendly display values (first seen per norm).
+        # categories/beneficiaries arrays are human-friendly display values (first seen per norm).
         "categories": sorted(category_display.values(), key=lambda s: s.lower()),
-        "targets": sorted(target_display.values(), key=lambda s: s.lower()),
+        "beneficiaries": sorted(
+            beneficiaries_display.values(), key=lambda s: s.lower()
+        ),
         # counts keyed by normalized token; display maps normalized -> representative value
         "categories_counts": category_counts,
-        "targets_counts": target_counts,
+        "beneficiaries_counts": beneficiaries_counts,
         "categories_display": category_display,
-        "targets_display": target_display,
+        "beneficiaries_display": beneficiaries_display,
         # Meta constraints
         "min_length": int(float(str(meta.get("min_length", "")).strip())) if str(meta.get("min_length", "")).strip().replace(".", "", 1).isdigit() else None,
         "max_length": int(float(str(meta.get("max_length", "")).strip())) if str(meta.get("max_length", "")).strip().replace(".", "", 1).isdigit() else None,

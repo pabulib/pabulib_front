@@ -27,7 +27,7 @@ from typing import Any, Dict, List
 from sqlalchemy.exc import OperationalError
 
 from app.db import Base, engine, ensure_runtime_schema, get_session
-from app.models import PBCategory, PBComment, PBFile, PBTarget, RefreshState
+from app.models import PBCategory, PBBeneficiary, PBComment, PBFile, RefreshState
 from app.services import export_service
 from app.services.pb_service import (
     backfill_pbfile_derived_fields,
@@ -57,6 +57,7 @@ def ensure_db(max_tries: int = 30, sleep_secs: float = 2.0) -> None:
     while attempt < max_tries:
         attempt += 1
         try:
+            ensure_runtime_schema()
             Base.metadata.create_all(bind=engine)
             ensure_runtime_schema()
             print("[DB] Schema ready", flush=True)
@@ -185,7 +186,7 @@ def ingest_file(
         quality=tile.get("quality"),
         has_geo=bool(tile.get("has_geo") or False),
         has_category=bool(tile.get("has_category") or False),
-        has_target=bool(tile.get("has_target") or False),
+        has_beneficiaries=bool(tile.get("has_beneficiaries") or False),
         min_length=_pi(meta_lower.get("min_length")),
         max_length=_pi(meta_lower.get("max_length")),
         min_sum_points=_pi(meta_lower.get("min_sum_points")),
@@ -210,12 +211,19 @@ def ingest_file(
         ),
     )
     comments = _parse_comments_from_meta(meta)
-    # Extract per-file category/target token counts from tile (computed in parse_pb_to_tile)
+    # Extract per-file category/beneficiaries token counts from tile (computed in parse_pb_to_tile)
     cat_counts: dict[str, int] = tile.get("categories_counts") or {}
-    tgt_counts: dict[str, int] = tile.get("targets_counts") or {}
+    beneficiaries_counts: dict[str, int] = tile.get("beneficiaries_counts") or {}
     cat_display: dict[str, str] = tile.get("categories_display") or {}
-    tgt_display: dict[str, str] = tile.get("targets_display") or {}
-    return record, comments, cat_counts, tgt_counts, cat_display, tgt_display
+    beneficiaries_display: dict[str, str] = tile.get("beneficiaries_display") or {}
+    return (
+        record,
+        comments,
+        cat_counts,
+        beneficiaries_counts,
+        cat_display,
+        beneficiaries_display,
+    )
 
 
 def mark_group_current(s, group_key: str) -> None:
@@ -265,7 +273,14 @@ def refresh(full: bool = False) -> Dict[str, Any]:
                 continue
             try:
                 print(f"[LOAD] {idx}/{total} {p.name}", flush=True)
-                rec, comments, cat_counts, tgt_counts, cat_disp, tgt_disp = ingest_file(
+                (
+                    rec,
+                    comments,
+                    cat_counts,
+                    beneficiaries_counts,
+                    cat_disp,
+                    beneficiaries_display,
+                ) = ingest_file(
                     p
                 )
                 # Link supersedes when same group exists current
@@ -304,7 +319,7 @@ def refresh(full: bool = False) -> Dict[str, Any]:
                     s.add(
                         PBComment(file_id=rec.id, idx=idx_c, text=text, is_active=True)
                     )
-                # Insert categories/targets for this version (default active)
+                # Insert categories/beneficiaries for this version (default active)
                 for norm, cnt in (cat_counts or {}).items():
                     norm_str = str(norm).strip().lower()
                     if norm_str:
@@ -318,12 +333,14 @@ def refresh(full: bool = False) -> Dict[str, Any]:
                                 is_active=True,
                             )
                         )
-                for norm, cnt in (tgt_counts or {}).items():
+                for norm, cnt in (beneficiaries_counts or {}).items():
                     norm_str = str(norm).strip().lower()
                     if norm_str:
-                        display = (tgt_disp or {}).get(norm_str, norm_str)
+                        display = (beneficiaries_display or {}).get(
+                            norm_str, norm_str
+                        )
                         s.add(
-                            PBTarget(
+                            PBBeneficiary(
                                 file_id=rec.id,
                                 value=str(display),
                                 norm=norm_str,
@@ -367,8 +384,10 @@ def refresh(full: bool = False) -> Dict[str, Any]:
                         {PBCategory.is_active: bool(f.is_current)},
                         synchronize_session=False,
                     )
-                    s.query(PBTarget).filter(PBTarget.file_id == f.id).update(
-                        {PBTarget.is_active: bool(f.is_current)},
+                    s.query(PBBeneficiary).filter(
+                        PBBeneficiary.file_id == f.id
+                    ).update(
+                        {PBBeneficiary.is_active: bool(f.is_current)},
                         synchronize_session=False,
                     )
 
@@ -388,8 +407,8 @@ def refresh(full: bool = False) -> Dict[str, Any]:
             s.query(PBCategory).filter(PBCategory.file_id == mf.id).update(
                 {PBCategory.is_active: False}, synchronize_session=False
             )
-            s.query(PBTarget).filter(PBTarget.file_id == mf.id).update(
-                {PBTarget.is_active: False}, synchronize_session=False
+            s.query(PBBeneficiary).filter(PBBeneficiary.file_id == mf.id).update(
+                {PBBeneficiary.is_active: False}, synchronize_session=False
             )
 
     save_refresh_timestamp("pb", now)

@@ -43,12 +43,23 @@ SessionLocal = sessionmaker(
 
 def get_runtime_schema_statements() -> list[str]:
     inspector = inspect(engine)
-    if "pb_files" not in inspector.get_table_names():
+    table_names = set(inspector.get_table_names())
+    if "pb_files" not in table_names:
         return []
 
     columns = {col["name"] for col in inspector.get_columns("pb_files")}
     indexes = {idx["name"] for idx in inspector.get_indexes("pb_files")}
     statements = []
+
+    # Temporary April 2026 migration: rename target -> beneficiaries in DB schema.
+    if "has_target" in columns and "has_beneficiaries" not in columns:
+        statements.append(
+            "ALTER TABLE pb_files CHANGE COLUMN has_target has_beneficiaries BOOLEAN NOT NULL DEFAULT 0"
+        )
+        columns.add("has_beneficiaries")
+    if "pb_targets" in table_names and "pb_beneficiaries" not in table_names:
+        statements.append("RENAME TABLE pb_targets TO pb_beneficiaries")
+        table_names.add("pb_beneficiaries")
 
     if "is_first_addition" not in columns:
         statements.append(
@@ -60,6 +71,10 @@ def get_runtime_schema_statements() -> list[str]:
         )
     if "search_text_norm" not in columns:
         statements.append("ALTER TABLE pb_files ADD COLUMN search_text_norm TEXT NULL")
+    if "has_beneficiaries" not in columns:
+        statements.append(
+            "ALTER TABLE pb_files ADD COLUMN has_beneficiaries BOOLEAN NOT NULL DEFAULT 0"
+        )
     if "ix_pb_files_is_first_addition" not in indexes:
         statements.append(
             "CREATE INDEX ix_pb_files_is_first_addition ON pb_files (is_first_addition)"
