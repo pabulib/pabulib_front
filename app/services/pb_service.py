@@ -1,12 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-import logging
-from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional, Tuple
-
-_logger = logging.getLogger(__name__)
 
 from sqlalchemy import and_, asc, desc, func, or_
 from ..db import get_session
@@ -139,28 +135,21 @@ def compute_is_first_addition(
 
 def backfill_pbfile_derived_fields() -> None:
     with get_session() as s:
-        missing_count = (
-            s.query(PBFile.id)
-            .filter(
-                or_(
-                    PBFile.search_text_norm.is_(None),
-                    PBFile.is_first_addition.is_(None),
-                )
-            )
-            .count()
-        )
-        if missing_count <= 0:
-            return
-
         rows: List[PBFile] = (
             s.query(PBFile)
             .order_by(PBFile.ingested_at.asc(), PBFile.id.asc())
             .all()
         )
+        if not rows:
+            return
+
         seen_file_names = set()
         seen_webpage_names = set()
+        derived_changed = False
 
         for row in rows:
+            old_search_text_norm = row.search_text_norm
+            old_is_first_addition = row.is_first_addition
             row.search_text_norm = build_pbfile_search_text_norm(
                 row.file_name,
                 row.webpage_name,
@@ -176,10 +165,15 @@ def backfill_pbfile_derived_fields() -> None:
                 webpage_key and webpage_key in seen_webpage_names
             )
             row.is_first_addition = not prior_exists
+            if row.search_text_norm != old_search_text_norm or row.is_first_addition != old_is_first_addition:
+                derived_changed = True
             if file_key:
                 seen_file_names.add(file_key)
             if webpage_key:
                 seen_webpage_names.add(webpage_key)
+
+        if derived_changed:
+            invalidate_caches()
 
 
 def _slugify_text(value: str) -> str:

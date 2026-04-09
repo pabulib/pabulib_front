@@ -53,6 +53,7 @@ from .services.snapshot_service import (
 from .utils.formatting import format_budget as _format_budget
 from .utils.formatting import format_int as _format_int
 from .utils.formatting import format_vote_length as _format_vote_length
+from .utils.filename_normalization import normalize_storage_filename
 from .utils.load_pb_file import parse_pb_lines as _parse_pb_lines
 from .utils.pb_utils import build_group_key as _build_group_key
 from .utils.pb_utils import parse_pb_to_tile as _parse_pb_to_tile
@@ -1273,7 +1274,7 @@ def upload_tiles_post():
     )  # Track filenames to prevent overwriting within batch
 
     for f in files:
-        fname = secure_filename(f.filename or "").strip()
+        fname = normalize_storage_filename(f.filename or "").strip()
         if not fname:
             results.append(
                 {
@@ -1386,7 +1387,7 @@ def upload_tiles_post():
             else:
                 target_fname = fname
             # Ensure the target file name is safe for filesystem usage
-            target_fname = secure_filename(target_fname) or secure_filename(fname)
+            target_fname = normalize_storage_filename(target_fname) or normalize_storage_filename(fname)
 
             target = tmp_dir / target_fname
             if target.exists() and target.is_symlink():

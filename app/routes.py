@@ -69,6 +69,7 @@ from .services.blog_service import (
 )
 from .services.visualization_service import get_or_compute_visualization_data
 from .utils.file_helpers import is_safe_filename as _is_safe_filename
+from .utils.filename_normalization import normalize_storage_filename
 from .utils.formatting import format_int as _format_int
 from .utils.load_pb_file import parse_pb_lines
 from .utils.pb_utils import parse_comments_from_meta as _parse_comments_from_meta
@@ -1050,7 +1051,7 @@ def upload_upload_batch():
     with get_session() as s:
         for f in files:
             name = (f.filename or "").strip()
-            safe_name = secure_filename(name)
+            safe_name = normalize_storage_filename(name)
             if not safe_name or not _is_allowed_ext(safe_name):
                 results.append(
                     {
@@ -1125,7 +1126,9 @@ def upload_upload_batch():
                     webpage_name = ""
 
                 target_name = (
-                    secure_filename(f"{webpage_name}.pb") if webpage_name else safe_name
+                    normalize_storage_filename(f"{webpage_name}.pb")
+                    if webpage_name
+                    else safe_name
                 )
                 # Check if this webpage_name already exists in current library (for overwrite alert on client)
                 exists_conflict = False
@@ -1397,7 +1400,7 @@ def upload_validate():
         return jsonify({"ok": False, "error": "Invalid email"}), 400
 
     name = (f.filename or "").strip()
-    safe_name = secure_filename(name)
+    safe_name = normalize_storage_filename(name)
     if not safe_name:
         return jsonify({"ok": False, "error": "Empty filename"}), 400
     if not _is_allowed_ext(safe_name):
@@ -1469,7 +1472,7 @@ def upload_submit():
     if not _validate_email_address(email):
         return jsonify({"ok": False, "error": "Valid email required"}), 400
     name = (f.filename or "").strip()
-    safe_name = secure_filename(name)
+    safe_name = normalize_storage_filename(name)
     if not safe_name or not _is_allowed_ext(safe_name):
         return jsonify({"ok": False, "error": "Only .pb files are allowed"}), 400
 
@@ -1513,8 +1516,6 @@ def upload_submit():
             )
 
         # Copy into admin tmp with a sidecar marker containing email
-        from werkzeug.utils import secure_filename
-
         from .routes_admin import _tmp_upload_dir  # avoid cycle at top
 
         admin_tmp = _tmp_upload_dir()

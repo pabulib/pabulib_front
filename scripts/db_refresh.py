@@ -36,6 +36,7 @@ from app.services.pb_service import (
     invalidate_caches as _invalidate_pb_caches,
 )
 from app.utils.load_pb_file import parse_pb_lines
+from app.utils.filename_normalization import normalize_storage_filename
 from app.utils.pb_utils import (
     build_group_key,
     compute_webpage_name,
@@ -154,8 +155,13 @@ def ingest_file(
 
     ingested_at = datetime.utcnow()
 
+    normalized_file_name = normalize_storage_filename(
+        f"{webpage_name}.pb" if webpage_name else p.name,
+        fallback_stem=p.stem or "file",
+    )
+
     record = PBFile(
-        file_name=p.name,
+        file_name=normalized_file_name,
         path=str(p),
         country=country or None,
         unit=unit or None,
@@ -194,7 +200,7 @@ def ingest_file(
         is_current=True,
         group_key=group_key,
         search_text_norm=build_pbfile_search_text_norm(
-            p.name,
+            normalized_file_name,
             webpage_name,
             tile.get("description"),
             country,
