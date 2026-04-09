@@ -434,69 +434,76 @@ def _blog_social_image_png(
             return fallback_path.read_bytes()
         raise RuntimeError("Pillow is required to generate social preview images")
 
-    image = Image.new("RGB", (1200, 630), "#0f172a")
+    width = 1200
+    height = 630
+    image = Image.new("RGB", (width, height), "#071a2f")
     draw = ImageDraw.Draw(image, "RGBA")
 
-    for y in range(630):
-        ratio = y / 629.0
-        red = int(15 + (31 - 15) * ratio)
-        green = int(23 + (122 - 23) * ratio)
-        blue = int(42 + (140 - 42) * ratio)
-        draw.line([(0, y), (1200, y)], fill=(red, green, blue))
+    for y in range(height):
+        ratio = y / float(height - 1)
+        red = int(7 + (20 - 7) * ratio)
+        green = int(26 + (97 - 26) * ratio)
+        blue = int(47 + (145 - 47) * ratio)
+        draw.line([(0, y), (width, y)], fill=(red, green, blue))
 
-    draw.ellipse((900, -80, 1260, 280), fill=(245, 158, 11, 45))
-    draw.ellipse((760, 330, 1240, 810), fill=(56, 189, 248, 30))
-    draw.ellipse((20, 370, 340, 690), fill=(248, 250, 252, 18))
+    draw.rectangle((0, 0, width, 88), fill=(4, 11, 24, 120))
+    draw.rectangle((0, height - 84, width, height), fill=(4, 11, 24, 95))
+
+    draw.ellipse((840, -100, 1270, 330), fill=(34, 197, 94, 42))
+    draw.ellipse((820, 320, 1280, 780), fill=(14, 165, 233, 34))
+    draw.ellipse((-110, 430, 270, 810), fill=(255, 255, 255, 16))
+    draw.polygon(
+        [(760, 0), (1200, 0), (1200, 180), (990, 250)],
+        fill=(250, 204, 21, 26),
+    )
     draw.rounded_rectangle(
-        (58, 58, 1142, 572),
-        radius=32,
-        fill=(255, 255, 255, 20),
-        outline=(255, 255, 255, 45),
+        (56, 56, width - 56, height - 56),
+        radius=34,
+        fill=(255, 255, 255, 12),
+        outline=(255, 255, 255, 48),
         width=2,
     )
 
-    eyebrow_font = _load_social_font(26, bold=True)
-    title_font = _load_social_font(64, bold=True)
+    eyebrow_font = _load_social_font(24, bold=True)
+    title_font = _load_social_font(62, bold=True)
     summary_font = _load_social_font(30)
-    tag_font = _load_social_font(22, bold=True)
-    brand_font = _load_social_font(34, bold=True)
-    footer_font = _load_social_font(24)
+    brand_font = _load_social_font(32, bold=True)
+    footer_font = _load_social_font(24, bold=True)
 
-    title_lines = _wrap_social_text(title, max_chars=24, max_lines=3)
-    summary_lines = _wrap_social_text(summary, max_chars=54, max_lines=3)
-    safe_tags = [tag.strip() for tag in (tags or []) if tag.strip()][:4]
+    title_lines = _wrap_social_text(title, max_chars=30, max_lines=3)
+    summary_lines = _wrap_social_text(summary, max_chars=58, max_lines=3)
 
-    draw.text((92, 92), eyebrow.upper(), font=eyebrow_font, fill="#bae6fd")
+    accent_x = 98
+    draw.rounded_rectangle(
+        (accent_x, 116, accent_x + 170, 126),
+        radius=5,
+        fill=(34, 197, 94, 255),
+    )
+    draw.text((96, 144), eyebrow.upper(), font=eyebrow_font, fill="#bbf7d0")
 
-    title_y = 155
+    brand_text = "Pabulib"
+    brand_bbox = draw.textbbox((0, 0), brand_text, font=brand_font)
+    brand_width = brand_bbox[2] - brand_bbox[0]
+    brand_x = width - 96 - brand_width
+    draw.text((brand_x, 126), brand_text, font=brand_font, fill="#e2e8f0")
+
+    title_y = 204
     for line in title_lines:
-        draw.text((92, title_y), line, font=title_font, fill="#ffffff")
-        title_y += 76
+        draw.text((96, title_y), line, font=title_font, fill="#ffffff")
+        title_y += 72
 
-    summary_y = 395
+    summary_y = min(title_y + 20, 432)
     for line in summary_lines:
-        draw.text((92, summary_y), line, font=summary_font, fill="#dbeafe")
+        draw.text((96, summary_y), line, font=summary_font, fill="#dbeafe")
         summary_y += 40
 
-    chip_x = 92
-    for tag in safe_tags:
-        bbox = draw.textbbox((0, 0), tag, font=tag_font)
-        chip_width = min(280, max(120, bbox[2] - bbox[0] + 44))
-        draw.rounded_rectangle(
-            (chip_x, 505, chip_x + chip_width, 547),
-            radius=21,
-            fill=(255, 255, 255, 26),
-            outline=(255, 255, 255, 40),
-            width=1,
-        )
-        draw.text((chip_x + 22, 515), tag, font=tag_font, fill="#f8fafc")
-        chip_x += chip_width + 14
-
-    draw.text((92, 528), "Pabulib", font=brand_font, fill="#f8fafc")
+    footer_label = "Open participatory budgeting datasets"
+    draw.text((96, height - 92), footer_label, font=footer_font, fill="#e2e8f0")
 
     footer_text = "pabulib.org"
     footer_bbox = draw.textbbox((0, 0), footer_text, font=footer_font)
-    draw.text((1020 - (footer_bbox[2] - footer_bbox[0]), 534), footer_text, font=footer_font, fill="#e2e8f0")
+    footer_x = width - 96 - (footer_bbox[2] - footer_bbox[0])
+    draw.text((footer_x, height - 92), footer_text, font=footer_font, fill="#f8fafc")
 
     output = io.BytesIO()
     image.save(output, format="PNG", optimize=True)
