@@ -30,6 +30,7 @@ log "🚀 Setting up Pabulib production environment..."
 # Create user directories
 log "Creating directory structure..."
 mkdir -p /home/pabulib/{logs,backups,pb_files,pb_files_depreciated}
+mkdir -p /home/pabulib/pabulib_front/var/waiting_room/{admin,public}
 
 PROJECT_DIR=/home/pabulib/pabulib_front
 CONFIG_DIR="$PROJECT_DIR/config"
@@ -81,6 +82,7 @@ sudo cp /home/pabulib/pabulib_front/deployment/pabulib.logrotate /etc/logrotate.
 # Set proper permissions
 sudo chown -R pabulib:pabulib /home/pabulib/
 chmod 755 /home/pabulib/{logs,backups,pb_files,pb_files_depreciated}
+chmod 755 /home/pabulib/pabulib_front/var /home/pabulib/pabulib_front/var/waiting_room /home/pabulib/pabulib_front/var/waiting_room/admin /home/pabulib/pabulib_front/var/waiting_room/public
 
 success "🎉 Setup completed successfully!"
 

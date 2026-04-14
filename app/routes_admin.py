@@ -67,7 +67,7 @@ from .utils.security import (
     rotate_admin_csrf_token,
 )
 from .utils.upload_security import (
-    cleanup_stale_files,
+    admin_waiting_room_dir,
     detect_formula_injection_cells,
     inspect_uploaded_file,
     is_safe_regular_file,
@@ -979,15 +979,30 @@ def admin_comments():
 
 
 def _tmp_upload_dir() -> Path:
-    # Use container/host temp dir with a stable subfolder
-    base = Path(tempfile.gettempdir()) / "pabulib_uploads"
-    base.mkdir(parents=True, exist_ok=True)
-    cleanup_stale_files(
-        base,
-        max_age_seconds=int(os.environ.get("ADMIN_UPLOAD_TTL_HOURS", "168")) * 3600,
-        skip_names={SETTINGS_FILENAME},
-    )
-    return base
+    return admin_waiting_room_dir()
+
+
+def _tmp_validation_cache_path(name: str) -> Path:
+    return _tmp_upload_dir() / f".{name}.validation.json"
+
+
+def _tmp_public_marker_path(name: str) -> Path:
+    return _tmp_upload_dir() / f".{name}.public.json"
+
+
+def _load_tmp_validation_cache(file_path: Path) -> Optional[Dict[str, Any]]:
+    validation_cache_path = _tmp_validation_cache_path(file_path.name)
+    try:
+        if (
+            validation_cache_path.exists()
+            and validation_cache_path.stat().st_mtime >= file_path.stat().st_mtime
+        ):
+            with open(validation_cache_path, "r") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+    return None
 
 
 def _extract_deletion_timestamp(file_path: str) -> Optional[datetime]:
@@ -1027,7 +1042,7 @@ def _list_tmp_tiles() -> list[dict]:
             try:
                 import json
 
-                marker_path = tmp_dir / f".{p.name}.public.json"
+                marker_path = _tmp_public_marker_path(p.name)
                 if marker_path.exists():
                     with open(marker_path, "r") as mf:
                         marker = json.load(mf) or {}
@@ -1043,19 +1058,8 @@ def _list_tmp_tiles() -> list[dict]:
                 tile_data["submitted_email"] = ""
 
             # Add validation - check for cached validation first
-            validation_cache_path = tmp_dir / f".{p.name}.validation.json"
-            validation = None
-
-            # Use cached validation if it exists and is newer than the file
-            if validation_cache_path.exists():
-                try:
-                    if validation_cache_path.stat().st_mtime >= p.stat().st_mtime:
-                        import json
-
-                        with open(validation_cache_path, "r") as f:
-                            validation = json.load(f)
-                except Exception:
-                    pass  # If cache read fails, re-validate
+            validation_cache_path = _tmp_validation_cache_path(p.name)
+            validation = _load_tmp_validation_cache(p)
 
             # If no cached validation, validate and cache it
             if validation is None:
@@ -1424,10 +1428,8 @@ def upload_tiles_post():
                     # force_replace=True: remove old file and track as replaced
                     old_file_path = tmp_dir / existing_filename
                     old_file_path.unlink(missing_ok=True)
-                    validation_cache_path = (
-                        tmp_dir / f".{existing_filename}.validation.json"
-                    )
-                    validation_cache_path.unlink(missing_ok=True)
+                    _tmp_validation_cache_path(existing_filename).unlink(missing_ok=True)
+                    _tmp_public_marker_path(existing_filename).unlink(missing_ok=True)
                     current_batch_filenames.discard(existing_filename)
                     overwrites_replaced.append(uploaded_webpage_name)
 
@@ -1572,6 +1574,9 @@ def upload_tiles_ingest():
 
     logger = current_app.logger
     logger.debug("Ingest requested for %s (tmp: %s)", name, tmp_path)
+
+    tmp_validation = _load_tmp_validation_cache(tmp_path)
+    tmp_public_marker = _tmp_public_marker_path(name)
 
     # Parse at tmp first; if parsing fails, don't move
     try:
@@ -1843,6 +1848,17 @@ def upload_tiles_ingest():
             s.add(rec)
             s.flush()  # ensure rec.id is available
 
+            if tmp_validation is not None:
+                issue_counts = count_issues(tmp_validation)
+                _upsert_db_validation_cache(
+                    s,
+                    rec,
+                    tmp_validation,
+                    _checker_status_from_validation(tmp_validation),
+                    issue_counts["errors"],
+                    issue_counts["warnings"],
+                )
+
             # Insert comments for the new record (active)
             try:
                 comments = tile.get("comments") or []
@@ -1934,6 +1950,15 @@ def upload_tiles_ingest():
 
     try:
         pb_service.invalidate_caches()
+    except Exception:
+        pass
+
+    try:
+        _tmp_validation_cache_path(name).unlink(missing_ok=True)
+    except Exception:
+        pass
+    try:
+        tmp_public_marker.unlink(missing_ok=True)
     except Exception:
         pass
 
@@ -2036,11 +2061,11 @@ def upload_tiles_delete():
             try:
                 p.unlink()
                 # Also remove the cached validation file if it exists
-                validation_cache_path = tmp_dir / f".{name}.validation.json"
+                validation_cache_path = _tmp_validation_cache_path(name)
                 if validation_cache_path.exists():
                     validation_cache_path.unlink()
                 # Remove public submission sidecar if present
-                public_marker = tmp_dir / f".{name}.public.json"
+                public_marker = _tmp_public_marker_path(name)
                 if public_marker.exists():
                     public_marker.unlink()
                 deleted_count += 1
@@ -2330,18 +2355,8 @@ def upload_tiles_validate():
         current_app.logger.info(f"Processing file: `{webpage_name}`...")
 
         # Check for cached validation first
-        validation_cache_path = tmp_dir / f".{fname}.validation.json"
-        validation = None
-
-        if validation_cache_path.exists():
-            try:
-                if validation_cache_path.stat().st_mtime >= file_path.stat().st_mtime:
-                    import json
-
-                    with open(validation_cache_path, "r") as f:
-                        validation = json.load(f)
-            except Exception:
-                pass
+        validation_cache_path = _tmp_validation_cache_path(fname)
+        validation = _load_tmp_validation_cache(file_path)
 
         # If no cached validation, validate now
         if validation is None:
@@ -2420,18 +2435,8 @@ def upload_tiles_validate_single():
         )
 
     # Check for cached validation first
-    validation_cache_path = tmp_dir / f".{fname}.validation.json"
-    validation = None
-
-    if validation_cache_path.exists():
-        try:
-            if validation_cache_path.stat().st_mtime >= file_path.stat().st_mtime:
-                import json
-
-                with open(validation_cache_path, "r") as f:
-                    validation = json.load(f)
-        except Exception:
-            pass
+    validation_cache_path = _tmp_validation_cache_path(fname)
+    validation = _load_tmp_validation_cache(file_path)
 
     # If no cached validation, validate now
     if validation is None:
@@ -2471,7 +2476,8 @@ def upload_tiles_validate_single():
 def upload_tiles_preview_data():
     """Return parsed preview data (meta, projects, votes) for a tmp file.
     Expects JSON: {"file": "filename.pb"}
-    Returns meta_items, project table (first 5 rows), vote table (first 5 rows).
+    Optional JSON keys: "project_limit", "vote_limit" (integer or "all").
+    Returns meta_items plus project/vote table rows limited per request.
     """
     if not request.is_json:
         return jsonify({"error": "JSON required"}), 400
@@ -2508,7 +2514,18 @@ def upload_tiles_preview_data():
                 seen.add(k)
         return cols
 
-    PREVIEW_ROWS = 5
+    DEFAULT_PREVIEW_ROWS = 5
+
+    def _parse_limit(value: Any, total_rows: int) -> int:
+        if total_rows <= 0:
+            return 0
+        if isinstance(value, str) and value.strip().lower() == "all":
+            return total_rows
+        try:
+            parsed = int(value)
+        except Exception:
+            parsed = DEFAULT_PREVIEW_ROWS
+        return max(1, min(parsed, total_rows))
 
     # ---- META ----
     preferred_meta = [
@@ -2553,16 +2570,22 @@ def upload_tiles_preview_data():
     def _serialise_row(row: dict, cols: list) -> list:
         return [str(row.get(c, "")) for c in cols]
 
+    project_limit = _parse_limit(data.get("project_limit"), len(project_rows_raw))
+    vote_limit = _parse_limit(data.get("vote_limit"), len(vote_rows_raw))
+
     return jsonify({
         "ok": True,
         "file": fname,
+        "default_preview_rows": DEFAULT_PREVIEW_ROWS,
         "meta_items": [[str(k), str(v)] for k, v in meta_items],
         "project_columns": project_columns,
-        "project_rows": [_serialise_row(r, project_columns) for r in project_rows_raw[:PREVIEW_ROWS]],
+        "project_rows": [_serialise_row(r, project_columns) for r in project_rows_raw[:project_limit]],
         "total_projects": len(project_rows_raw),
+        "project_limit": project_limit,
         "vote_columns": vote_columns,
-        "vote_rows": [_serialise_row(r, vote_columns) for r in vote_rows_raw[:PREVIEW_ROWS]],
+        "vote_rows": [_serialise_row(r, vote_columns) for r in vote_rows_raw[:vote_limit]],
         "total_votes": len(vote_rows_raw),
+        "vote_limit": vote_limit,
     })
 
 

@@ -41,15 +41,19 @@
       <div class="pv-checker-main">
         <div class="pv-checker-kicker">
           <span class="pv-checker-kicker-label">Checker</span>
-          {% if checker.version %}
-          <span class="pv-checker-kicker-version">v. {{ checker.version }}</span>
-          {% endif %}
         </div>
         <div class="pv-checker-status-row">
           <span class="pv-checker-badge pv-checker-{{ checker.status }}">{{ checker.status_label }}</span>
           <div class="pv-checker-meta-group">
             {% if checker.checked_at %}
-            <span class="pv-checker-meta">Checked: {{ checker.checked_at }}</span>
+            <span class="pv-checker-meta">
+              Checked: {{ checker.checked_at }}
+            </span>
+            {% endif %}
+            {% if checker.checked_version %}
+            <span class="pv-checker-meta">
+              Checked with version v. {{ checker.checked_version }}{% if checker.current_version %} ({% if checker.version_matches_current %}current{% else %}latest: v. {{ checker.current_version }}{% endif %}){% endif %}
+            </span>
             {% endif %}
           </div>
         </div>
@@ -251,7 +255,6 @@ html,body.preview{overflow-x:hidden;}
 .pv-checker-main{min-width:0;flex:1 1 auto;}
 .pv-checker-kicker{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
 .pv-checker-kicker-label{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#64748b;}
-.pv-checker-kicker-version{font-size:13px;font-weight:500;color:#94a3b8;font-style:normal;font-family:inherit;letter-spacing:0;}
 .pv-checker-status-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 .pv-checker-meta-group{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .pv-checker-badge{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800;border:1px solid transparent;white-space:nowrap;}

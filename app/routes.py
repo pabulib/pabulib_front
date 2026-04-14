@@ -3,6 +3,7 @@ import json
 import mimetypes
 import os
 import re
+import subprocess
 import tempfile
 import threading
 import uuid
@@ -81,6 +82,7 @@ from .utils.upload_security import (
     inspect_uploaded_file as _inspect_uploaded_file,
     is_allowed_extension as _is_allowed_ext,
     is_safe_regular_file as _is_safe_regular_file,
+    public_waiting_room_base_dir as _public_waiting_room_base_dir,
     public_tmp_dir as _public_tmp_dir,
     validate_email_address as _validate_email_address,
 )
@@ -409,6 +411,9 @@ def _load_social_font(size: int, *, bold: bool = False):
     font_candidates = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
     ]
     for font_path in font_candidates:
         if Path(font_path).exists():
@@ -416,6 +421,23 @@ def _load_social_font(size: int, *, bold: bool = False):
                 return ImageFont.truetype(font_path, size=size)
             except Exception:
                 continue
+
+    # As a final system-font fallback, ask fontconfig for a usable sans-serif font.
+    font_family = "sans:style=Bold" if bold else "sans"
+    try:
+        resolved_font = (
+            subprocess.check_output(
+                ["fc-match", "-f", "%{file}\n", font_family],
+                text=True,
+                stderr=subprocess.DEVNULL,
+            )
+            .strip()
+        )
+        if resolved_font and Path(resolved_font).exists():
+            return ImageFont.truetype(resolved_font, size=size)
+    except Exception:
+        pass
+
     return ImageFont.load_default()
 
 
@@ -920,9 +942,7 @@ def _public_session_dir() -> Path:
     if not key:
         key = uuid.uuid4().hex
         session["public_tmp_key"] = key
-    # Base folder for public uploads in temp dir
-    base = Path(tempfile.gettempdir()) / "pabulib_public"
-    base.mkdir(parents=True, exist_ok=True)
+    base = _public_waiting_room_base_dir()
     _cleanup_stale_subdirs(
         base,
         max_age_seconds=int(os.environ.get("PUBLIC_UPLOAD_TTL_HOURS", "24")) * 3600,
@@ -1313,6 +1333,13 @@ def upload_submit_selected():
         try:
             # Copy bytes
             dest.write_bytes(src.read_bytes())
+            admin_validation_cache_path = admin_tmp / f".{dest.name}.validation.json"
+            try:
+                admin_validation_cache_path.write_text(
+                    json.dumps(validation), encoding="utf-8"
+                )
+            except Exception:
+                pass
             # Write sidecar marker with contributor email
             marker = {"public_submission": True, "email": email}
             (admin_tmp / f".{dest.name}.public.json").write_text(
@@ -1549,9 +1576,13 @@ def upload_submit():
         # Write file
         content = tmp_path.read_bytes()
         dest.write_bytes(content)
+        try:
+            (admin_tmp / f".{dest.name}.validation.json").write_text(
+                json.dumps(validation), encoding="utf-8"
+            )
+        except Exception:
+            pass
         # Write marker file for admin UI (e.g., .<filename>.public.json)
-        import json
-
         marker = {
             "public_submission": True,
             "email": email,
@@ -2678,6 +2709,14 @@ def preview_file(filename: str):
         cache_row.checker_status if checker_validation and cache_row is not None else None
     )
     checker_status = checker_public_status(checker_internal_status)
+    current_checker_version = None
+    try:
+        current_checker_version = _get_checker_version()
+    except Exception:
+        current_checker_version = None
+    checked_checker_version = (
+        cache_row.checker_version if checker_validation and cache_row else None
+    )
     checker_counts = (
         count_issues(checker_validation)
         if checker_validation
@@ -2686,7 +2725,14 @@ def preview_file(filename: str):
     checker_info = {
         "status": checker_status,
         "status_label": checker_public_label(checker_status),
-        "version": cache_row.checker_version if checker_validation and cache_row else None,
+        "version": checked_checker_version,
+        "checked_version": checked_checker_version,
+        "current_version": current_checker_version,
+        "version_matches_current": bool(
+            checked_checker_version
+            and current_checker_version
+            and checked_checker_version == current_checker_version
+        ),
         "checked_at": (
             cache_row.checked_at.strftime("%d/%m/%Y")
             if checker_validation and cache_row and cache_row.checked_at

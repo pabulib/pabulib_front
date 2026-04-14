@@ -73,16 +73,18 @@ setup_directories() {
     mkdir -p "$BACKUP_DIR"
     mkdir -p "$PROJECT_DIR/pb_files"
     mkdir -p "$PROJECT_DIR/pb_files_depreciated"
+    mkdir -p "$PROJECT_DIR/var/waiting_room/admin"
+    mkdir -p "$PROJECT_DIR/var/waiting_room/public"
     
     # Set permissions only if we have permission to do so (non-fatal)
     chmod 755 "$LOG_DIR" "$BACKUP_DIR" 2>/dev/null || true
-    chmod 755 "$PROJECT_DIR/pb_files" "$PROJECT_DIR/pb_files_depreciated" 2>/dev/null || true
+    chmod 755 "$PROJECT_DIR/pb_files" "$PROJECT_DIR/pb_files_depreciated" "$PROJECT_DIR/var" "$PROJECT_DIR/var/waiting_room" "$PROJECT_DIR/var/waiting_room/admin" "$PROJECT_DIR/var/waiting_room/public" 2>/dev/null || true
     
     # Try to set ownership, but don't fail if we can't (non-fatal)
-    chown -R $(whoami):$(whoami) "$PROJECT_DIR/pb_files" "$PROJECT_DIR/pb_files_depreciated" 2>/dev/null || true
+    chown -R $(whoami):$(whoami) "$PROJECT_DIR/pb_files" "$PROJECT_DIR/pb_files_depreciated" "$PROJECT_DIR/var/waiting_room" 2>/dev/null || true
     
     # Check if critical directories are writable
-    for d in "$LOG_DIR" "$BACKUP_DIR" "$PROJECT_DIR/pb_files" "$PROJECT_DIR/pb_files_depreciated"; do
+    for d in "$LOG_DIR" "$BACKUP_DIR" "$PROJECT_DIR/pb_files" "$PROJECT_DIR/pb_files_depreciated" "$PROJECT_DIR/var/waiting_room/admin" "$PROJECT_DIR/var/waiting_room/public"; do
         if [ ! -w "$d" ]; then
             warning "Directory $d is not writable by $(whoami). You may need to adjust permissions or ownership."
         fi

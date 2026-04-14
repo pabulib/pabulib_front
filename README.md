@@ -19,7 +19,7 @@ Local development (`python run_locally.py` wraps Docker Compose for you):
 - `docker/` — Dockerfile and compose stacks
 - `deployment/` — Production scripts, systemd service, logrotate, nginx config
 - `docs/` — Project documentation (`CONTRIBUTING.md`, `bib.bib`, etc.)
-- `pb_files/`, `pb_files_depreciated/`, `cache/`, `scripts/` — Data, archives, cache, and utility scripts
+- `pb_files/`, `pb_files_depreciated/`, `var/waiting_room/`, `cache/`, `scripts/` — Data, archives, waiting room, cache, and utility scripts
 - Root contains `README.md`, `requirements.txt`, `run.py`, and other runtime essentials
 
 ## Services
@@ -43,6 +43,7 @@ Local development (`python run_locally.py` wraps Docker Compose for you):
 ## Configuration
 
 - PB files path (host): set PB_FILES_DIR in your shell or `config/.env` to the local folder with .pb files. Docker binds it to /app/pb_files inside the container. Default is ./pb_files.
+- Waiting-room paths (host): set `ADMIN_UPLOAD_HOST_DIR` and `PUBLIC_UPLOAD_HOST_DIR` in `config/.env` if you want to override them. Docker binds them to `/app/waiting_room/admin` and `/app/waiting_room/public` inside the container. Defaults live under `./var/waiting_room/`.
 - Other common env: FLASK_PORT, REFRESH_FULL, MYSQL_*.
 
 To re-ingest after adding files: docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml exec web python -m scripts.db_refresh

@@ -92,6 +92,16 @@ config/.env
 cache/*
 !cache/.gitkeep
 
+# Waiting room storage (keep directories, ignore uploaded contents)
+var/waiting_room/*
+!var/waiting_room/.gitkeep
+!var/waiting_room/admin/
+!var/waiting_room/public/
+var/waiting_room/admin/*
+var/waiting_room/public/*
+!var/waiting_room/admin/.gitkeep
+!var/waiting_room/public/.gitkeep
+
 
 # Codex
 .codex

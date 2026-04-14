@@ -82,7 +82,10 @@
           <h1 class="text-3xl font-bold text-slate-800">Admin – Upload Tiles</h1>
           <span class="text-sm text-slate-500">{{ count or 0 }} PB files</span>
         </div>
-  <p class="text-gray-600 mb-6">These are temporary uploads. You can upload them as new files or remove them from the temporary area.</p>
+  <p class="text-gray-600 mb-3">These are temporary uploads. You can upload them as new files or remove them from the temporary area.</p>
+  <div class="mb-6 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+    The waiting room is stored persistently on disk, so uploaded files survive container restarts. Files and checker sidecars are still cleaned up when you delete them here, and untouched abandoned waiting-room files are auto-cleared later by TTL cleanup.
+  </div>
 
         <!-- How it works / Checker info -->
         {% include 'partials/upload_how_it_works.html' %}
@@ -595,14 +598,29 @@
 
   function esc(s){ const d=document.createElement('div'); d.textContent=String(s??''); return d.innerHTML; }
 
-  function buildTable(columns, rows, totalCount, label){
+  const previewState = {
+    file: null,
+    title: null,
+    projectLimit: 5,
+    voteLimit: 5,
+    defaultPreviewRows: 5,
+  };
+
+  function buildTable(sectionKey, columns, rows, totalCount, label, currentLimit, defaultPreviewRows){
     const previewCount = rows.length;
     const truncated = totalCount > previewCount;
+    const canReset = currentLimit > defaultPreviewRows && totalCount > defaultPreviewRows;
+    const nextLimit = Math.min(totalCount, Math.max(currentLimit + 20, defaultPreviewRows + 20));
     let html = `<div class="pm-section">
       <div class="pm-section-head">
         <span class="pm-section-title">${esc(label)}</span>
         <span class="pm-section-cnt">${totalCount.toLocaleString()}</span>
         ${truncated ? `<span class="pm-badge-yellow">first ${previewCount} rows</span>` : ''}
+        ${(truncated || canReset) ? `<div class="pm-actions">
+          ${truncated ? `<button type="button" class="pm-action-btn" data-preview-action="more" data-preview-section="${esc(sectionKey)}" data-preview-limit="${nextLimit}">Show more</button>` : ''}
+          ${truncated ? `<button type="button" class="pm-action-btn" data-preview-action="all" data-preview-section="${esc(sectionKey)}" data-preview-limit="all">Show all</button>` : ''}
+          ${canReset ? `<button type="button" class="pm-action-btn pm-action-btn-muted" data-preview-action="less" data-preview-section="${esc(sectionKey)}" data-preview-limit="${defaultPreviewRows}">Show less</button>` : ''}
+        </div>` : ''}
       </div>
       <div class="pm-scroll">
         <table class="pm-table">
@@ -612,7 +630,11 @@
       html += '<tr>' + row.map(v=>`<td>${esc(v)}</td>`).join('') + '</tr>';
     }
     html += `</tbody></table></div>`;
-    if(truncated) html += `<div class="pm-note">Showing first ${previewCount} of ${totalCount.toLocaleString()} rows.</div>`;
+    if(truncated) {
+      html += `<div class="pm-note">Showing first ${previewCount} of ${totalCount.toLocaleString()} rows.</div>`;
+    } else if(canReset) {
+      html += `<div class="pm-note">Showing all ${totalCount.toLocaleString()} rows.</div>`;
+    }
     html += '</div>';
     return html;
   }
@@ -632,9 +654,40 @@
     </div>`;
   }
 
+  function renderPreview(data){
+    previewState.defaultPreviewRows = data.default_preview_rows || 5;
+    previewState.projectLimit = data.project_limit || previewState.defaultPreviewRows;
+    previewState.voteLimit = data.vote_limit || previewState.defaultPreviewRows;
+    content.innerHTML =
+      buildMetaTable(data.meta_items) +
+      buildTable('projects', data.project_columns, data.project_rows, data.total_projects, 'Projects', previewState.projectLimit, previewState.defaultPreviewRows) +
+      buildTable('votes', data.vote_columns, data.vote_rows, data.total_votes, 'Votes', previewState.voteLimit, previewState.defaultPreviewRows);
+  }
+
+  async function loadPreviewData(){
+    const resp = await fetch("/admin/upload/preview_data", {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-Requested-With':'fetch'},
+      body: JSON.stringify({
+        file: previewState.file,
+        project_limit: previewState.projectLimit,
+        vote_limit: previewState.voteLimit,
+      })
+    });
+    const data = await resp.json();
+    if(!resp.ok || !data.ok){
+      throw new Error(data.error || 'Server error');
+    }
+    renderPreview(data);
+  }
+
   async function openPreview(fname, titleText){
     modal.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
+    previewState.file = fname;
+    previewState.title = titleText || fname;
+    previewState.projectLimit = previewState.defaultPreviewRows;
+    previewState.voteLimit = previewState.defaultPreviewRows;
     title.textContent = titleText || fname;
     fileEl.textContent = fname;
     loading.classList.remove('hidden');
@@ -643,19 +696,7 @@
     errEl.classList.add('hidden');
 
     try {
-      const resp = await fetch("/admin/upload/preview_data", {
-        method: 'POST',
-        headers: {'Content-Type':'application/json','X-Requested-With':'fetch'},
-        body: JSON.stringify({file: fname})
-      });
-      const data = await resp.json();
-      if(!resp.ok || !data.ok){
-        throw new Error(data.error || 'Server error');
-      }
-      content.innerHTML =
-        buildMetaTable(data.meta_items) +
-        buildTable(data.project_columns, data.project_rows, data.total_projects, 'Projects') +
-        buildTable(data.vote_columns, data.vote_rows, data.total_votes, 'Votes');
+      await loadPreviewData();
       loading.classList.add('hidden');
       content.classList.remove('hidden');
     } catch(err){
@@ -674,6 +715,34 @@
       openPreview(fname, titleText);
     });
   });
+
+  content.addEventListener('click', async function(e){
+    const btn = e.target.closest('[data-preview-action]');
+    if(!btn || !previewState.file) return;
+    e.preventDefault();
+    const section = btn.dataset.previewSection;
+    const limit = btn.dataset.previewLimit;
+    if(section === 'projects'){
+      previewState.projectLimit = limit === 'all' ? 'all' : parseInt(limit, 10) || previewState.defaultPreviewRows;
+    } else if(section === 'votes'){
+      previewState.voteLimit = limit === 'all' ? 'all' : parseInt(limit, 10) || previewState.defaultPreviewRows;
+    } else {
+      return;
+    }
+
+    loading.classList.remove('hidden');
+    content.classList.add('hidden');
+    errEl.classList.add('hidden');
+    try {
+      await loadPreviewData();
+      loading.classList.add('hidden');
+      content.classList.remove('hidden');
+    } catch(err){
+      loading.classList.add('hidden');
+      errEl.textContent = 'Failed to load preview: ' + (err.message||err);
+      errEl.classList.remove('hidden');
+    }
+  });
 })();
 </script>
 <style>
@@ -683,6 +752,10 @@
 .pm-section-title{font-size:14px;font-weight:700;color:#1e293b;}
 .pm-section-cnt{font-size:12px;color:#64748b;}
 .pm-badge-yellow{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:#fef9c3;color:#854d0e;}
+.pm-actions{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+.pm-action-btn{border:1px solid #cbd5e1;border-radius:999px;background:#fff;padding:4px 10px;font-size:11px;font-weight:600;color:#334155;transition:background-color .15s ease,border-color .15s ease;}
+.pm-action-btn:hover{background:#eef2ff;border-color:#a5b4fc;color:#312e81;}
+.pm-action-btn-muted:hover{background:#f8fafc;border-color:#94a3b8;color:#0f172a;}
 .pm-scroll{overflow-x:auto;overflow-y:visible;}
 .pm-table{border-collapse:separate;border-spacing:0;font-size:12px;width:100%;min-width:100%;}
 .pm-table thead{background:#f8fafc;}

@@ -2,10 +2,11 @@ import csv
 import os
 import re
 import shutil
-import tempfile
 import time
 import uuid
 from pathlib import Path
+
+from .pb_utils import workspace_root
 
 ALLOWED_EXTENSIONS = {".pb"}
 _ARCHIVE_SIGNATURES = (
@@ -187,16 +188,42 @@ def cleanup_stale_subdirectories(
         return
 
 
-def public_tmp_dir() -> Path:
-    """Create a dedicated temp directory for public uploads.
-    Separate from admin tmp to avoid any cross-contamination.
-    """
-    base = Path(tempfile.gettempdir()) / "pabulib_public"
+def _resolve_storage_dir(env_var: str, default_relative: str) -> Path:
+    env_val = os.environ.get(env_var)
+    if env_val:
+        path = Path(env_val).expanduser()
+        if not path.is_absolute():
+            path = workspace_root() / path
+        return path
+    return workspace_root() / default_relative
+
+
+def admin_waiting_room_dir() -> Path:
+    base = _resolve_storage_dir("ADMIN_UPLOAD_DIR", "var/waiting_room/admin")
+    base.mkdir(parents=True, exist_ok=True)
+    cleanup_stale_files(
+        base,
+        max_age_seconds=int(os.environ.get("ADMIN_UPLOAD_TTL_HOURS", "168")) * 3600,
+        skip_names={".upload_settings.json"},
+    )
+    return base
+
+
+def public_waiting_room_base_dir() -> Path:
+    base = _resolve_storage_dir("PUBLIC_UPLOAD_DIR", "var/waiting_room/public")
     base.mkdir(parents=True, exist_ok=True)
     cleanup_stale_subdirectories(
         base,
         max_age_seconds=int(os.environ.get("PUBLIC_UPLOAD_TTL_HOURS", "24")) * 3600,
     )
+    return base
+
+
+def public_tmp_dir() -> Path:
+    """Create a dedicated temp directory for public uploads.
+    Separate from admin tmp to avoid any cross-contamination.
+    """
+    base = public_waiting_room_base_dir()
     # Unique per request/session folder
     uid = uuid.uuid4().hex
     p = base / uid

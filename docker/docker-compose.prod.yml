@@ -28,6 +28,9 @@ services:
       - ${PB_FILES_DIR:-../pb_files}:/app/pb_files
       # Archive (depreciated) files folder
       - ${PB_FILES_DEPRECIATED_DIR:-../pb_files_depreciated}:/app/pb_files_depreciated
+      # Persistent waiting room folders
+      - ${ADMIN_UPLOAD_HOST_DIR:-../var/waiting_room/admin}:/app/waiting_room/admin
+      - ${PUBLIC_UPLOAD_HOST_DIR:-../var/waiting_room/public}:/app/waiting_room/public
       # Cache folder for exports and admin zip jobs
       - ../cache:/app/cache
     restart: unless-stopped

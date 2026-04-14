@@ -1329,7 +1329,13 @@ nav#mainNav {
 .badge.category{color:#c2410c;background:#ffedd5;border-color:#fed7aa}
 .badge.beneficiaries{color:#7c2d12;background:#fef3c7;border-color:#fde68a}
 .badge.new{color:#047857;background:#ecfdf5;border-color:#a7f3d0}
-.sidebar .checkbox .badge{margin-left:4px;margin-right:6px}
+.sidebar .checkbox .badge{
+  margin-left:4px;
+  margin-right:6px;
+  min-width:3.8em;
+  text-align:center;
+  flex:0 0 3.8em;
+}
 .filter-note{margin-top:8px;color:var(--muted);font-size:14px;line-height:1.4}
 
 /* Hidden by default; shown only on mobile breakpoint */
