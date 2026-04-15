@@ -3631,7 +3631,12 @@ def admin_export_create():
                 base_url = request.host_url.rstrip("/")
                 from .services.snapshot_service import create_link_text_file as _mk
 
-                link_txt = _mk(snapshot_id, out_zip.name, base_url)
+                link_txt = _mk(
+                    snapshot_id,
+                    out_zip.name,
+                    base_url,
+                    file_count=len(files),
+                )
                 zf.writestr("_PERMANENT_DOWNLOAD_LINK.txt", link_txt.encode("utf-8"))
             except Exception:
                 pass

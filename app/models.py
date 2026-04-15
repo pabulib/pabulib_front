@@ -211,6 +211,33 @@ class DownloadSnapshot(Base):
     __table_args__ = (Index("ix_download_snapshots_created_at", "created_at"),)
 
 
+class DownloadSnapshotContext(Base):
+    """Request-scoped metadata for rendering snapshot explanations."""
+
+    __tablename__ = "download_snapshot_contexts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    context_id: Mapped[str] = mapped_column(
+        String(32), unique=True, nullable=False, index=True
+    )
+    snapshot_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("download_snapshots.snapshot_id"),
+        nullable=False,
+        index=True,
+    )
+    download_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    filters_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_download_snapshot_contexts_created_at", "created_at"),
+        Index("ix_download_snapshot_contexts_snapshot_id", "snapshot_id"),
+    )
+
+
 class DownloadSnapshotFile(Base):
     """Minimal mapping of link token to exact PBFile record IDs."""
 

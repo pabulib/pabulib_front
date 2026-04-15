@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import hashlib
 import re
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -28,6 +29,7 @@ class BlogPost:
     tags: List[str]
     body_markdown: str
     body_html: str
+    social_image_version: str
     source_path: Path
 
 
@@ -116,6 +118,7 @@ def _parse_post(source_path: Path) -> BlogPost:
         tags=tags,
         body_markdown=body,
         body_html=_render_markdown(body),
+        social_image_version=hashlib.sha1(raw_text.encode("utf-8")).hexdigest()[:12],
         source_path=source_path,
     )
 

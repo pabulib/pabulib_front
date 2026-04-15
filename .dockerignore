@@ -13,6 +13,7 @@ __pycache__/
 pb_files/
 pb_files_depreciated/
 cache/
+var/waiting_room/
 
 # Environment overrides live under config/
 config/.env

@@ -121,7 +121,12 @@ def _build_zip(zip_name: str = "all_pb_files.zip") -> Path:
             # This uses the current DB set at build time, matching files we just zipped
             snapshot_id = _create_snapshot_for_cache_file(download_name=out_zip.name)
             base_url = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
-            link_txt = _create_link_text_file(snapshot_id, out_zip.name, base_url)
+            link_txt = _create_link_text_file(
+                snapshot_id,
+                out_zip.name,
+                base_url,
+                file_count=len(files),
+            )
             zf.writestr("_PERMANENT_DOWNLOAD_LINK.txt", link_txt.encode("utf-8"))
         except Exception:
             # Non-fatal: zip will still be usable without the link file

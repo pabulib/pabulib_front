@@ -481,6 +481,9 @@ nav#mainNav {
   box-shadow:0 4px 12px rgba(0,0,0,0.05);
   position:sticky;
   top:calc(var(--topbar-offset) + 12px);
+  max-height:calc(100dvh - var(--topbar-offset) - 24px);
+  overflow-y:auto;
+  overscroll-behavior:contain;
 }
 
 /* Layout responsiveness */
@@ -1309,7 +1312,7 @@ nav#mainNav {
 .tile-header .qs{font-size:12px;font-weight:700;color:#0b6ec5;background:transparent;border:none;border-radius:0;padding:0;white-space:nowrap;margin-left:auto;margin-right:6px;flex-shrink:0}
 .tile-header .tag{font-size:11px;font-weight:700;border-radius:999px;padding:4px 7px;border:1px solid transparent}
 .tile-header .tag.exp{color:#8a2be2;background:#f2e9ff;border-color:#e4d4ff}
-.tile-header .tag.funded{color:#1a7f37;background:#e9f7ef;border-color:#cfe9da}
+.tile-header .tag.funded{color:#7c3aed;background:#f3e8ff;border-color:#d8b4fe}
 .tile-header .tag.new{color:#047857;background:#ecfdf5;border-color:#a7f3d0}
 .tile-header .tag.geo{color:#0369a1;background:#e0f2fe;border-color:#bae6fd}
 .tile-header .tag.category{color:#c2410c;background:#ffedd5;border-color:#fed7aa}

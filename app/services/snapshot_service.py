@@ -2,10 +2,161 @@
 
 import hashlib
 import io
+import json
+import secrets
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+# NOTE: This is the canonical list of user-facing download filters that we persist
+# into snapshot context and render inside `_PERMANENT_DOWNLOAD_LINK.txt`.
+# If any filter is added, removed, renamed, or reinterpreted in the UI/search flow,
+# update this list and the surrounding snapshot logic in tandem so permanent-link
+# notes stay accurate. Keep `app/services/SNAPSHOT_SYSTEM.md` in sync as well.
+FILTER_SPECS = [
+    ("search", "Search", "text"),
+    ("country", "Country", "text"),
+    ("city", "City", "text"),
+    ("year", "Year", "text"),
+    ("votes_min", "Minimum votes", "number"),
+    ("votes_max", "Maximum votes", "number"),
+    ("projects_min", "Minimum projects", "number"),
+    ("projects_max", "Maximum projects", "number"),
+    ("len_min", "Minimum budget", "number"),
+    ("len_max", "Maximum budget", "number"),
+    ("type", "Vote type", "text"),
+    ("rule", "Rule", "text"),
+    ("exclude_fully", "Exclude fully artificial data", "boolean"),
+    ("exclude_experimental", "Exclude experimental data", "boolean"),
+    ("require_geo", "Require geo", "boolean"),
+    ("require_beneficiaries", "Require beneficiaries", "boolean"),
+    ("require_category", "Require category", "boolean"),
+    ("require_new", "Require new files only", "boolean"),
+]
+
+
+def empty_filter_context() -> Dict[str, Any]:
+    """Return the canonical filter state with all supported filters unset."""
+    return {key: None for key, _label, _kind in FILTER_SPECS}
+
+
+def normalize_filter_context(raw_filters: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Normalize request filters into a stable JSON-friendly shape."""
+    normalized = empty_filter_context()
+    if not raw_filters:
+        return normalized
+
+    for key, _label, kind in FILTER_SPECS:
+        value = raw_filters.get(key)
+        if kind == "boolean":
+            if value in {True, "true", "True", "1", 1}:
+                normalized[key] = True
+            elif value in {False, "false", "False", "0", 0}:
+                normalized[key] = False
+            else:
+                normalized[key] = None
+            continue
+
+        if value is None:
+            normalized[key] = None
+            continue
+
+        if isinstance(value, str):
+            value = value.strip()
+        if value == "" or value == []:
+            normalized[key] = None
+        else:
+            normalized[key] = value
+
+    return normalized
+
+
+def format_filter_context_lines(filters: Optional[Dict[str, Any]]) -> List[str]:
+    """Render the canonical filter state as human-readable text lines."""
+    normalized = normalize_filter_context(filters)
+    lines: List[str] = []
+    for key, label, kind in FILTER_SPECS:
+        value = normalized.get(key)
+        if value is None:
+            display = "not applied"
+        elif kind == "boolean":
+            display = "true" if value else "false"
+        else:
+            display = str(value)
+        lines.append(f"- {label}: {display}")
+    return lines
+
+
+def build_snapshot_url(snapshot_id: str, base_url: str, context_id: Optional[str] = None) -> str:
+    """Build a snapshot URL, optionally preserving request-specific context."""
+    snapshot_url = f"{base_url}/download/snapshot/{snapshot_id}"
+    if context_id:
+        snapshot_url = f"{snapshot_url}?context={context_id}"
+    return snapshot_url
+
+
+def create_snapshot_context(
+    snapshot_id: str, download_name: str, filters: Optional[Dict[str, Any]] = None
+) -> Optional[str]:
+    """Persist request-scoped metadata for rendering permalink notes."""
+    from ..db import get_session
+    from ..models import DownloadSnapshotContext
+
+    normalized = normalize_filter_context(filters)
+    context_id = secrets.token_hex(8)
+
+    try:
+        with get_session() as session:
+            session.add(
+                DownloadSnapshotContext(
+                    context_id=context_id,
+                    snapshot_id=snapshot_id,
+                    download_name=download_name,
+                    filters_json=json.dumps(normalized, sort_keys=True),
+                )
+            )
+            session.commit()
+        return context_id
+    except Exception:
+        return None
+
+
+def get_snapshot_context(context_id: Optional[str], snapshot_id: str) -> Optional[Dict[str, Any]]:
+    """Load request-scoped snapshot context if it belongs to the snapshot."""
+    if not context_id:
+        return None
+
+    from ..db import get_session
+    from ..models import DownloadSnapshotContext
+
+    try:
+        with get_session() as session:
+            row = (
+                session.query(DownloadSnapshotContext)
+                .filter(
+                    DownloadSnapshotContext.context_id == context_id,
+                    DownloadSnapshotContext.snapshot_id == snapshot_id,
+                )
+                .first()
+            )
+            if not row:
+                return None
+            filters = empty_filter_context()
+            if row.filters_json:
+                try:
+                    filters = normalize_filter_context(json.loads(row.filters_json))
+                except Exception:
+                    filters = empty_filter_context()
+            return {
+                "context_id": row.context_id,
+                "snapshot_id": row.snapshot_id,
+                "download_name": row.download_name,
+                "filters": filters,
+                "created_at": row.created_at,
+            }
+    except Exception:
+        return None
 
 
 def create_deterministic_hash(file_ids: List[int]) -> str:
@@ -15,19 +166,31 @@ def create_deterministic_hash(file_ids: List[int]) -> str:
     return hashlib.sha256(hash_input.encode()).hexdigest()[:16]
 
 
-def create_link_text_file(snapshot_id: str, download_name: str, base_url: str) -> str:
+def create_link_text_file(
+    snapshot_id: str,
+    download_name: str,
+    base_url: str,
+    filters: Optional[Dict[str, Any]] = None,
+    context_id: Optional[str] = None,
+    file_count: Optional[int] = None,
+) -> str:
     """Create text file content with permanent download link."""
-    snapshot_url = f"{base_url}/download/snapshot/{snapshot_id}"
+    snapshot_url = build_snapshot_url(snapshot_id, base_url, context_id=context_id)
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    filter_lines = "\n".join(format_filter_context_lines(filters))
 
     content = f"""Permanent Download Link
 ========================
 
 This download was created on: {timestamp}
 Download name: {download_name}
+File count: {file_count if file_count is not None else "unknown"}
 
 Permanent Link (never expires):
 {snapshot_url}
+
+Filter context:
+{filter_lines}
 
 What is this?
 This link will always download the exact same files that were included 
@@ -174,7 +337,9 @@ def get_snapshot_info(snapshot_id: str):
         }
 
 
-def serve_snapshot_download(snapshot_id: str, base_url: str = ""):
+def serve_snapshot_download(
+    snapshot_id: str, base_url: str = "", context_id: Optional[str] = None
+):
     """Serve snapshot by recreating ZIP from original files with link text file."""
     from flask import abort, request, send_file
 
@@ -210,6 +375,10 @@ def serve_snapshot_download(snapshot_id: str, base_url: str = ""):
     # Get base URL for link generation
     if not base_url:
         base_url = request.host_url.rstrip("/")
+    snapshot_context = get_snapshot_context(context_id, snapshot_id)
+    context_filters = (snapshot_context or {}).get("filters")
+    context_download_name = (snapshot_context or {}).get("download_name")
+    effective_download_name = context_download_name or snapshot_info["download_name"]
 
     # Always create ZIP with files + link text file
     memory_file = io.BytesIO()
@@ -221,7 +390,12 @@ def serve_snapshot_download(snapshot_id: str, base_url: str = ""):
 
         # Add the permanent link text file
         link_content = create_link_text_file(
-            snapshot_id, snapshot_info["download_name"], base_url
+            snapshot_id,
+            effective_download_name,
+            base_url,
+            filters=context_filters,
+            context_id=(snapshot_context or {}).get("context_id"),
+            file_count=snapshot_info.get("file_count"),
         )
         zf.writestr("_PERMANENT_DOWNLOAD_LINK.txt", link_content.encode("utf-8"))
 
@@ -229,7 +403,7 @@ def serve_snapshot_download(snapshot_id: str, base_url: str = ""):
     return send_file(
         memory_file,
         as_attachment=True,
-        download_name=snapshot_info["download_name"],
+        download_name=effective_download_name,
         mimetype="application/zip",
     )
 
@@ -254,12 +428,18 @@ def create_snapshot_for_cache_file(download_name: str, file_pairs=None) -> str:
 
 
 def create_download_with_link(
-    file_pairs: List[Tuple[str, Path]], download_name: str, base_url: str
-) -> tuple[io.BytesIO, str]:
+    file_pairs: List[Tuple[str, Path]],
+    download_name: str,
+    base_url: str,
+    filters: Optional[Dict[str, Any]] = None,
+) -> tuple[io.BytesIO, str, Optional[str]]:
     """Create a ZIP download with files and permanent link text file."""
     # Create snapshot first
     snapshot_id = create_download_snapshot(
         file_pairs=file_pairs, download_name=download_name
+    )
+    context_id = create_snapshot_context(
+        snapshot_id=snapshot_id, download_name=download_name, filters=filters
     )
 
     # Create ZIP in memory with files + link
@@ -271,15 +451,27 @@ def create_download_with_link(
                 zf.write(path, arcname=name)
 
         # Add the permanent link text file
-        link_content = create_link_text_file(snapshot_id, download_name, base_url)
+        link_content = create_link_text_file(
+            snapshot_id,
+            download_name,
+            base_url,
+            filters=filters,
+            context_id=context_id,
+            file_count=len(file_pairs),
+        )
         zf.writestr("_PERMANENT_DOWNLOAD_LINK.txt", link_content.encode("utf-8"))
 
     memory_file.seek(0)
-    return memory_file, snapshot_id
+    return memory_file, snapshot_id, context_id
 
 
 def add_link_to_existing_zip(
-    zip_path: Path, snapshot_id: str, download_name: str, base_url: str
+    zip_path: Path,
+    snapshot_id: str,
+    download_name: str,
+    base_url: str,
+    filters: Optional[Dict[str, Any]] = None,
+    context_id: Optional[str] = None,
 ) -> io.BytesIO:
     """Add link text file to an existing ZIP file."""
     memory_file = io.BytesIO()
@@ -295,7 +487,14 @@ def add_link_to_existing_zip(
                 target_zip.writestr(item, data)
 
             # Add the permanent link text file
-            link_content = create_link_text_file(snapshot_id, download_name, base_url)
+            link_content = create_link_text_file(
+                snapshot_id,
+                download_name,
+                base_url,
+                filters=filters,
+                context_id=context_id,
+                file_count=max(0, len(source_zip.namelist()) - (1 if "_PERMANENT_DOWNLOAD_LINK.txt" in source_zip.namelist() else 0)),
+            )
             target_zip.writestr(
                 "_PERMANENT_DOWNLOAD_LINK.txt", link_content.encode("utf-8")
             )

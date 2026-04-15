@@ -4,7 +4,7 @@
 {% block meta_description %}{{ post.summary }}{% endblock %}
 {% block meta_type %}article{% endblock %}
 {% block meta_canonical %}{{ url_for('main.blog_post', slug=post.slug, _external=True) }}{% endblock %}
-{% block meta_image %}{{ url_for('main.blog_post_og_image', slug=post.slug, _external=True) }}{% endblock %}
+{% block meta_image %}{{ url_for('main.blog_post_og_image', slug=post.slug, v=post.social_image_version, _external=True) }}{% endblock %}
 {% block meta_image_alt %}Preview image for {{ post.title }}{% endblock %}
 {% block meta_image_type %}image/png{% endblock %}
 {% block meta_image_width %}1200{% endblock %}
@@ -43,7 +43,7 @@
       },
       "mainEntityOfPage": url_for('main.blog_post', slug=post.slug, _external=True),
       "url": url_for('main.blog_post', slug=post.slug, _external=True),
-      "image": url_for('main.blog_post_og_image', slug=post.slug, _external=True),
+      "image": url_for('main.blog_post_og_image', slug=post.slug, v=post.social_image_version, _external=True),
       "keywords": post.tags
     }|tojson }}
   </script>

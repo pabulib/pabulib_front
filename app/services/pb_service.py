@@ -617,6 +617,7 @@ def _apply_search_filters(
     len_min: Optional[float] = None,
     len_max: Optional[float] = None,
     vote_type: Optional[str] = None,
+    rule: Optional[str] = None,
     exclude_fully: bool = False,
     exclude_experimental: bool = False,
     require_geo: bool = False,
@@ -662,6 +663,8 @@ def _apply_search_filters(
         
     if vote_type:
         q = q.filter(PBFile.vote_type.ilike(vote_type))
+    if rule:
+        q = q.filter(PBFile.rule_raw == rule)
         
     if exclude_fully:
         q = q.filter(PBFile.fully_funded == False)  # noqa: E712
@@ -695,6 +698,7 @@ def get_filtered_file_paths(
     len_min: Optional[float] = None,
     len_max: Optional[float] = None,
     vote_type: Optional[str] = None,
+    rule: Optional[str] = None,
     exclude_fully: bool = False,
     exclude_experimental: bool = False,
     require_geo: bool = False,
@@ -707,7 +711,7 @@ def get_filtered_file_paths(
         q = s.query(PBFile.file_name).filter(PBFile.is_current == True)  # noqa: E712
         q = _apply_search_filters(
             q, query, country, city, year, votes_min, votes_max,
-            projects_min, projects_max, len_min, len_max, vote_type,
+            projects_min, projects_max, len_min, len_max, vote_type, rule,
             exclude_fully, exclude_experimental, require_geo, require_beneficiaries, require_category, require_new
         )
         rows = q.all()
@@ -732,6 +736,7 @@ def search_tiles(
     len_min: Optional[float] = None,
     len_max: Optional[float] = None,
     vote_type: Optional[str] = None,
+    rule: Optional[str] = None,
     exclude_fully: bool = False,
     exclude_experimental: bool = False,
     require_geo: bool = False,
@@ -804,6 +809,7 @@ def search_tiles(
             len_min=len_min,
             len_max=len_max,
             vote_type=vote_type,
+            rule=rule,
             exclude_fully=exclude_fully,
             exclude_experimental=exclude_experimental,
             require_geo=require_geo,
@@ -849,6 +855,7 @@ def get_filter_options() -> Dict[str, Any]:
         countries = [r[0] for r in s.query(PBFile.country).filter(PBFile.is_current == True).distinct().order_by(PBFile.country).all() if r[0]]
         cities = [r[0] for r in s.query(PBFile.unit).filter(PBFile.is_current == True).distinct().order_by(PBFile.unit).all() if r[0]]
         years = [str(r[0]) for r in s.query(PBFile.year).filter(PBFile.is_current == True).distinct().order_by(PBFile.year.desc()).all() if r[0] is not None]
+        rules = [r[0] for r in s.query(PBFile.rule_raw).filter(PBFile.is_current == True).distinct().order_by(PBFile.rule_raw).all() if r[0]]
         
         # Get all valid combinations for client-side filtering
         comb_rows = s.query(PBFile.country, PBFile.unit, PBFile.year).filter(PBFile.is_current == True).distinct().all()
@@ -868,6 +875,7 @@ def get_filter_options() -> Dict[str, Any]:
         "cities": cities,
         "city_slug_map": city_slug_map,
         "years": years,
+        "rules": rules,
         "combinations": combinations
     }
 
@@ -884,6 +892,7 @@ def get_filter_availability(
     len_min: Optional[float] = None,
     len_max: Optional[float] = None,
     vote_type: Optional[str] = None,
+    rule: Optional[str] = None,
     exclude_fully: bool = False,
     exclude_experimental: bool = False,
     require_geo: bool = False,
@@ -906,6 +915,7 @@ def get_filter_availability(
             len_min=len_min,
             len_max=len_max,
             vote_type=vote_type,
+            rule=rule,
             exclude_fully=exclude_fully,
             exclude_experimental=exclude_experimental,
             require_geo=require_geo,
@@ -918,6 +928,33 @@ def get_filter_availability(
             for r in countries_q.distinct().order_by(PBFile.country).all()
             if r[0]
         ]
+        country_counts_q = s.query(PBFile.country, func.count(PBFile.id)).filter(PBFile.is_current == True)  # noqa: E712
+        country_counts_q = _apply_search_filters(
+            country_counts_q,
+            query=query,
+            country=None,
+            city=city,
+            year=year,
+            votes_min=votes_min,
+            votes_max=votes_max,
+            projects_min=projects_min,
+            projects_max=projects_max,
+            len_min=len_min,
+            len_max=len_max,
+            vote_type=vote_type,
+            rule=rule,
+            exclude_fully=exclude_fully,
+            exclude_experimental=exclude_experimental,
+            require_geo=require_geo,
+            require_beneficiaries=require_beneficiaries,
+            require_category=require_category,
+            require_new=require_new,
+        )
+        available_country_counts = {
+            key: int(count)
+            for key, count in country_counts_q.group_by(PBFile.country).all()
+            if key
+        }
 
         cities_q = s.query(PBFile.unit).filter(PBFile.is_current == True)  # noqa: E712
         cities_q = _apply_search_filters(
@@ -933,6 +970,7 @@ def get_filter_availability(
             len_min=len_min,
             len_max=len_max,
             vote_type=vote_type,
+            rule=rule,
             exclude_fully=exclude_fully,
             exclude_experimental=exclude_experimental,
             require_geo=require_geo,
@@ -943,6 +981,33 @@ def get_filter_availability(
         available_cities = [
             r[0] for r in cities_q.distinct().order_by(PBFile.unit).all() if r[0]
         ]
+        city_counts_q = s.query(PBFile.unit, func.count(PBFile.id)).filter(PBFile.is_current == True)  # noqa: E712
+        city_counts_q = _apply_search_filters(
+            city_counts_q,
+            query=query,
+            country=country,
+            city=None,
+            year=year,
+            votes_min=votes_min,
+            votes_max=votes_max,
+            projects_min=projects_min,
+            projects_max=projects_max,
+            len_min=len_min,
+            len_max=len_max,
+            vote_type=vote_type,
+            rule=rule,
+            exclude_fully=exclude_fully,
+            exclude_experimental=exclude_experimental,
+            require_geo=require_geo,
+            require_beneficiaries=require_beneficiaries,
+            require_category=require_category,
+            require_new=require_new,
+        )
+        available_city_counts = {
+            key: int(count)
+            for key, count in city_counts_q.group_by(PBFile.unit).all()
+            if key
+        }
 
         years_q = s.query(PBFile.year).filter(PBFile.is_current == True)  # noqa: E712
         years_q = _apply_search_filters(
@@ -958,6 +1023,7 @@ def get_filter_availability(
             len_min=len_min,
             len_max=len_max,
             vote_type=vote_type,
+            rule=rule,
             exclude_fully=exclude_fully,
             exclude_experimental=exclude_experimental,
             require_geo=require_geo,
@@ -970,11 +1036,151 @@ def get_filter_availability(
             for r in years_q.distinct().order_by(PBFile.year.desc()).all()
             if r[0] is not None
         ]
+        year_counts_q = s.query(PBFile.year, func.count(PBFile.id)).filter(PBFile.is_current == True)  # noqa: E712
+        year_counts_q = _apply_search_filters(
+            year_counts_q,
+            query=query,
+            country=country,
+            city=city,
+            year=None,
+            votes_min=votes_min,
+            votes_max=votes_max,
+            projects_min=projects_min,
+            projects_max=projects_max,
+            len_min=len_min,
+            len_max=len_max,
+            vote_type=vote_type,
+            rule=rule,
+            exclude_fully=exclude_fully,
+            exclude_experimental=exclude_experimental,
+            require_geo=require_geo,
+            require_beneficiaries=require_beneficiaries,
+            require_category=require_category,
+            require_new=require_new,
+        )
+        available_year_counts = {
+            str(key): int(count)
+            for key, count in year_counts_q.group_by(PBFile.year).all()
+            if key is not None
+        }
+
+        vote_types_q = s.query(PBFile.vote_type).filter(PBFile.is_current == True)  # noqa: E712
+        vote_types_q = _apply_search_filters(
+            vote_types_q,
+            query=query,
+            country=country,
+            city=city,
+            year=year,
+            votes_min=votes_min,
+            votes_max=votes_max,
+            projects_min=projects_min,
+            projects_max=projects_max,
+            len_min=len_min,
+            len_max=len_max,
+            vote_type=None,
+            rule=rule,
+            exclude_fully=exclude_fully,
+            exclude_experimental=exclude_experimental,
+            require_geo=require_geo,
+            require_beneficiaries=require_beneficiaries,
+            require_category=require_category,
+            require_new=require_new,
+        )
+        available_vote_types = [
+            r[0] for r in vote_types_q.distinct().order_by(PBFile.vote_type).all() if r[0]
+        ]
+        vote_type_counts_q = s.query(PBFile.vote_type, func.count(PBFile.id)).filter(PBFile.is_current == True)  # noqa: E712
+        vote_type_counts_q = _apply_search_filters(
+            vote_type_counts_q,
+            query=query,
+            country=country,
+            city=city,
+            year=year,
+            votes_min=votes_min,
+            votes_max=votes_max,
+            projects_min=projects_min,
+            projects_max=projects_max,
+            len_min=len_min,
+            len_max=len_max,
+            vote_type=None,
+            rule=rule,
+            exclude_fully=exclude_fully,
+            exclude_experimental=exclude_experimental,
+            require_geo=require_geo,
+            require_beneficiaries=require_beneficiaries,
+            require_category=require_category,
+            require_new=require_new,
+        )
+        available_vote_type_counts = {
+            key: int(count)
+            for key, count in vote_type_counts_q.group_by(PBFile.vote_type).all()
+            if key
+        }
+
+        rules_q = s.query(PBFile.rule_raw).filter(PBFile.is_current == True)  # noqa: E712
+        rules_q = _apply_search_filters(
+            rules_q,
+            query=query,
+            country=country,
+            city=city,
+            year=year,
+            votes_min=votes_min,
+            votes_max=votes_max,
+            projects_min=projects_min,
+            projects_max=projects_max,
+            len_min=len_min,
+            len_max=len_max,
+            vote_type=vote_type,
+            rule=None,
+            exclude_fully=exclude_fully,
+            exclude_experimental=exclude_experimental,
+            require_geo=require_geo,
+            require_beneficiaries=require_beneficiaries,
+            require_category=require_category,
+            require_new=require_new,
+        )
+        available_rules = [
+            r[0] for r in rules_q.distinct().order_by(PBFile.rule_raw).all() if r[0]
+        ]
+        rule_counts_q = s.query(PBFile.rule_raw, func.count(PBFile.id)).filter(PBFile.is_current == True)  # noqa: E712
+        rule_counts_q = _apply_search_filters(
+            rule_counts_q,
+            query=query,
+            country=country,
+            city=city,
+            year=year,
+            votes_min=votes_min,
+            votes_max=votes_max,
+            projects_min=projects_min,
+            projects_max=projects_max,
+            len_min=len_min,
+            len_max=len_max,
+            vote_type=vote_type,
+            rule=None,
+            exclude_fully=exclude_fully,
+            exclude_experimental=exclude_experimental,
+            require_geo=require_geo,
+            require_beneficiaries=require_beneficiaries,
+            require_category=require_category,
+            require_new=require_new,
+        )
+        available_rule_counts = {
+            key: int(count)
+            for key, count in rule_counts_q.group_by(PBFile.rule_raw).all()
+            if key
+        }
 
     return {
         "available_countries": available_countries,
+        "available_country_counts": available_country_counts,
         "available_cities": available_cities,
+        "available_city_counts": available_city_counts,
         "available_years": available_years,
+        "available_year_counts": available_year_counts,
+        "available_vote_types": available_vote_types,
+        "available_vote_type_counts": available_vote_type_counts,
+        "available_rules": available_rules,
+        "available_rule_counts": available_rule_counts,
     }
 
 

@@ -39,9 +39,30 @@ Permanent Download Link
 
 This download was created on: 2024-10-25 14:30:22 UTC
 Download name: example_file.pb.zip
+File count: 1703
 
 Permanent Link (never expires):
 https://pabulib.org/download/snapshot/a1b2c3d4e5f6789a
+
+Filter context:
+- Search: not applied
+- Country: Poland
+- City: not applied
+- Year: 2024
+- Minimum votes: not applied
+- Maximum votes: not applied
+- Minimum projects: not applied
+- Maximum projects: not applied
+- Minimum budget: not applied
+- Maximum budget: not applied
+- Vote type: not applied
+- Rule: greedy
+- Exclude fully artificial data: false
+- Exclude experimental data: false
+- Require geo: false
+- Require beneficiaries: true
+- Require category: false
+- Require new files only: false
 
 What is this?
 This link will always download the exact same files that were included 
@@ -171,6 +192,7 @@ fetch('/download-selected/file/' + token)
 The snapshot system requires two new database tables:
 - `download_snapshots` - stores snapshot metadata
 - `download_snapshot_files` - stores file information at snapshot time
+- `download_snapshot_contexts` - stores request-specific filter context used to render the permalink note
 
 **Tables are created automatically** when the application starts via `models.py`. No manual migration is required.
 
@@ -197,6 +219,11 @@ The system requires no regular maintenance:
 - File integrity can be verified using stored hashes  
 - Database records provide audit trail
 - Manual cleanup possible if needed (not recommended)
+
+When changing filters:
+- Treat the filter list in `app/services/snapshot_service.py` as the canonical contract for permalink rendering.
+- If any user-facing filter is added, removed, renamed, or has its meaning changed, update the snapshot filter schema and text rendering at the same time.
+- Keep this document in sync with those changes so the snapshot behavior stays discoverable for future maintenance.
 
 For troubleshooting, check:
 - `cache/snapshots/` directory permissions

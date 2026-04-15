@@ -59,7 +59,9 @@ from .services.pb_service import (
 )
 from .services.snapshot_service import (
     add_link_to_existing_zip as _add_link_to_existing_zip,
+    create_snapshot_context as _create_snapshot_context,
     create_download_with_link as _create_download_with_link,
+    normalize_filter_context as _normalize_filter_context,
     serve_snapshot_download as _serve_snapshot_download,
 )
 from .services.blog_service import (
@@ -195,6 +197,7 @@ def _build_zip_in_background(
     download_name: str,
     reuse_file_path: Optional[Path] = None,
     file_ids: Optional[List[int]] = None,
+    filter_context: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Create the zip in the background and update progress JSON. If reuse_file_path
     is provided, mark job as done immediately using that existing file."""
@@ -215,6 +218,7 @@ def _build_zip_in_background(
                 "artifact_type": "zip",
                 "file_path": str(reuse_file_path),
                 "mime_type": "application/zip",
+                "filter_context": filter_context or {},
             }
             _write_progress(token, progress)
             with _ZIP_JOBS_LOCK:
@@ -224,6 +228,7 @@ def _build_zip_in_background(
                     "file_ids": file_ids or [],
                     "artifact_type": "zip",
                     "mime_type": "application/zip",
+                    "filter_context": filter_context or {},
                 }
             return
 
@@ -243,6 +248,7 @@ def _build_zip_in_background(
             "artifact_type": "zip",
             "file_path": str(out_zip),
             "mime_type": "application/zip",
+            "filter_context": filter_context or {},
         }
         _write_progress(token, progress)
 
@@ -293,6 +299,7 @@ def _build_zip_in_background(
                 "file_ids": file_ids or [],
                 "artifact_type": "zip",
                 "mime_type": "application/zip",
+                "filter_context": filter_context or {},
             }
     except Exception as e:
         progress = {
@@ -307,6 +314,7 @@ def _build_zip_in_background(
             "download_name": download_name,
             "file_ids": file_ids or [],
             "artifact_type": "zip",
+            "filter_context": filter_context or {},
         }
         _write_progress(token, progress)
 
@@ -328,6 +336,53 @@ def _zip_has_permanent_link(zip_path: Path) -> bool:
             return "_PERMANENT_DOWNLOAD_LINK.txt" in zf.namelist()
     except Exception:
         return False
+
+
+def _snapshot_external_url(snapshot_id: str, context_id: Optional[str] = None) -> str:
+    return url_for(
+        "main.download_snapshot",
+        snapshot_id=snapshot_id,
+        context=context_id,
+        _external=True,
+    )
+
+
+def _parse_filter_context(source) -> Dict[str, Any]:
+    raw_filters = {
+        "search": source.get("search"),
+        "country": source.get("country"),
+        "city": source.get("city"),
+        "year": source.get("year"),
+        "votes_min": source.get("votes_min", type=int),
+        "votes_max": source.get("votes_max", type=int),
+        "projects_min": source.get("projects_min", type=int),
+        "projects_max": source.get("projects_max", type=int),
+        "len_min": source.get("len_min", type=float),
+        "len_max": source.get("len_max", type=float),
+        "type": source.get("type"),
+        "rule": source.get("rule"),
+        "exclude_fully": source.get("exclude_fully") == "true",
+        "exclude_experimental": source.get("exclude_experimental") == "true",
+        "require_geo": source.get("require_geo") == "true",
+        "require_beneficiaries": (
+            source.get("require_beneficiaries") == "true"
+            or source.get("require_target") == "true"
+        ),
+        "require_category": source.get("require_category") == "true",
+        "require_new": source.get("require_new") == "true",
+    }
+    return _normalize_filter_context(raw_filters)
+
+
+def _has_active_filter_context(filter_context: Dict[str, Any]) -> bool:
+    for value in filter_context.values():
+        if isinstance(value, bool):
+            if value:
+                return True
+            continue
+        if value is not None:
+            return True
+    return False
 
 
 bp = Blueprint(
@@ -661,6 +716,7 @@ def api_search():
     len_max = request.args.get("len_max", type=float)
     
     vote_type = request.args.get("type")
+    rule = request.args.get("rule")
     
     exclude_fully = request.args.get("exclude_fully") == "true"
     exclude_experimental = request.args.get("exclude_experimental") == "true"
@@ -691,6 +747,7 @@ def api_search():
         len_min=len_min,
         len_max=len_max,
         vote_type=vote_type,
+        rule=rule,
         exclude_fully=exclude_fully,
         exclude_experimental=exclude_experimental,
         require_geo=require_geo,
@@ -726,6 +783,7 @@ def api_options():
     len_max = request.args.get("len_max", type=float)
 
     vote_type = request.args.get("type")
+    rule = request.args.get("rule")
 
     exclude_fully = request.args.get("exclude_fully") == "true"
     exclude_experimental = request.args.get("exclude_experimental") == "true"
@@ -751,6 +809,7 @@ def api_options():
         len_min=len_min,
         len_max=len_max,
         vote_type=vote_type,
+        rule=rule,
         exclude_fully=exclude_fully,
         exclude_experimental=exclude_experimental,
         require_geo=require_geo,
@@ -813,7 +872,9 @@ def blog_index_og_image():
         eyebrow=eyebrow,
         tags=tags,
     )
-    return Response(image_bytes, mimetype="image/png")
+    response = Response(image_bytes, mimetype="image/png")
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    return response
 
 
 @bp.route("/blog/<slug>")
@@ -836,7 +897,9 @@ def blog_post_og_image(slug: str):
         eyebrow=post.published_on.strftime("%d %b %Y"),
         tags=post.tags,
     )
-    return Response(image_bytes, mimetype="image/png")
+    response = Response(image_bytes, mimetype="image/png")
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    return response
 
 
 @bp.route("/citations")
@@ -1747,6 +1810,7 @@ def download(filename: str):
 @bp.post("/download-selected")
 def download_selected():
     use_permanent_link = _wants_permanent_link()
+    filter_context = _parse_filter_context(request.form)
     names = request.form.getlist("files")
     # Deduplicate names to prevent issues with double submission (checkbox + hidden input)
     if names:
@@ -1816,6 +1880,8 @@ def download_selected():
                                 txt = ""
                             m = re.search(r"/download/snapshot/([0-9a-f]{16})", txt)
                             snapshot_id = m.group(1) if m else None
+                            c = re.search(r"[?&]context=([0-9a-f]{16})", txt)
+                            context_id = c.group(1) if c else None
                             resp = send_file(
                                 latest_export,
                                 as_attachment=True,
@@ -1823,10 +1889,8 @@ def download_selected():
                             )
                             if snapshot_id:
                                 resp.headers["X-Download-Snapshot-ID"] = snapshot_id
-                                resp.headers["X-Download-Snapshot-URL"] = url_for(
-                                    "main.download_snapshot",
-                                    snapshot_id=snapshot_id,
-                                    _external=True,
+                                resp.headers["X-Download-Snapshot-URL"] = _snapshot_external_url(
+                                    snapshot_id, context_id
                                 )
                             return resp
                 except Exception:
@@ -1843,8 +1907,18 @@ def download_selected():
                     snapshot_id = create_download_snapshot(
                         file_pairs=all_file_pairs, download_name=dl_name
                     )
+                    context_id = _create_snapshot_context(
+                        snapshot_id=snapshot_id,
+                        download_name=dl_name,
+                        filters=filter_context,
+                    )
                     mem = _add_link_to_existing_zip(
-                        latest_export, snapshot_id, dl_name, base_url
+                        latest_export,
+                        snapshot_id,
+                        dl_name,
+                        base_url,
+                        filters=filter_context,
+                        context_id=context_id,
                     )
                     response = send_file(
                         mem,
@@ -1853,8 +1927,8 @@ def download_selected():
                         mimetype="application/zip",
                     )
                     response.headers["X-Download-Snapshot-ID"] = snapshot_id
-                    response.headers["X-Download-Snapshot-URL"] = url_for(
-                        "main.download_snapshot", snapshot_id=snapshot_id, _external=True
+                    response.headers["X-Download-Snapshot-URL"] = _snapshot_external_url(
+                        snapshot_id, context_id
                     )
                     return response
                 except Exception:
@@ -1888,7 +1962,19 @@ def download_selected():
             snapshot_id = create_download_snapshot(
                 file_pairs=all_file_pairs, download_name=dl_name
             )
-            mem = _add_link_to_existing_zip(out_zip, snapshot_id, dl_name, base_url)
+            context_id = _create_snapshot_context(
+                snapshot_id=snapshot_id,
+                download_name=dl_name,
+                filters=filter_context,
+            )
+            mem = _add_link_to_existing_zip(
+                out_zip,
+                snapshot_id,
+                dl_name,
+                base_url,
+                filters=filter_context,
+                context_id=context_id,
+            )
             response = send_file(
                 mem,
                 as_attachment=True,
@@ -1896,8 +1982,8 @@ def download_selected():
                 mimetype="application/zip",
             )
             response.headers["X-Download-Snapshot-ID"] = snapshot_id
-            response.headers["X-Download-Snapshot-URL"] = url_for(
-                "main.download_snapshot", snapshot_id=snapshot_id, _external=True
+            response.headers["X-Download-Snapshot-URL"] = _snapshot_external_url(
+                snapshot_id, context_id
             )
             return response
         except Exception:
@@ -1936,16 +2022,19 @@ def download_selected():
             mimetype="application/zip",
         )
     base_url = request.host_url.rstrip("/")
-    mem, _snapshot_id = _create_download_with_link(
-        file_pairs=file_pairs, download_name=filename, base_url=base_url
+    mem, _snapshot_id, _context_id = _create_download_with_link(
+        file_pairs=file_pairs,
+        download_name=filename,
+        base_url=base_url,
+        filters=filter_context,
     )
     response = send_file(
         mem, as_attachment=True, download_name=filename, mimetype="application/zip"
     )
     try:
         response.headers["X-Download-Snapshot-ID"] = _snapshot_id
-        response.headers["X-Download-Snapshot-URL"] = url_for(
-            "main.download_snapshot", snapshot_id=_snapshot_id, _external=True
+        response.headers["X-Download-Snapshot-URL"] = _snapshot_external_url(
+            _snapshot_id, _context_id
         )
     except Exception:
         pass
@@ -1973,33 +2062,28 @@ def download_selected_start():
     excludes = set(request.form.getlist("exclude"))
 
     # Parse filter args from form (since we are POSTing)
-    
-    query = request.form.get("search")
-    country = request.form.get("country")
-    city = request.form.get("city")
-    year = request.form.get("year")
-    votes_min = request.form.get("votes_min", type=int)
-    votes_max = request.form.get("votes_max", type=int)
-    projects_min = request.form.get("projects_min", type=int)
-    projects_max = request.form.get("projects_max", type=int)
-    len_min = request.form.get("len_min", type=float)
-    len_max = request.form.get("len_max", type=float)
-    vote_type = request.form.get("type")
-    exclude_fully = request.form.get("exclude_fully") == "true"
-    exclude_experimental = request.form.get("exclude_experimental") == "true"
-    require_geo = request.form.get("require_geo") == "true"
-    require_beneficiaries = (
-        request.form.get("require_beneficiaries") == "true"
-        or request.form.get("require_target") == "true"
-    )
-    require_category = request.form.get("require_category") == "true"
-    require_new = request.form.get("require_new") == "true"
+    filter_context = _parse_filter_context(request.form)
 
-    has_filters = any([
-        query, country, city, year, votes_min, votes_max, projects_min, projects_max,
-        len_min, len_max, vote_type, exclude_fully, exclude_experimental,
-        require_geo, require_beneficiaries, require_category, require_new
-    ])
+    query = filter_context.get("search")
+    country = filter_context.get("country")
+    city = filter_context.get("city")
+    year = filter_context.get("year")
+    votes_min = filter_context.get("votes_min")
+    votes_max = filter_context.get("votes_max")
+    projects_min = filter_context.get("projects_min")
+    projects_max = filter_context.get("projects_max")
+    len_min = filter_context.get("len_min")
+    len_max = filter_context.get("len_max")
+    vote_type = filter_context.get("type")
+    rule = filter_context.get("rule")
+    exclude_fully = bool(filter_context.get("exclude_fully"))
+    exclude_experimental = bool(filter_context.get("exclude_experimental"))
+    require_geo = bool(filter_context.get("require_geo"))
+    require_beneficiaries = bool(filter_context.get("require_beneficiaries"))
+    require_category = bool(filter_context.get("require_category"))
+    require_new = bool(filter_context.get("require_new"))
+
+    has_filters = _has_active_filter_context(filter_context)
 
     # If select_all is not set and no explicit names provided, reject.
     # Allow select_all=true to proceed even when names list is empty ("all" or exclude-mode).
@@ -2064,6 +2148,7 @@ def download_selected_start():
             projects_min=projects_min, projects_max=projects_max,
             len_min=len_min, len_max=len_max,
             vote_type=vote_type,
+            rule=rule,
             exclude_fully=exclude_fully,
             exclude_experimental=exclude_experimental,
             require_geo=require_geo,
@@ -2194,6 +2279,7 @@ def download_selected_start():
             "file_path": str(path),
             "mime_type": mime_type,
             "file_ids": [],
+            "filter_context": filter_context,
         }
         _write_progress(token, progress_payload)
         with _ZIP_JOBS_LOCK:
@@ -2202,6 +2288,7 @@ def download_selected_start():
                 "download_name": download_name,
                 "artifact_type": "file",
                 "mime_type": mime_type,
+                "filter_context": filter_context,
             }
         response = jsonify(
             {
@@ -2231,6 +2318,7 @@ def download_selected_start():
             "artifact_type": "zip",
             "mime_type": "application/zip",
             "file_ids": file_ids_for_snapshot,
+            "filter_context": filter_context,
         },
     )
 
@@ -2243,6 +2331,7 @@ def download_selected_start():
             download_name,
             reuse_path,
             file_ids_for_snapshot,
+            filter_context,
         ),
         daemon=True,
     )
@@ -2359,6 +2448,7 @@ def handle_large_request(e):
                         "artifact_type": "zip",
                         "mime_type": "application/zip",
                         "file_ids": [],
+                        "filter_context": {},
                     },
                 )
                 with _ZIP_JOBS_LOCK:
@@ -2368,6 +2458,7 @@ def handle_large_request(e):
                         "artifact_type": "zip",
                         "mime_type": "application/zip",
                         "file_ids": [],
+                        "filter_context": {},
                     }
                 # Start background builder to create the all-files zip
                 all_file_pairs = get_all_current_file_paths()
@@ -2383,6 +2474,8 @@ def handle_large_request(e):
                         [(name, path) for name, path in all_file_pairs],
                         download_name,
                         None,
+                        None,
+                        {},
                     ),
                     daemon=True,
                 )
@@ -2438,6 +2531,7 @@ def download_selected_file(token: str):
             captured_ids = [int(x) for x in ids_from_job if x is not None]
     except Exception:
         captured_ids = []
+    filter_context = (job_data or {}).get("filter_context") or data.get("filter_context") or {}
     artifact_type = (
         (job_data or {}).get("artifact_type") or data.get("artifact_type") or "zip"
     )
@@ -2481,6 +2575,8 @@ def download_selected_file(token: str):
                     txt = ""
                 m = re.search(r"/download/snapshot/([0-9a-f]{16})", txt)
                 snapshot_id = m.group(1) if m else None
+                c = re.search(r"[?&]context=([0-9a-f]{16})", txt)
+                context_id = c.group(1) if c else None
                 resp = send_file(
                     file_path,
                     as_attachment=True,
@@ -2488,10 +2584,8 @@ def download_selected_file(token: str):
                 )
                 if snapshot_id:
                     resp.headers["X-Download-Snapshot-ID"] = snapshot_id
-                    resp.headers["X-Download-Snapshot-URL"] = url_for(
-                        "main.download_snapshot",
-                        snapshot_id=snapshot_id,
-                        _external=True,
+                    resp.headers["X-Download-Snapshot-URL"] = _snapshot_external_url(
+                        snapshot_id, context_id
                     )
                 return resp
     except Exception:
@@ -2508,7 +2602,19 @@ def download_selected_file(token: str):
             base_url = request.host_url.rstrip("/")
             # Legacy zip without link: inject into memory
             snapshot_id = _create_snapshot_from_ids(captured_ids, download_name)
-            mem = _add_link(file_path, snapshot_id, download_name, base_url)
+            context_id = _create_snapshot_context(
+                snapshot_id=snapshot_id,
+                download_name=download_name,
+                filters=filter_context,
+            )
+            mem = _add_link(
+                file_path,
+                snapshot_id,
+                download_name,
+                base_url,
+                filters=filter_context,
+                context_id=context_id,
+            )
             response = send_file(
                 mem,
                 as_attachment=True,
@@ -2516,8 +2622,8 @@ def download_selected_file(token: str):
                 mimetype="application/zip",
             )
             response.headers["X-Download-Snapshot-ID"] = snapshot_id
-            response.headers["X-Download-Snapshot-URL"] = url_for(
-                "main.download_snapshot", snapshot_id=snapshot_id, _external=True
+            response.headers["X-Download-Snapshot-URL"] = _snapshot_external_url(
+                snapshot_id, context_id
             )
             return response
         except Exception:
@@ -2535,10 +2641,13 @@ def download_snapshot(snapshot_id: str):
     ensuring the same versions are downloaded even after updates.
     """
     token = (snapshot_id or "").strip().lower()
+    context_id = (request.args.get("context") or "").strip().lower() or None
     # Validate token format (deterministic 16 hex chars). Return 400 for invalid format.
     if not re.fullmatch(r"[0-9a-f]{16}", token):
         abort(400, description="Invalid snapshot link format.")
-    return _serve_snapshot_download(token)
+    if context_id and not re.fullmatch(r"[0-9a-f]{16}", context_id):
+        abort(400, description="Invalid snapshot context format.")
+    return _serve_snapshot_download(token, context_id=context_id)
 
 
 def _order_columns(all_keys: List[str], preferred_order: List[str]) -> List[str]:

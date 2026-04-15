@@ -50,6 +50,7 @@
     lenMin: $('#lenMin'),
     lenMax: $('#lenMax'),
     type: $('#filterType'),
+    rule: $('#filterRule'),
     excludeFully: $('#excludeFully'),
     excludeExperimental: $('#excludeExperimental'),
     requireGeo: $('#requireGeo'),
@@ -74,6 +75,7 @@
       len_min: filters.lenMin ? filters.lenMin.value : '',
       len_max: filters.lenMax ? filters.lenMax.value : '',
       type: filters.type ? filters.type.value : '',
+      rule: filters.rule ? filters.rule.value : '',
       exclude_fully: filters.excludeFully ? filters.excludeFully.checked : false,
       exclude_experimental: filters.excludeExperimental ? filters.excludeExperimental.checked : false,
       require_geo: filters.requireGeo ? filters.requireGeo.checked : false,
@@ -105,6 +107,7 @@
     if (v.projects_min || v.projects_max) n++;
     if (v.len_min || v.len_max) n++;
     if (v.type) n++;
+    if (v.rule) n++;
     if (v.exclude_fully) n++;
     if (v.exclude_experimental) n++;
     if (v.require_geo) n++;
@@ -453,6 +456,7 @@
     set(filters.lenMin, 'len_min');
     set(filters.lenMax, 'len_max');
     set(filters.type, 'type');
+    set(filters.rule, 'rule');
     
     setCheck(filters.excludeFully, 'exclude_fully');
     setCheck(filters.excludeExperimental, 'exclude_experimental');
@@ -474,6 +478,20 @@
     return hasFilters;
   }
 
+  function applyOptionCounts(selectEl, counts) {
+    if (!selectEl) return;
+    Array.from(selectEl.options).forEach(opt => {
+      if (!opt.value) return;
+      const baseLabel = opt.dataset.baseLabel || opt.value;
+      const count = counts && Object.prototype.hasOwnProperty.call(counts, opt.value)
+        ? counts[opt.value]
+        : null;
+      opt.textContent = count === null || count === undefined
+        ? baseLabel
+        : `${baseLabel} (${count})`;
+    });
+  }
+
   async function fetchOptions() {
     try {
         const res = await fetch('/api/options');
@@ -491,6 +509,7 @@
                 const o = document.createElement('option');
                 o.value = c;
                 o.textContent = c;
+                o.dataset.baseLabel = c;
                 filters.country.appendChild(o);
             });
         }
@@ -500,6 +519,7 @@
                 const o = document.createElement('option');
                 o.value = c;
                 o.textContent = c;
+                o.dataset.baseLabel = c;
                 filters.city.appendChild(o);
             });
         }
@@ -509,9 +529,33 @@
                 const o = document.createElement('option');
                 o.value = y;
                 o.textContent = y;
+                o.dataset.baseLabel = y;
                 filters.year.appendChild(o);
             });
         }
+
+        if (filters.type) {
+          Array.from(filters.type.options).forEach(opt => {
+            if (!opt.value) return;
+            if (!opt.dataset.baseLabel) opt.dataset.baseLabel = opt.textContent;
+          });
+        }
+
+        if (filters.rule) {
+            (data.rules || []).forEach(r => {
+                const o = document.createElement('option');
+                o.value = r;
+                o.textContent = r;
+                o.dataset.baseLabel = r;
+                filters.rule.appendChild(o);
+            });
+        }
+
+        applyOptionCounts(filters.country, data.available_country_counts || {});
+        applyOptionCounts(filters.city, data.available_city_counts || {});
+        applyOptionCounts(filters.year, data.available_year_counts || {});
+        applyOptionCounts(filters.type, data.available_vote_type_counts || {});
+        applyOptionCounts(filters.rule, data.available_rule_counts || {});
         
     } catch (e) {
         console.error("Failed to fetch options", e);
@@ -596,6 +640,8 @@
       const availableCountries = new Set(data.available_countries || []);
       const availableCities = new Set(data.available_cities || []);
       const availableYears = new Set(data.available_years || []);
+      const availableVoteTypes = new Set(data.available_vote_types || []);
+      const availableRules = new Set(data.available_rules || []);
 
       if (filters.country) {
         Array.from(filters.country.options).forEach(opt => {
@@ -604,6 +650,7 @@
           opt.disabled = !exists;
           opt.style.color = exists ? '' : '#ccc';
         });
+        applyOptionCounts(filters.country, data.available_country_counts || {});
       }
 
       if (filters.city) {
@@ -613,6 +660,7 @@
           opt.disabled = !exists;
           opt.style.color = exists ? '' : '#ccc';
         });
+        applyOptionCounts(filters.city, data.available_city_counts || {});
       }
 
       if (filters.year) {
@@ -622,6 +670,28 @@
           opt.disabled = !exists;
           opt.style.color = exists ? '' : '#ccc';
         });
+        applyOptionCounts(filters.year, data.available_year_counts || {});
+      }
+
+      if (filters.type) {
+        Array.from(filters.type.options).forEach(opt => {
+          if (!opt.value) return;
+          if (!opt.dataset.baseLabel) opt.dataset.baseLabel = opt.textContent;
+          const exists = availableVoteTypes.has(opt.value);
+          opt.disabled = !exists;
+          opt.style.color = exists ? '' : '#ccc';
+        });
+        applyOptionCounts(filters.type, data.available_vote_type_counts || {});
+      }
+
+      if (filters.rule) {
+        Array.from(filters.rule.options).forEach(opt => {
+          if (!opt.value) return;
+          const exists = availableRules.has(opt.value);
+          opt.disabled = !exists;
+          opt.style.color = exists ? '' : '#ccc';
+        });
+        applyOptionCounts(filters.rule, data.available_rule_counts || {});
       }
     } catch (e) {
       console.error("Failed to update filter availability", e);
@@ -1226,7 +1296,7 @@
              } else {
                // Ensure we request an unfiltered full archive.
                fd.delete('exclude');
-               ['search','country','city','year','votes_min','votes_max','projects_min','projects_max','len_min','len_max','type','exclude_fully','exclude_experimental','require_geo','require_beneficiaries','require_target','require_category','require_new'].forEach((k) => fd.delete(k));
+               ['search','country','city','year','votes_min','votes_max','projects_min','projects_max','len_min','len_max','type','rule','exclude_fully','exclude_experimental','require_geo','require_beneficiaries','require_target','require_category','require_new'].forEach((k) => fd.delete(k));
              }
           }
 
