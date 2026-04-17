@@ -4,7 +4,7 @@
 {% block title %}Pabulib – Blog{% endblock %}
 {% block meta_description %}Read updates about the Pabulib website, along with analyses, research, and tooling related to participatory budgeting.{% endblock %}
 {% block meta_canonical %}{{ url_for('main.blog_index', tag=selected_tag, _external=True) if selected_tag else url_for('main.blog_index', _external=True) }}{% endblock %}
-{% block meta_image %}{{ url_for('main.blog_index_og_image', tag=selected_tag, _external=True) if selected_tag else url_for('main.blog_index_og_image', _external=True) }}{% endblock %}
+{% block meta_image %}{{ url_for('main.blog_index_og_image', tag=selected_tag, v=social_image_version, _external=True) if selected_tag else url_for('main.blog_index_og_image', v=social_image_version, _external=True) }}{% endblock %}
 {% block meta_image_alt %}Preview image for the Pabulib blog{% endblock %}
 {% block meta_image_type %}image/png{% endblock %}
 {% block meta_image_width %}1200{% endblock %}

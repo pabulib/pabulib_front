@@ -17,6 +17,7 @@ except Exception:  # pragma: no cover
 
 _POSTS_DIR = Path(__file__).resolve().parent.parent / "blog_posts"
 _FRONT_MATTER_DELIMITER = "---"
+_BLOG_SOCIAL_IMAGE_STYLE_VERSION = "2026-04-17-3"
 
 
 @dataclass(frozen=True)
@@ -118,9 +119,14 @@ def _parse_post(source_path: Path) -> BlogPost:
         tags=tags,
         body_markdown=body,
         body_html=_render_markdown(body),
-        social_image_version=hashlib.sha1(raw_text.encode("utf-8")).hexdigest()[:12],
+        social_image_version=current_blog_social_image_version(raw_text),
         source_path=source_path,
     )
+
+
+def current_blog_social_image_version(seed: str = "") -> str:
+    version_source = f"{_BLOG_SOCIAL_IMAGE_STYLE_VERSION}:{seed or ''}"
+    return hashlib.sha1(version_source.encode("utf-8")).hexdigest()[:12]
 
 
 def list_blog_posts(tag: Optional[str] = None) -> List[BlogPost]:

@@ -66,6 +66,7 @@ from .services.snapshot_service import (
 )
 from .services.blog_service import (
     blog_sitemap_entries as _blog_sitemap_entries,
+    current_blog_social_image_version as _current_blog_social_image_version,
     get_blog_post as _get_blog_post,
     list_blog_posts as _list_blog_posts,
     list_blog_tags as _list_blog_tags,
@@ -464,6 +465,13 @@ def _load_social_font(size: int, *, bold: bool = False):
         return None
 
     font_candidates = [
+        str(
+            Path(__file__).resolve().parent
+            / "static"
+            / "fonts"
+            / "blog-social"
+            / ("DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf")
+        ),
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
@@ -846,6 +854,9 @@ def blog_index():
         posts=posts,
         tags=_list_blog_tags(),
         selected_tag=selected_tag,
+        social_image_version=_current_blog_social_image_version(
+            selected_tag or "blog-index"
+        ),
     )
 
 

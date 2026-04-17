@@ -665,9 +665,12 @@ voter_id; age; sex; vote
         {
             "field_name": "selected",
             "datatype": "int*",
-            "description": "if project was selected by orignial rule. Typically selected (1) or not (0), but there are ambiguous cases where 2 is used. Then, explained in the comment.",
+            "description": "indicates whether the project was selected by the original rule. Typically selected (1) or not selected (0), but in some ambiguous cases 2 may be used and should then be explained in the comment.",
             "options": null,
             "example": ["0", "1", "2"],
+            "additional_info": [
+                "This field is not obligatory, but it is highly desirable because it helps check data consistency and detect mistakes in the dataset. Whenever possible, we prefer to include it."
+            ],
             "if_obligatory": false
         },
         {

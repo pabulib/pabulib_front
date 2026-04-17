@@ -7,7 +7,7 @@ tags: updates
 summary: We added Ruda Śląska and 28 files from Rybnik, introduced filtering by rule, added counts next to filter options, and made permanent download links preserve filter context.
 ---
 
-Hi! Here is another short update:
+Hi!
 
 We are now at **1785 files** in Pabulib, so we are getting closer and closer to the magic number of **2000**.
 
@@ -26,8 +26,6 @@ Together they contain **43 projects** and **24,451 votes**.
 
 Both files use **ordinal voting** with up to **4 choices**, and both are described with the `greedy-exclusive` rule.
 
-You can browse them here:
-
 [https://pabulib.org/?city=ruda-slaska](https://pabulib.org/?city=ruda-slaska)
 
 ## 28 new files from Rybnik
@@ -36,8 +34,6 @@ We also added **28 files** from **Rybnik**:
 
 - **1 citywide** file
 - **27 district** files
-
-You can browse them here:
 
 [https://pabulib.org/?city=rybnik](https://pabulib.org/?city=rybnik)
 
