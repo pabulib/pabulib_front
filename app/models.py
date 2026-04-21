@@ -287,6 +287,33 @@ class PBVisualization(Base):
     __table_args__ = (Index("ix_pb_visualizations_computed_at", "computed_at"),)
 
 
+class PBRuleComparison(Base):
+    """Cache for computed rule comparison data per PB file and alternative rule."""
+
+    __tablename__ = "pb_rule_comparisons"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    file_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("pb_files.id"), nullable=False, index=True
+    )
+    alternative_rule: Mapped[str] = mapped_column(String(64), nullable=False)
+    data: Mapped[str] = mapped_column(MEDIUMTEXT, nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    file_mtime: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "file_id",
+            "alternative_rule",
+            name="uq_pb_rule_comparisons_file_rule",
+        ),
+        Index("ix_pb_rule_comparisons_computed_at", "computed_at"),
+    )
+
+
 class CheckerValidationCache(Base):
     """Persistent checker results cache for current PB files."""
 

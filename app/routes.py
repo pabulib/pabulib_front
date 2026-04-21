@@ -72,6 +72,7 @@ from .services.blog_service import (
     list_blog_tags as _list_blog_tags,
 )
 from .services.visualization_service import get_or_compute_visualization_data
+from .services.rule_comparison_service import get_or_compute_rule_comparison
 from .utils.file_helpers import is_safe_filename as _is_safe_filename
 from .utils.filename_normalization import normalize_storage_filename
 from .utils.formatting import format_int as _format_int
@@ -2904,6 +2905,49 @@ def preview_file(filename: str):
         counts=counts,
         checker=checker_info,
     )
+
+
+@bp.route("/preview/<path:filename>/rule-comparison")
+def preview_rule_comparison(filename: str):
+    if not _is_safe_filename(filename):
+        abort(400, description="Invalid filename")
+
+    alternative_rule = (
+        request.args.get("rule") or "equalshares/add1-comparison"
+    ).strip().lower()
+
+    with get_session() as session:
+        pb_file = (
+            session.query(PBFile)
+            .filter(PBFile.file_name == filename, PBFile.is_current == True)
+            .first()
+        )
+        if not pb_file:
+            abort(404)
+
+        path = Path(pb_file.path)
+        if not path.exists() or not path.is_file():
+            abort(404)
+
+        try:
+            comparison = get_or_compute_rule_comparison(
+                file_id=pb_file.id,
+                filename=filename,
+                file_path=path,
+                file_mtime=pb_file.file_mtime,
+                session=session,
+                alternative_rule=alternative_rule,
+            )
+        except Exception as e:
+            return jsonify(
+                {
+                    "ok": False,
+                    "supported": False,
+                    "message": f"Failed to compute rule comparison: {e}",
+                }
+            ), 400
+
+    return jsonify(comparison)
 
 
 @bp.route("/visualize/<path:filename>")

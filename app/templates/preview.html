@@ -36,6 +36,12 @@
     </div>
   </div>
 
+  <div class="pv-tabs" role="tablist" aria-label="Preview sections">
+    <button class="pv-tab-btn active" id="pv-tab-data" type="button" role="tab" aria-selected="true" aria-controls="pv-panel-data" onclick="pvSwitchTab('data')">File Preview</button>
+    <button class="pv-tab-btn" id="pv-tab-compare" type="button" role="tab" aria-selected="false" aria-controls="pv-panel-compare" onclick="pvSwitchTab('compare')">Rule Comparison</button>
+  </div>
+
+  <div class="pv-tab-panel" id="pv-panel-data" role="tabpanel" aria-labelledby="pv-tab-data">
   <div class="pv-card pv-checker-card">
     <div class="pv-checker-head">
       <div class="pv-checker-main">
@@ -222,6 +228,103 @@
       {% endif %}
     </div>
   </div>
+  </div>
+
+  <div class="pv-tab-panel" id="pv-panel-compare" role="tabpanel" aria-labelledby="pv-tab-compare" hidden>
+    <div class="pv-card pv-compare-card">
+      <div class="pv-compare-head">
+        <div>
+          <h2 class="pv-compare-title">Rule comparison for this file</h2>
+          <p class="pv-compare-subtitle">Compare the recorded winners with the Wieliczka rule: <code>equalshares/add1-comparison</code>.</p>
+        </div>
+      </div>
+
+      <div class="pv-beta-banner">
+        <div class="pv-beta-pill">Beta functionality</div>
+        <div>
+          This comparison is experimental. It uses <strong>MES with Add1 completion and a comparison step</strong>: first compute MES with Add1 completion, then compare that outcome with a greedy benchmark and switch only if more voters prefer the greedy outcome.
+        </div>
+      </div>
+
+      <div id="pv-compare-loading" class="pv-compare-state">Loading comparison…</div>
+      <div id="pv-compare-error" class="pv-compare-state pv-compare-state-error" hidden></div>
+
+      <div id="pv-compare-content" hidden>
+        <div class="pv-compare-metrics">
+          <div class="pv-compare-metric">
+            <span class="pv-compare-metric-value" id="pv-metric-overlap">0</span>
+            <span class="pv-compare-metric-label">same winners</span>
+          </div>
+          <div class="pv-compare-metric">
+            <span class="pv-compare-metric-value" id="pv-metric-current-only">0</span>
+            <span class="pv-compare-metric-label">only in current rule</span>
+          </div>
+          <div class="pv-compare-metric">
+            <span class="pv-compare-metric-value" id="pv-metric-alt-only">0</span>
+            <span class="pv-compare-metric-label">only in MES Add1 comparison</span>
+          </div>
+        </div>
+
+        <div class="pv-compare-split">
+          <div class="pv-compare-column">
+            <div class="pv-compare-column-head">
+              <span class="pv-compare-column-title" id="pv-current-rule-name">Current rule</span>
+              <span class="pv-badge blue" id="pv-current-rule-count">0 winners</span>
+            </div>
+            <div class="pv-compare-budget-line" id="pv-current-budget-line">Budget used: 0</div>
+            <div class="pv-compare-list" id="pv-current-only-list"></div>
+          </div>
+          <div class="pv-compare-column">
+            <div class="pv-compare-column-head">
+              <span class="pv-compare-column-title" id="pv-alt-rule-name">MES Add1 comparison</span>
+              <span class="pv-badge green" id="pv-alt-rule-count">0 winners</span>
+            </div>
+            <div class="pv-compare-budget-line" id="pv-alt-budget-line">Budget used: 0</div>
+            <div class="pv-compare-list" id="pv-alt-only-list"></div>
+          </div>
+        </div>
+
+        <div class="pv-compare-bars">
+          <div class="pv-compare-bar-row">
+            <span class="pv-compare-bar-label">Same winners</span>
+            <div class="pv-compare-bar-track"><div class="pv-compare-bar pv-compare-bar-overlap" id="pv-bar-overlap"></div></div>
+            <span class="pv-compare-bar-value" id="pv-bar-overlap-label">0</span>
+          </div>
+          <div class="pv-compare-bar-row">
+            <span class="pv-compare-bar-label">Only current</span>
+            <div class="pv-compare-bar-track"><div class="pv-compare-bar pv-compare-bar-current" id="pv-bar-current"></div></div>
+            <span class="pv-compare-bar-value" id="pv-bar-current-label">0</span>
+          </div>
+          <div class="pv-compare-bar-row">
+            <span class="pv-compare-bar-label">Only MES Add1</span>
+            <div class="pv-compare-bar-track"><div class="pv-compare-bar pv-compare-bar-alt" id="pv-bar-alt"></div></div>
+            <span class="pv-compare-bar-value" id="pv-bar-alt-label">0</span>
+          </div>
+        </div>
+
+        <div class="pv-compare-diff-head">
+          <h3 class="pv-section-title">Projects that change</h3>
+          <span class="pv-cnt" id="pv-diff-count">0 projects</span>
+        </div>
+        <div class="pv-scroll">
+          <table class="pv-table">
+            <thead>
+              <tr>
+                <th>Project</th>
+                <th>Cost</th>
+                <th>Votes</th>
+                <th>Current</th>
+                <th>MES</th>
+              </tr>
+            </thead>
+            <tbody id="pv-diff-body"></tbody>
+          </table>
+        </div>
+
+        <div class="pv-compare-notes" id="pv-compare-notes"></div>
+      </div>
+    </div>
+  </div>
 
 </div>
 
@@ -248,6 +351,11 @@ html,body.preview{overflow-x:hidden;}
 .pv-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:10px;border:1.5px solid #cbd5e1;background:#f8fafc;color:#334155;font-size:14px;font-weight:600;text-decoration:none;transition:background .15s,border-color .15s;}
 .pv-btn:hover{background:#f1f5f9;border-color:#94a3b8;}
 .pv-btn-top{background:#fff;}
+.pv-tabs{display:flex;gap:10px;flex-wrap:wrap;padding:0 6px 14px;}
+.pv-tab-btn{appearance:none;border:none;border-radius:999px;padding:10px 16px;background:#e2e8f0;color:#334155;font-size:14px;font-weight:700;cursor:pointer;transition:background .15s,color .15s,transform .15s;}
+.pv-tab-btn:hover{background:#cbd5e1;}
+.pv-tab-btn.active{background:#0f172a;color:#fff;}
+.pv-tab-panel[hidden]{display:none;}
 
 /* Checker */
 .pv-checker-card{padding:18px;}
@@ -337,6 +445,44 @@ html,body.preview{overflow-x:hidden;}
 /* Truncate note */
 .pv-truncnote{padding:12px 16px;font-size:12px;color:#64748b;background:#f8fafc;border-top:1px solid #f1f5f9;}
 
+/* Rule comparison */
+.pv-compare-card{padding:20px;}
+.pv-compare-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px;}
+.pv-compare-title{margin:4px 0 0;font-size:26px;font-weight:800;line-height:1.1;color:#0f172a;letter-spacing:-.03em;}
+.pv-compare-subtitle{margin:8px 0 0;color:#64748b;max-width:78ch;font-size:14px;line-height:1.55;}
+.pv-compare-subtitle code{padding:2px 6px;border-radius:7px;background:#f1f5f9;color:#334155;font-size:.9em;}
+.pv-beta-banner{display:flex;align-items:flex-start;gap:12px;margin:-4px 0 18px;padding:14px 16px;border:1px solid #fde68a;border-radius:14px;background:linear-gradient(135deg,#fffbeb 0%,#fef3c7 100%);color:#78350f;font-size:14px;line-height:1.55;}
+.pv-beta-pill{flex:0 0 auto;display:inline-flex;align-items:center;border-radius:999px;padding:4px 9px;background:#92400e;color:#fff;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;}
+.pv-compare-state{padding:14px 16px;border-radius:12px;background:#f8fafc;color:#475569;font-size:14px;}
+.pv-compare-state-error{background:#fef2f2;color:#991b1b;border:1px solid #fecaca;}
+.pv-compare-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:18px;}
+.pv-compare-metric{padding:16px;border-radius:14px;background:linear-gradient(180deg,#f8fafc 0%,#eef2ff 100%);border:1px solid #dbeafe;}
+.pv-compare-metric-value{display:block;font-size:34px;font-weight:800;line-height:1;color:#0f172a;letter-spacing:-.04em;}
+.pv-compare-metric-label{display:block;margin-top:6px;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:#64748b;}
+.pv-compare-split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:18px;}
+.pv-compare-column{padding:16px;border:1px solid #e2e8f0;border-radius:14px;background:#fff;}
+.pv-compare-column-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+.pv-compare-column-title{font-size:15px;font-weight:800;color:#1e293b;}
+.pv-compare-budget-line{margin-top:8px;font-size:13px;color:#64748b;}
+.pv-compare-list{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;min-height:28px;}
+.pv-pill{display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:600;line-height:1;background:#f8fafc;border:1px solid #e2e8f0;color:#334155;}
+.pv-pill-empty{background:#f8fafc;color:#94a3b8;font-style:italic;}
+.pv-compare-bars{display:grid;gap:10px;margin-bottom:18px;}
+.pv-compare-bar-row{display:grid;grid-template-columns:110px minmax(0,1fr) 36px;align-items:center;gap:10px;}
+.pv-compare-bar-label{font-size:13px;font-weight:700;color:#334155;}
+.pv-compare-bar-track{height:12px;border-radius:999px;background:#e2e8f0;overflow:hidden;}
+.pv-compare-bar{height:100%;width:0%;}
+.pv-compare-bar-overlap{background:linear-gradient(90deg,#22c55e 0%,#16a34a 100%);}
+.pv-compare-bar-current{background:linear-gradient(90deg,#60a5fa 0%,#2563eb 100%);}
+.pv-compare-bar-alt{background:linear-gradient(90deg,#f59e0b 0%,#d97706 100%);}
+.pv-compare-bar-value{font-size:12px;color:#64748b;font-weight:700;text-align:right;}
+.pv-compare-diff-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap;}
+.pv-compare-bool{font-size:12px;font-weight:700;}
+.pv-compare-bool-yes{color:#166534;}
+.pv-compare-bool-no{color:#94a3b8;}
+.pv-compare-notes{margin-top:14px;display:grid;gap:8px;}
+.pv-compare-note{padding:10px 12px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;font-size:13px;color:#475569;line-height:1.5;}
+
 @media (max-width: 640px){
   .pv-wrap{padding-left:10px;padding-right:10px;}
   .pv-topbar{flex-direction:column;align-items:flex-start;padding:0;gap:12px;}
@@ -354,6 +500,14 @@ html,body.preview{overflow-x:hidden;}
   .pv-checker-card{padding:16px;}
   .pv-checker-head{flex-direction:column;align-items:flex-start;}
   .pv-checker-counts{width:100%;}
+  .pv-tabs{padding:0 0 14px;}
+  .pv-tab-btn{flex:1 1 calc(50% - 6px);justify-content:center;}
+  .pv-compare-card{padding:16px;}
+  .pv-compare-title{font-size:22px;}
+  .pv-beta-banner{flex-direction:column;}
+  .pv-compare-metrics{grid-template-columns:1fr;}
+  .pv-compare-split{grid-template-columns:1fr;}
+  .pv-compare-bar-row{grid-template-columns:88px minmax(0,1fr) 32px;}
   .pv-table th,.pv-table td{padding:8px 12px;}
   .pv-scroll{overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;padding-bottom:6px;}
   .pv-scroll .pv-table{width:max-content;min-width:100%;}
@@ -379,8 +533,149 @@ function pvToggle(id) {
   btn.setAttribute('aria-expanded', String(!closed));
   if (window.pvFrozenUpdaters) window.pvFrozenUpdaters.forEach(fn => fn());
 }
+
+let pvComparisonLoaded = false;
+let pvComparisonLoading = false;
+
+function pvSwitchTab(tabId) {
+  const tabs = ['data', 'compare'];
+  tabs.forEach(id => {
+    const btn = document.getElementById('pv-tab-' + id);
+    const panel = document.getElementById('pv-panel-' + id);
+    const active = id === tabId;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', String(active));
+    panel.hidden = !active;
+  });
+  if (tabId === 'compare') {
+    pvLoadRuleComparison(false);
+  } else if (window.pvFrozenUpdaters) {
+    window.pvFrozenUpdaters.forEach(fn => fn());
+  }
+}
+
 function pvExpand(el) {
   el.classList.toggle('expanded');
+}
+
+function pvFormatInt(value) {
+  return new Intl.NumberFormat('en-US').format(Number(value || 0));
+}
+
+function pvEscapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function pvSetCompareBar(id, value, total) {
+  const bar = document.getElementById(id);
+  const label = document.getElementById(id + '-label');
+  const ratio = total > 0 ? (value / total) * 100 : 0;
+  bar.style.width = `${ratio}%`;
+  label.textContent = pvFormatInt(value);
+}
+
+function pvRenderPills(containerId, values) {
+  const container = document.getElementById(containerId);
+  const items = Array.isArray(values) ? values : [];
+  if (!items.length) {
+    container.innerHTML = '<span class="pv-pill pv-pill-empty">No differing winners</span>';
+    return;
+  }
+  container.innerHTML = items.map(value => `<span class="pv-pill">${pvEscapeHtml(value)}</span>`).join('');
+}
+
+function pvRuleLabel(value) {
+  if (value === 'equalshares/add1-comparison') return 'MES Add1 comparison';
+  return value || 'Rule';
+}
+
+function pvRenderRuleComparison(data) {
+  document.getElementById('pv-compare-loading').hidden = true;
+  document.getElementById('pv-compare-error').hidden = true;
+  document.getElementById('pv-compare-content').hidden = false;
+
+  const summary = data.summary || {};
+  const winners = data.winners || {};
+  const differenceRows = Array.isArray(data.difference_rows) ? data.difference_rows : [];
+
+  document.getElementById('pv-metric-overlap').textContent = pvFormatInt(summary.overlap_count);
+  document.getElementById('pv-metric-current-only').textContent = pvFormatInt(summary.only_current_count);
+  document.getElementById('pv-metric-alt-only').textContent = pvFormatInt(summary.only_alternative_count);
+
+  document.getElementById('pv-current-rule-name').textContent = data.current_rule || 'Current rule';
+  document.getElementById('pv-alt-rule-name').textContent = pvRuleLabel(data.alternative_rule);
+  document.getElementById('pv-current-rule-count').textContent = `${pvFormatInt(summary.current_count)} winners`;
+  document.getElementById('pv-alt-rule-count').textContent = `${pvFormatInt(summary.alternative_count)} winners`;
+  document.getElementById('pv-current-budget-line').textContent = `Budget used: ${pvFormatInt(summary.current_cost)} / ${pvFormatInt(data.budget)}`;
+  document.getElementById('pv-alt-budget-line').textContent = `Budget used: ${pvFormatInt(summary.alternative_cost)} / ${pvFormatInt(data.budget)}`;
+
+  pvRenderPills('pv-current-only-list', winners.only_current);
+  pvRenderPills('pv-alt-only-list', winners.only_alternative);
+
+  const totalChanged = Number(summary.overlap_count || 0) + Number(summary.only_current_count || 0) + Number(summary.only_alternative_count || 0);
+  pvSetCompareBar('pv-bar-overlap', Number(summary.overlap_count || 0), totalChanged);
+  pvSetCompareBar('pv-bar-current', Number(summary.only_current_count || 0), totalChanged);
+  pvSetCompareBar('pv-bar-alt', Number(summary.only_alternative_count || 0), totalChanged);
+
+  document.getElementById('pv-diff-count').textContent = `${pvFormatInt(differenceRows.length)} projects`;
+  const diffBody = document.getElementById('pv-diff-body');
+  if (!differenceRows.length) {
+    diffBody.innerHTML = '<tr><td colspan="5">No project changes between these two winner sets.</td></tr>';
+  } else {
+    diffBody.innerHTML = differenceRows.map(row => `
+      <tr>
+        <td>${pvEscapeHtml(row.name ? String(row.name) : row.project_id)} <span class="pv-cnt">#${pvEscapeHtml(row.project_id)}</span></td>
+        <td>${pvFormatInt(row.cost)}</td>
+        <td>${pvFormatInt(row.votes)}</td>
+        <td><span class="pv-compare-bool ${row.selected_current ? 'pv-compare-bool-yes' : 'pv-compare-bool-no'}">${row.selected_current ? 'Yes' : 'No'}</span></td>
+        <td><span class="pv-compare-bool ${row.selected_alternative ? 'pv-compare-bool-yes' : 'pv-compare-bool-no'}">${row.selected_alternative ? 'Yes' : 'No'}</span></td>
+      </tr>
+    `).join('');
+  }
+
+  const notes = Array.isArray(data.notes) ? data.notes : [];
+  document.getElementById('pv-compare-notes').innerHTML = notes.map(note => `<div class="pv-compare-note">${pvEscapeHtml(note)}</div>`).join('');
+}
+
+function pvShowRuleComparisonError(message) {
+  document.getElementById('pv-compare-loading').hidden = true;
+  const errorEl = document.getElementById('pv-compare-error');
+  errorEl.hidden = false;
+  errorEl.textContent = message;
+  document.getElementById('pv-compare-content').hidden = true;
+}
+
+async function pvLoadRuleComparison(forceRefresh) {
+  if (pvComparisonLoading) return;
+  if (pvComparisonLoaded && !forceRefresh) return;
+
+  pvComparisonLoading = true;
+  document.getElementById('pv-compare-loading').hidden = false;
+  document.getElementById('pv-compare-error').hidden = true;
+  document.getElementById('pv-compare-content').hidden = true;
+
+  try {
+    const cacheBust = forceRefresh ? `&t=${Date.now()}` : '';
+    const response = await fetch(`{{ url_for('main.preview_rule_comparison', filename=filename) }}?rule=equalshares%2Fadd1-comparison${cacheBust}`);
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to load rule comparison.');
+    }
+    if (!data.ok || !data.supported) {
+      throw new Error(data.message || 'Rule comparison is not available for this file.');
+    }
+    pvRenderRuleComparison(data);
+    pvComparisonLoaded = true;
+  } catch (error) {
+    pvShowRuleComparisonError(error.message || 'Failed to load rule comparison.');
+  } finally {
+    pvComparisonLoading = false;
+  }
 }
 
 function pvInitFrozenHeader(sectionId) {
