@@ -11,7 +11,7 @@ from typing import Any, Dict, List
 
 from sqlalchemy.orm import Session
 
-from ..models import PBRuleComparison
+from ..models import PBFile, PBRuleComparison
 from ..utils.load_pb_file import parse_pb_lines
 
 
@@ -43,6 +43,21 @@ def get_or_compute_rule_comparison(
     if cached and cached.file_mtime == file_mtime:
         return json.loads(cached.data)
 
+    stable_cached = _find_stable_cached_comparison(
+        session=session,
+        filename=filename,
+        file_mtime=file_mtime,
+        alternative_rule=alternative_rule,
+        current_file_id=file_id,
+    )
+    if stable_cached:
+        if cached:
+            session.delete(cached)
+            session.flush()
+        stable_cached.file_id = file_id
+        session.commit()
+        return json.loads(stable_cached.data)
+
     if cached:
         session.delete(cached)
         session.commit()
@@ -59,6 +74,30 @@ def get_or_compute_rule_comparison(
     session.add(new_cache)
     session.commit()
     return comparison_data
+
+
+def _find_stable_cached_comparison(
+    *,
+    session: Session,
+    filename: str,
+    file_mtime: datetime,
+    alternative_rule: str,
+    current_file_id: int,
+) -> PBRuleComparison | None:
+    """Recover cache entries when a DB refresh gives the same file a new PBFile.id."""
+
+    return (
+        session.query(PBRuleComparison)
+        .join(PBFile, PBFile.id == PBRuleComparison.file_id)
+        .filter(
+            PBRuleComparison.file_id != current_file_id,
+            PBRuleComparison.alternative_rule == alternative_rule,
+            PBRuleComparison.file_mtime == file_mtime,
+            PBFile.file_name == filename,
+        )
+        .order_by(PBRuleComparison.computed_at.desc())
+        .first()
+    )
 
 
 def _compute_rule_comparison(
@@ -455,7 +494,7 @@ def _build_comparison_payload(
     notes = [
         "Beta version: comparison currently supports approval ballots only.",
         "The alternative outcome uses equalshares/add1-comparison: MES with Add1 completion, followed by a comparison step against a greedy benchmark.",
-        "The current outcome is read from the file's selected projects, not recomputed from metadata.",
+        "The original outcome is read from the file's selected projects, not recomputed from metadata.",
     ]
     if comparison_details.get("comparison_step"):
         selected = comparison_details.get("comparison_selected", "equalshares/add1")

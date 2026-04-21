@@ -37,11 +37,11 @@
   </div>
 
   <div class="pv-tabs" role="tablist" aria-label="Preview sections">
-    <button class="pv-tab-btn active" id="pv-tab-data" type="button" role="tab" aria-selected="true" aria-controls="pv-panel-data" onclick="pvSwitchTab('data')">File Preview</button>
-    <button class="pv-tab-btn" id="pv-tab-compare" type="button" role="tab" aria-selected="false" aria-controls="pv-panel-compare" onclick="pvSwitchTab('compare')">Rule Comparison</button>
+    <button class="pv-tab-btn active" id="pv-tab-data" type="button" role="tab" aria-selected="true" aria-controls="pv-panel-data" onclick="pvSwitchTab('preview')">File Preview</button>
+    <button class="pv-tab-btn" id="pv-tab-compare" type="button" role="tab" aria-selected="false" aria-controls="pv-panel-compare" onclick="pvSwitchTab('comparison')">Rule Comparison</button>
   </div>
 
-  <div class="pv-tab-panel" id="pv-panel-data" role="tabpanel" aria-labelledby="pv-tab-data">
+  <div class="pv-tab-panel" id="pv-panel-data" role="tabpanel" aria-labelledby="pv-tab-data" data-pv-anchor="preview">
   <div class="pv-card pv-checker-card">
     <div class="pv-checker-head">
       <div class="pv-checker-main">
@@ -230,7 +230,7 @@
   </div>
   </div>
 
-  <div class="pv-tab-panel" id="pv-panel-compare" role="tabpanel" aria-labelledby="pv-tab-compare" hidden>
+  <div class="pv-tab-panel" id="pv-panel-compare" role="tabpanel" aria-labelledby="pv-tab-compare" data-pv-anchor="comparison" hidden>
     <div class="pv-card pv-compare-card">
       <div class="pv-compare-head">
         <div>
@@ -246,7 +246,9 @@
         </div>
       </div>
 
-      <div id="pv-compare-loading" class="pv-compare-state">Loading comparison…</div>
+      <div id="pv-compare-loading" class="pv-compare-state">
+        Loading comparison. The first run for this file can take some time; later visits use the cached result.
+      </div>
       <div id="pv-compare-error" class="pv-compare-state pv-compare-state-error" hidden></div>
 
       <div id="pv-compare-content" hidden>
@@ -257,7 +259,7 @@
           </div>
           <div class="pv-compare-metric">
             <span class="pv-compare-metric-value" id="pv-metric-current-only">0</span>
-            <span class="pv-compare-metric-label">only in current rule</span>
+            <span class="pv-compare-metric-label">only in original rule</span>
           </div>
           <div class="pv-compare-metric">
             <span class="pv-compare-metric-value" id="pv-metric-alt-only">0</span>
@@ -268,7 +270,7 @@
         <div class="pv-compare-split">
           <div class="pv-compare-column">
             <div class="pv-compare-column-head">
-              <span class="pv-compare-column-title" id="pv-current-rule-name">Current rule</span>
+              <span class="pv-compare-column-title" id="pv-current-rule-name">Original rule</span>
               <span class="pv-badge blue" id="pv-current-rule-count">0 winners</span>
             </div>
             <div class="pv-compare-budget-line" id="pv-current-budget-line">Budget used: 0</div>
@@ -291,7 +293,7 @@
             <span class="pv-compare-bar-value" id="pv-bar-overlap-label">0</span>
           </div>
           <div class="pv-compare-bar-row">
-            <span class="pv-compare-bar-label">Only current</span>
+            <span class="pv-compare-bar-label">Only original</span>
             <div class="pv-compare-bar-track"><div class="pv-compare-bar pv-compare-bar-current" id="pv-bar-current"></div></div>
             <span class="pv-compare-bar-value" id="pv-bar-current-label">0</span>
           </div>
@@ -313,7 +315,7 @@
                 <th>Project</th>
                 <th>Cost</th>
                 <th>Votes</th>
-                <th>Current</th>
+                <th>Original</th>
                 <th>MES</th>
               </tr>
             </thead>
@@ -537,21 +539,42 @@ function pvToggle(id) {
 let pvComparisonLoaded = false;
 let pvComparisonLoading = false;
 
-function pvSwitchTab(tabId) {
+function pvNormalizeTabId(tabId) {
+  const value = String(tabId || '').replace(/^#/, '').trim().toLowerCase();
+  if (value === 'comparison' || value === 'compare') return 'compare';
+  return 'data';
+}
+
+function pvTabAnchor(tabId) {
+  return pvNormalizeTabId(tabId) === 'compare' ? 'comparison' : 'preview';
+}
+
+function pvSwitchTab(tabId, updateHash = true) {
+  const normalizedTabId = pvNormalizeTabId(tabId);
   const tabs = ['data', 'compare'];
   tabs.forEach(id => {
     const btn = document.getElementById('pv-tab-' + id);
     const panel = document.getElementById('pv-panel-' + id);
-    const active = id === tabId;
+    const active = id === normalizedTabId;
     btn.classList.toggle('active', active);
     btn.setAttribute('aria-selected', String(active));
     panel.hidden = !active;
   });
-  if (tabId === 'compare') {
+  if (updateHash) {
+    const anchor = pvTabAnchor(normalizedTabId);
+    if (window.location.hash !== `#${anchor}`) {
+      history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${anchor}`);
+    }
+  }
+  if (normalizedTabId === 'compare') {
     pvLoadRuleComparison(false);
   } else if (window.pvFrozenUpdaters) {
     window.pvFrozenUpdaters.forEach(fn => fn());
   }
+}
+
+function pvSwitchTabFromHash() {
+  pvSwitchTab(window.location.hash || 'preview', false);
 }
 
 function pvExpand(el) {
@@ -607,7 +630,7 @@ function pvRenderRuleComparison(data) {
   document.getElementById('pv-metric-current-only').textContent = pvFormatInt(summary.only_current_count);
   document.getElementById('pv-metric-alt-only').textContent = pvFormatInt(summary.only_alternative_count);
 
-  document.getElementById('pv-current-rule-name').textContent = data.current_rule || 'Current rule';
+  document.getElementById('pv-current-rule-name').textContent = data.current_rule ? `Original: ${data.current_rule}` : 'Original rule';
   document.getElementById('pv-alt-rule-name').textContent = pvRuleLabel(data.alternative_rule);
   document.getElementById('pv-current-rule-count').textContent = `${pvFormatInt(summary.current_count)} winners`;
   document.getElementById('pv-alt-rule-count').textContent = `${pvFormatInt(summary.alternative_count)} winners`;
@@ -741,6 +764,8 @@ function pvInitFrozenHeader(sectionId) {
 // Init chevrons as open
 document.querySelectorAll('.pv-chevron').forEach(c => c.classList.add('open'));
 window.pvFrozenUpdaters = ['meta', 'projects', 'votes'].map(pvInitFrozenHeader).filter(Boolean);
+pvSwitchTabFromHash();
+window.addEventListener('hashchange', pvSwitchTabFromHash);
 window.addEventListener('load', () => window.pvFrozenUpdaters.forEach(fn => fn()));
 </script>
 
